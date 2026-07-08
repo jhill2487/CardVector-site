@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CardVector QR Mobile</title>
+<style>
+body{margin:0;background:#f5f7fb;font-family:Arial,sans-serif;color:#1f2937}
+.wrap{max-width:700px;margin:24px auto;padding:20px}
+.card{background:#fff;border:1px solid #dbe3ef;border-radius:14px;padding:24px}
+.badge{color:#2563eb;font-weight:bold;text-transform:uppercase;font-size:12px;letter-spacing:.08em}
+h1{margin:.4em 0;font-size:42px}
+h2{margin:0 0 18px;color:#4b5563;font-size:22px}
+.row{display:flex;justify-content:space-between;padding:12px 0;border-top:1px solid #e5e7eb}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="card">
+<div class="badge">QR Mobile Entry Point</div>
+<h1 id="title">CardVector</h1>
+<h2 id="subtitle">Trading Card Inventory Operating System</h2>
+<div id="rows"></div>
+</div>
+</div>
+<script>
+(function(){
+const p=location.pathname.split('/').filter(Boolean);
+const t=document.getElementById('title');
+const s=document.getElementById('subtitle');
+const r=document.getElementById('rows');
+function row(a,b){return '<div class="row"><strong>'+a+'</strong><span>'+b+'</span></div>';}
+if(p[0]==='etb'&&p[1]){
+ t.textContent=decodeURIComponent(p[1]);
+ s.textContent='Elite Trainer Box';
+ r.innerHTML=row('Type','ETB')+row('ID',decodeURIComponent(p[1]));
+}else if(p[0]==='location'&&p[1]&&p[2]){
+ t.textContent='Location '+decodeURIComponent(p[2]);
+ s.textContent=decodeURIComponent(p[1]);
+ r.innerHTML=row('Type','Location')+row('ETB',decodeURIComponent(p[1]))+row('Location',decodeURIComponent(p[2]));
+}else if(p[0]==='lot'&&p[1]){
+ t.textContent=decodeURIComponent(p[1]);
+ s.textContent='Acquisition Lot';
+ r.innerHTML=row('Type','Lot')+row('ID',decodeURIComponent(p[1]));
+}else{
+ r.innerHTML=row('Status','Home');
+}
+})();
+</script>
+</body>
+</html>
