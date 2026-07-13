@@ -601,6 +601,18 @@ h3 {
   margin-bottom: 16px;
 }
 
+.capture-operator {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  color: var(--blue-950);
+  background: var(--blue-50);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: .9rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
 .capture-auth label {
   color: var(--muted);
   font-size: .82rem;

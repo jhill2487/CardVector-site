@@ -78,6 +78,26 @@
     return window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
   }
 
+  function authStateLabel(user) {
+    if (!user) {
+      return "not signed in";
+    }
+    return user.email ? `signed in as ${user.email}` : "signed in";
+  }
+
+  function sanitizeErrorMessage(value) {
+    return String(value || "Unknown error")
+      .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
+      .replace(/eyJ[A-Za-z0-9._-]+/g, "[redacted-token]")
+      .replace(/https:\/\/[a-z0-9-]+\.supabase\.co/gi, "[supabase-url]");
+  }
+
+  function supabaseErrorDetails(operation, error, user) {
+    const code = String(error && (error.code || error.status || error.statusCode || error.name) || "none");
+    const message = sanitizeErrorMessage(error && (error.message || error.error_description || error.details) || error);
+    return `${operation} failed. Code: ${code}. ${message}. Auth: ${authStateLabel(user)}.`;
+  }
+
   function sessionKey(etbId, location) {
     return `cardvector.mobileCapture.${etbId}.${location}`;
   }
@@ -111,6 +131,7 @@
       status: "DRAFT",
       source: "MOBILE_WEB",
       operator: "",
+      operator_id: "",
       device: {
         userAgent: navigator.userAgent,
         language: navigator.language,
@@ -213,6 +234,7 @@
           <div><span>Session</span><strong id="capture-session-id">Not started</strong></div>
           <div><span>Images</span><strong id="capture-image-count">0</strong></div>
         </div>
+        <div class="capture-operator" id="capture-operator" aria-live="polite">Operator: not signed in</div>
         <div class="capture-auth" id="capture-auth"></div>
         <div class="capture-actions">
           <button class="button primary capture-button" id="start-capture" type="button">Start Capture Session</button>
@@ -298,6 +320,7 @@
     const current = await client.auth.getSession();
     if (current.data && current.data.session) {
       auth.innerHTML = `<span class="capture-auth-state">Signed in</span>`;
+      setText("capture-operator", `Operator: ${authStateLabel(current.data.session.user)}`);
       return current.data.session.user;
     }
     auth.innerHTML = `
@@ -310,39 +333,48 @@
       const password = document.getElementById("capture-password").value;
       const result = await client.auth.signInWithPassword({ email, password });
       if (result.error) {
-        setText("capture-auth-state", result.error.message);
+        setText("capture-auth-state", supabaseErrorDetails("Sign in", result.error, null));
         return;
       }
+      const user = result.data && result.data.user ? result.data.user : null;
       setText("capture-auth-state", "Signed in.");
+      setText("capture-operator", `Operator: ${authStateLabel(user)}`);
     });
     return null;
   }
 
-  async function submitCapture(client, session, images, cfg, user) {
-    const now = new Date().toISOString();
-    session.status = "UPLOADING";
-    saveStoredSession(session.etb_location.split("-").slice(0, 2).join("-"), session.etb_location.split("-")[2], session);
-    updateCaptureSummary(session);
-    setProgress(5, "Creating capture session...");
-    const sessionPayload = {
+  function buildSessionPayload(session, images, user) {
+    return {
       capture_session_id: session.capture_session_id,
       etb_location: session.etb_location,
+      etb_location_id: session.etb_location,
       created_at: session.created_at,
-      updated_at: now,
+      updated_at: new Date().toISOString(),
       submitted_at: null,
       status: "UPLOADING",
       source: "MOBILE_WEB",
       operator: user ? user.email : "",
+      operator_id: user ? user.id : null,
       user_id: user ? user.id : null,
       device: session.device,
+      source_device: session.device,
       image_count: images.length,
       original_image_locations: [],
-      conversion_status: "",
+      conversion_status: "UPLOADING",
       conversion_workstation: ""
     };
+  }
+
+  async function submitCapture(client, session, images, cfg, user) {
+    session.status = "UPLOADING";
+    saveStoredSession(session.etb_location.split("-").slice(0, 2).join("-"), session.etb_location.split("-")[2], session);
+    updateCaptureSummary(session);
+    setProgress(5, "Creating capture session...");
+    const sessionPayload = buildSessionPayload(session, images, user);
+    const now = sessionPayload.updated_at;
     const upsert = await client.from("mobile_capture_sessions").upsert(sessionPayload, { onConflict: "capture_session_id" });
     if (upsert.error) {
-      throw upsert.error;
+      throw new Error(supabaseErrorDetails("Create capture session", upsert.error, user));
     }
     const uploaded = [];
     for (let index = 0; index < images.length; index += 1) {
@@ -367,14 +399,16 @@
         original_filename: image.name,
         content_type: image.type || "image/jpeg",
         byte_size: image.size || 0,
+        image_order: index + 1,
         sequence_number: index + 1,
+        upload_status: "UPLOADED",
         created_at: now,
         removed_at: null,
         user_id: user ? user.id : null
       };
       const imageInsert = await client.from("mobile_capture_images").upsert(row, { onConflict: "image_id" });
       if (imageInsert.error) {
-        throw imageInsert.error;
+        throw new Error(supabaseErrorDetails("Record uploaded image", imageInsert.error, user));
       }
       uploaded.push({ bucket: cfg.originalImageBucket, path, image_id: image.id, sequence_number: index + 1 });
     }
@@ -393,7 +427,7 @@
       .eq("capture_session_id", session.capture_session_id)
       .in("status", ["UPLOADING", "PENDING_CONVERSION"]);
     if (update.error) {
-      throw update.error;
+      throw new Error(supabaseErrorDetails("Submit capture session", update.error, user));
     }
     session.status = "PENDING_CONVERSION";
     session.submitted_at = submittedAt;
@@ -461,8 +495,11 @@
         const auth = await client.auth.getSession();
         const user = auth.data && auth.data.session ? auth.data.session.user : null;
         if (!user) {
-          throw new Error("Sign in before upload.");
+          setText("capture-operator", "Operator: not signed in");
+          setProgress(0, "Sign in required before upload.");
+          return;
         }
+        setText("capture-operator", `Operator: ${authStateLabel(user)}`);
         const images = await loadDraftImages(session.capture_session_id);
         if (!images.length) {
           throw new Error("Capture at least one image before upload.");
