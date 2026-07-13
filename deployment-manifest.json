@@ -1,0 +1,20 @@
+{
+  "source_repository": "jhill2487/CardVector",
+  "source_path": "Docs/",
+  "source_commit": "6d65860bcf8b11254572d5bd31a6025262454c71",
+  "generated_at": "2026-07-13T14:45:06+00:00",
+  "public_files": [
+    "index.html",
+    "404.html",
+    "app.js",
+    "style.css",
+    "mobile-capture-config.js",
+    "CNAME",
+    "_config.yml"
+  ],
+  "public_assets": [
+    "assets/putnam-profile.png",
+    "assets/putnam-profile-onepiece.png",
+    "assets/putnam-ebay-banner.png"
+  ]
+}

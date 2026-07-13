@@ -22,21 +22,461 @@
     return;
   }
 
-  function detailRow(label, value) {
-    return `<dt>${label}</dt><dd>${value}</dd>`;
+  const captureStatuses = new Set([
+    "DRAFT",
+    "UPLOADING",
+    "PENDING_CONVERSION",
+    "PROCESSING",
+    "CONVERTED",
+    "FAILED",
+    "CANCELLED"
+  ]);
+  const captureDbName = "cardvector-mobile-capture";
+  const captureStoreName = "images";
+
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
 
-  function renderQrView(title, subtitle, rows) {
+  function detailRow(label, value) {
+    return `<dt>${escapeHtml(label)}</dt><dd>${value}</dd>`;
+  }
+
+  function renderQrView(title, subtitle, rows, extra = "") {
     main.innerHTML = `
       <section class="qr-view wrap" aria-labelledby="qr-title">
         <article class="qr-card">
           <p class="eyebrow">CardVector QR</p>
-          <h1 id="qr-title">${title}</h1>
-          <p class="hero-lede">${subtitle}</p>
+          <h1 id="qr-title">${escapeHtml(title)}</h1>
+          <p class="hero-lede">${escapeHtml(subtitle)}</p>
           <dl>${rows}</dl>
-          <p class="qr-note">This public page is the permanent CardVector QR destination. Inventory details will expand as CardVector Mobile grows.</p>
+          ${extra}
+          <p class="qr-note">This public page is the permanent CardVector QR destination. Inventory details expand through authenticated CardVector Mobile workflows.</p>
         </article>
       </section>`;
+  }
+
+  function captureConfig() {
+    const cfg = window.CARDVECTOR_MOBILE_CAPTURE_CONFIG || {};
+    return {
+      supabaseUrl: String(cfg.supabaseUrl || "").trim(),
+      supabaseAnonKey: String(cfg.supabaseAnonKey || "").trim(),
+      originalImageBucket: String(cfg.originalImageBucket || "mobile-capture-originals").trim()
+    };
+  }
+
+  function configuredSupabase() {
+    const cfg = captureConfig();
+    if (!cfg.supabaseUrl || !cfg.supabaseAnonKey || !window.supabase) {
+      return null;
+    }
+    return window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
+  }
+
+  function sessionKey(etbId, location) {
+    return `cardvector.mobileCapture.${etbId}.${location}`;
+  }
+
+  function uuid() {
+    if (window.crypto && typeof window.crypto.randomUUID === "function") {
+      return window.crypto.randomUUID();
+    }
+    return `capture-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
+  function getStoredSession(etbId, location) {
+    try {
+      return JSON.parse(localStorage.getItem(sessionKey(etbId, location)) || "null");
+    } catch (_exc) {
+      return null;
+    }
+  }
+
+  function saveStoredSession(etbId, location, session) {
+    localStorage.setItem(sessionKey(etbId, location), JSON.stringify(session));
+  }
+
+  function newDraft(etbId, location) {
+    const createdAt = new Date().toISOString();
+    return {
+      capture_session_id: uuid(),
+      etb_location: `${etbId}-${location}`,
+      created_at: createdAt,
+      submitted_at: null,
+      status: "DRAFT",
+      source: "MOBILE_WEB",
+      operator: "",
+      device: {
+        userAgent: navigator.userAgent,
+        language: navigator.language,
+        platform: navigator.platform || ""
+      },
+      image_count: 0,
+      original_image_locations: [],
+      conversion_status: "",
+      conversion_workstation: ""
+    };
+  }
+
+  function openCaptureDb() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(captureDbName, 1);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(captureStoreName)) {
+          const store = db.createObjectStore(captureStoreName, { keyPath: "id" });
+          store.createIndex("sessionId", "sessionId", { unique: false });
+        }
+      };
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+  }
+
+  async function saveDraftImages(sessionId, files) {
+    const db = await openCaptureDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(captureStoreName, "readwrite");
+      const store = tx.objectStore(captureStoreName);
+      Array.from(files).forEach((file) => {
+        const id = uuid();
+        store.put({
+          id,
+          sessionId,
+          file,
+          name: file.name || `${id}.jpg`,
+          type: file.type || "image/jpeg",
+          size: file.size || 0,
+          createdAt: new Date().toISOString()
+        });
+      });
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  }
+
+  async function loadDraftImages(sessionId) {
+    const db = await openCaptureDb();
+    const rows = await new Promise((resolve, reject) => {
+      const tx = db.transaction(captureStoreName, "readonly");
+      const index = tx.objectStore(captureStoreName).index("sessionId");
+      const request = index.getAll(sessionId);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result || []);
+    });
+    db.close();
+    return rows.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+  }
+
+  async function removeDraftImage(imageId) {
+    const db = await openCaptureDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(captureStoreName, "readwrite");
+      tx.objectStore(captureStoreName).delete(imageId);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  }
+
+  async function clearDraftImages(sessionId) {
+    const images = await loadDraftImages(sessionId);
+    const db = await openCaptureDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(captureStoreName, "readwrite");
+      const store = tx.objectStore(captureStoreName);
+      images.forEach((image) => store.delete(image.id));
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  }
+
+  function capturePanelHtml(etbId, location) {
+    return `
+      <section class="mobile-capture" aria-labelledby="capture-title">
+        <div class="capture-header">
+          <div>
+            <p class="eyebrow">Mobile Capture</p>
+            <h2 id="capture-title">Capture Inventory</h2>
+          </div>
+          <span class="capture-status" id="capture-status">DRAFT</span>
+        </div>
+        <div class="capture-summary" aria-live="polite">
+          <div><span>ETB Location</span><strong id="capture-location">${escapeHtml(etbId)}-${escapeHtml(location)}</strong></div>
+          <div><span>Session</span><strong id="capture-session-id">Not started</strong></div>
+          <div><span>Images</span><strong id="capture-image-count">0</strong></div>
+        </div>
+        <div class="capture-auth" id="capture-auth"></div>
+        <div class="capture-actions">
+          <button class="button primary capture-button" id="start-capture" type="button">Start Capture Session</button>
+          <label class="button secondary capture-file-label" for="capture-files">Capture Photos</label>
+          <input id="capture-files" class="capture-file-input" type="file" accept="image/*" capture="environment" multiple>
+          <button class="button primary capture-button" id="upload-capture" type="button">Upload</button>
+        </div>
+        <div class="capture-progress" aria-live="polite">
+          <progress id="capture-progress" max="100" value="0"></progress>
+          <span id="capture-progress-text">Ready</span>
+        </div>
+        <div class="capture-thumbs" id="capture-thumbs" aria-label="Captured photo thumbnails"></div>
+      </section>`;
+  }
+
+  function setText(id, value) {
+    const el = document.getElementById(id);
+    if (el) {
+      el.textContent = value;
+    }
+  }
+
+  function setCaptureStatus(value) {
+    const status = captureStatuses.has(value) ? value : "DRAFT";
+    setText("capture-status", status);
+  }
+
+  function setProgress(value, text) {
+    const progress = document.getElementById("capture-progress");
+    if (progress) {
+      progress.value = Math.max(0, Math.min(100, Number(value) || 0));
+    }
+    setText("capture-progress-text", text);
+  }
+
+  async function renderThumbnails(session) {
+    const target = document.getElementById("capture-thumbs");
+    if (!target || !session) {
+      return;
+    }
+    const images = await loadDraftImages(session.capture_session_id);
+    target.innerHTML = "";
+    images.forEach((image, index) => {
+      const url = URL.createObjectURL(image.file);
+      const item = document.createElement("figure");
+      item.className = "capture-thumb";
+      item.innerHTML = `
+        <img src="${url}" alt="Captured card ${index + 1}">
+        <figcaption>
+          <span>${index + 1}</span>
+          <button type="button" data-remove-image="${escapeHtml(image.id)}" aria-label="Remove image ${index + 1}">Remove</button>
+        </figcaption>`;
+      target.appendChild(item);
+    });
+    target.querySelectorAll("[data-remove-image]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        await removeDraftImage(button.getAttribute("data-remove-image"));
+        session.image_count = (await loadDraftImages(session.capture_session_id)).length;
+        saveStoredSession(session.etb_location.split("-").slice(0, 2).join("-"), session.etb_location.split("-")[2], session);
+        updateCaptureSummary(session);
+        renderThumbnails(session);
+      });
+    });
+  }
+
+  function updateCaptureSummary(session) {
+    if (!session) {
+      setText("capture-session-id", "Not started");
+      setText("capture-image-count", "0");
+      setCaptureStatus("DRAFT");
+      return;
+    }
+    setText("capture-session-id", session.capture_session_id);
+    setText("capture-image-count", String(session.image_count || 0));
+    setCaptureStatus(session.status);
+  }
+
+  async function ensureAuth(client) {
+    const auth = document.getElementById("capture-auth");
+    if (!client || !auth) {
+      return null;
+    }
+    const current = await client.auth.getSession();
+    if (current.data && current.data.session) {
+      auth.innerHTML = `<span class="capture-auth-state">Signed in</span>`;
+      return current.data.session.user;
+    }
+    auth.innerHTML = `
+      <label>Email <input id="capture-email" type="email" autocomplete="email" placeholder="operator@example.com"></label>
+      <label>Password <input id="capture-password" type="password" autocomplete="current-password" placeholder="Password"></label>
+      <button class="button secondary" id="capture-sign-in" type="button">Sign In</button>
+      <span class="capture-auth-state" id="capture-auth-state">Sign in before upload.</span>`;
+    document.getElementById("capture-sign-in").addEventListener("click", async () => {
+      const email = document.getElementById("capture-email").value.trim();
+      const password = document.getElementById("capture-password").value;
+      const result = await client.auth.signInWithPassword({ email, password });
+      if (result.error) {
+        setText("capture-auth-state", result.error.message);
+        return;
+      }
+      setText("capture-auth-state", "Signed in.");
+    });
+    return null;
+  }
+
+  async function submitCapture(client, session, images, cfg, user) {
+    const now = new Date().toISOString();
+    session.status = "UPLOADING";
+    saveStoredSession(session.etb_location.split("-").slice(0, 2).join("-"), session.etb_location.split("-")[2], session);
+    updateCaptureSummary(session);
+    setProgress(5, "Creating capture session...");
+    const sessionPayload = {
+      capture_session_id: session.capture_session_id,
+      etb_location: session.etb_location,
+      created_at: session.created_at,
+      updated_at: now,
+      submitted_at: null,
+      status: "UPLOADING",
+      source: "MOBILE_WEB",
+      operator: user ? user.email : "",
+      user_id: user ? user.id : null,
+      device: session.device,
+      image_count: images.length,
+      original_image_locations: [],
+      conversion_status: "",
+      conversion_workstation: ""
+    };
+    const upsert = await client.from("mobile_capture_sessions").upsert(sessionPayload, { onConflict: "capture_session_id" });
+    if (upsert.error) {
+      throw upsert.error;
+    }
+    const uploaded = [];
+    for (let index = 0; index < images.length; index += 1) {
+      const image = images[index];
+      const ext = (image.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+      const path = `${user.id}/${session.etb_location}/${session.capture_session_id}/${String(index + 1).padStart(4, "0")}-${image.id}.${ext}`;
+      const progress = 10 + Math.round(((index + 1) / images.length) * 70);
+      setProgress(progress, `Uploading ${index + 1} of ${images.length}...`);
+      const upload = await client.storage.from(cfg.originalImageBucket).upload(path, image.file, {
+        cacheControl: "3600",
+        contentType: image.type || "image/jpeg",
+        upsert: false
+      });
+      if (upload.error && !String(upload.error.message || "").toLowerCase().includes("already exists")) {
+        throw upload.error;
+      }
+      const row = {
+        image_id: image.id,
+        capture_session_id: session.capture_session_id,
+        storage_bucket: cfg.originalImageBucket,
+        storage_path: path,
+        original_filename: image.name,
+        content_type: image.type || "image/jpeg",
+        byte_size: image.size || 0,
+        sequence_number: index + 1,
+        created_at: now,
+        removed_at: null,
+        user_id: user ? user.id : null
+      };
+      const imageInsert = await client.from("mobile_capture_images").upsert(row, { onConflict: "image_id" });
+      if (imageInsert.error) {
+        throw imageInsert.error;
+      }
+      uploaded.push({ bucket: cfg.originalImageBucket, path, image_id: image.id, sequence_number: index + 1 });
+    }
+    setProgress(90, "Submitting for conversion...");
+    const submittedAt = new Date().toISOString();
+    const update = await client
+      .from("mobile_capture_sessions")
+      .update({
+        status: "PENDING_CONVERSION",
+        updated_at: submittedAt,
+        submitted_at: submittedAt,
+        image_count: images.length,
+        original_image_locations: uploaded,
+        conversion_status: "PENDING_CONVERSION"
+      })
+      .eq("capture_session_id", session.capture_session_id)
+      .in("status", ["UPLOADING", "PENDING_CONVERSION"]);
+    if (update.error) {
+      throw update.error;
+    }
+    session.status = "PENDING_CONVERSION";
+    session.submitted_at = submittedAt;
+    session.image_count = images.length;
+    session.original_image_locations = uploaded;
+    session.conversion_status = "PENDING_CONVERSION";
+    saveStoredSession(session.etb_location.split("-").slice(0, 2).join("-"), session.etb_location.split("-")[2], session);
+    await clearDraftImages(session.capture_session_id);
+    updateCaptureSummary(session);
+    setProgress(100, "Uploaded. Pending conversion.");
+  }
+
+  async function initializeCapture(etbId, location) {
+    const cfg = captureConfig();
+    const client = configuredSupabase();
+    let session = getStoredSession(etbId, location);
+    updateCaptureSummary(session);
+    if (session) {
+      renderThumbnails(session);
+    }
+    if (!client) {
+      setProgress(0, "Mobile capture backend is not configured.");
+      const auth = document.getElementById("capture-auth");
+      if (auth) {
+        auth.innerHTML = `<span class="capture-auth-state">Configure Supabase before uploads are enabled.</span>`;
+      }
+    } else {
+      ensureAuth(client);
+    }
+    document.getElementById("start-capture").addEventListener("click", async () => {
+      session = newDraft(etbId, location);
+      saveStoredSession(etbId, location, session);
+      updateCaptureSummary(session);
+      setProgress(0, "Draft ready.");
+      await renderThumbnails(session);
+    });
+    document.getElementById("capture-files").addEventListener("change", async (event) => {
+      if (!session || session.status !== "DRAFT") {
+        session = newDraft(etbId, location);
+      }
+      const files = Array.from(event.target.files || []).filter((file) => file.type.startsWith("image/"));
+      if (!files.length) {
+        setProgress(0, "No images selected.");
+        return;
+      }
+      await saveDraftImages(session.capture_session_id, files);
+      session.image_count = (await loadDraftImages(session.capture_session_id)).length;
+      saveStoredSession(etbId, location, session);
+      updateCaptureSummary(session);
+      await renderThumbnails(session);
+      setProgress(0, "Images staged on this phone.");
+      event.target.value = "";
+    });
+    document.getElementById("upload-capture").addEventListener("click", async () => {
+      try {
+        if (!client) {
+          throw new Error("Mobile capture backend is not configured.");
+        }
+        if (!session) {
+          throw new Error("Start a capture session first.");
+        }
+        if (session.status === "PENDING_CONVERSION") {
+          throw new Error("This session is already pending conversion.");
+        }
+        const auth = await client.auth.getSession();
+        const user = auth.data && auth.data.session ? auth.data.session.user : null;
+        if (!user) {
+          throw new Error("Sign in before upload.");
+        }
+        const images = await loadDraftImages(session.capture_session_id);
+        if (!images.length) {
+          throw new Error("Capture at least one image before upload.");
+        }
+        await submitCapture(client, session, images, cfg, user);
+      } catch (exc) {
+        if (session) {
+          session.status = "FAILED";
+          saveStoredSession(etbId, location, session);
+          updateCaptureSummary(session);
+        }
+        setProgress(0, exc.message || String(exc));
+      }
+    });
   }
 
   if (route === "etb" && parts[1]) {
@@ -45,7 +485,7 @@
       etbId,
       "Putnam Collectibles inventory location check.",
       detailRow("Type", "Storage Label") +
-        detailRow("ETB ID", etbId) +
+        detailRow("ETB ID", escapeHtml(etbId)) +
         detailRow("Inventory Details", "Private") +
         detailRow("Owner", "Putnam Collectibles") +
         detailRow("Powered By", "CardVector")
@@ -61,13 +501,15 @@
       `Location ${location}`,
       "Putnam Collectibles inventory location check.",
       detailRow("Type", "Location Label") +
-        detailRow("ETB ID", etbId) +
-        detailRow("Location", location) +
+        detailRow("ETB ID", escapeHtml(etbId)) +
+        detailRow("Location", escapeHtml(location)) +
         detailRow("Inventory Details", "Private") +
         detailRow("Owner", "Putnam Collectibles") +
-        detailRow("Powered By", "CardVector")
+        detailRow("Powered By", "CardVector"),
+      capturePanelHtml(etbId, location)
     );
     document.title = `${etbId} Location ${location} | Putnam Collectibles`;
+    initializeCapture(etbId, location);
     return;
   }
 
@@ -76,7 +518,7 @@
     renderQrView(
       lotId,
       "Putnam Collectibles acquisition lot.",
-      detailRow("Type", "Acquisition Lot") + detailRow("Lot ID", lotId) + detailRow("Powered By", "CardVector")
+      detailRow("Type", "Acquisition Lot") + detailRow("Lot ID", escapeHtml(lotId)) + detailRow("Powered By", "CardVector")
     );
     document.title = `${lotId} | Putnam Collectibles`;
     return;
