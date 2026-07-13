@@ -33,3 +33,4 @@ Future public pages are reserved but not fully built yet:
 
 - eBay store: https://ebay.io/m/gttiV0
 - Collection inquiry form: https://tally.so/r/ob1ABN
+- Whatnot referral invite: https://whatnot.com/invite/putnam_collectibles
