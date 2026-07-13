@@ -1,4 +1,4 @@
-﻿# CardVector-site
+# CardVector-site
 
 Public website for Putnam Collectibles at https://cardvector.app.
 
@@ -31,5 +31,5 @@ Future public pages are reserved but not fully built yet:
 
 ## Public Links
 
-- eBay store: https://www.ebay.com/str/putnamcollectibles
-
+- eBay store: https://ebay.io/m/gttiV0
+- Collection inquiry form: https://tally.so/r/ob1ABN

@@ -118,13 +118,42 @@ a:hover {
   color: var(--blue-900);
 }
 
+.nav-links a.nav-cta {
+  background: var(--blue-700);
+  color: white;
+  box-shadow: 0 10px 24px rgba(31, 95, 191, .20);
+}
+
+.nav-links a.nav-cta:hover {
+  background: var(--blue-950);
+  color: white;
+}
+
 .hero {
-  min-height: 650px;
+  min-height: 560px;
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) 420px;
   align-items: center;
   gap: 56px;
-  padding: 72px 0 56px;
+  padding: 52px 0 56px;
+}
+
+.brand-banner {
+  padding-top: 28px;
+}
+
+.brand-banner a {
+  display: block;
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.brand-banner img {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: var(--blue-950);
 }
 
 .hero-logo {
@@ -211,6 +240,12 @@ h3 {
   color: white;
 }
 
+.button-large {
+  min-height: 58px;
+  padding: 16px 26px;
+  font-size: 1.05rem;
+}
+
 .button.secondary {
   background: white;
   color: var(--blue-900);
@@ -252,6 +287,25 @@ h3 {
   text-align: right;
 }
 
+.panel-shop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 10px 0 8px;
+  padding: 16px 18px;
+  color: white;
+  background: linear-gradient(135deg, var(--blue-700), var(--blue-950));
+  border-radius: 16px;
+  font-weight: 900;
+  text-align: center;
+  box-shadow: 0 14px 30px rgba(31, 95, 191, .22);
+}
+
+.panel-shop:hover {
+  color: white;
+  background: var(--blue-950);
+}
+
 .actions,
 .building {
   padding: 46px 0;
@@ -282,6 +336,39 @@ h3 {
 .action-card.featured {
   background: linear-gradient(180deg, #ffffff, var(--blue-50));
   border-color: #bdd4ff;
+}
+
+.action-card.shop-card {
+  grid-column: span 2;
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, .26), transparent 18rem),
+    linear-gradient(135deg, var(--blue-700), var(--blue-950));
+  border-color: var(--blue-700);
+  box-shadow: 0 22px 58px rgba(31, 95, 191, .22);
+}
+
+.action-card.shop-card h3,
+.action-card.shop-card p,
+.action-card.shop-card a {
+  color: white;
+}
+
+.action-card.shop-card .card-number {
+  color: var(--blue-950);
+  background: white;
+}
+
+.action-card.shop-card a {
+  width: fit-content;
+  padding: 11px 16px;
+  background: white;
+  color: var(--blue-950);
+  border-radius: 999px;
+}
+
+.action-card.shop-card a:hover {
+  background: var(--blue-100);
+  color: var(--blue-950);
 }
 
 .card-number {
@@ -460,6 +547,10 @@ h3 {
   .card-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .action-card.shop-card {
+    grid-column: span 2;
+  }
 }
 
 @media (max-width: 720px) {
@@ -480,8 +571,16 @@ h3 {
   }
 
   .hero {
-    padding-top: 44px;
+    padding-top: 34px;
     gap: 28px;
+  }
+
+  .brand-banner {
+    padding-top: 18px;
+  }
+
+  .brand-banner a {
+    border-radius: 16px;
   }
 
   .hero-actions,
@@ -493,6 +592,10 @@ h3 {
   .card-grid,
   .updates {
     display: grid;
+  }
+
+  .action-card.shop-card {
+    grid-column: auto;
   }
 
   .footer-inner {
