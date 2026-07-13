@@ -28,3 +28,8 @@ Future public pages are reserved but not fully built yet:
 - `/events`
 - `/contact`
 - `/about`
+
+## Public Links
+
+- eBay store: https://www.ebay.com/str/putnamcollectibles
+
