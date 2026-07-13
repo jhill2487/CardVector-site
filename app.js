@@ -98,6 +98,17 @@
     return `${operation} failed. Code: ${code}. ${message}. Auth: ${authStateLabel(user)}.`;
   }
 
+  function authTokenStateLabel(session) {
+    return session && session.access_token ? "user bearer token present" : "user bearer token missing";
+  }
+
+  function storageErrorDetails(operation, response, body, user, session) {
+    const status = response ? `${response.status} ${response.statusText || ""}`.trim() : "none";
+    const code = body && (body.error || body.error_code || body.code || body.statusCode || body.status) || status;
+    const message = body && (body.message || body.error_description || body.details) || body || "Unknown storage error";
+    return `${operation} failed. Code: ${sanitizeErrorMessage(code)}. ${sanitizeErrorMessage(message)}. Auth: ${authStateLabel(user)}; ${authTokenStateLabel(session)}.`;
+  }
+
   function sessionKey(etbId, location) {
     return `cardvector.mobileCapture.${etbId}.${location}`;
   }
@@ -365,7 +376,61 @@
     };
   }
 
-  async function submitCapture(client, session, images, cfg, user) {
+  function storageObjectUrl(cfg, bucket, path) {
+    const baseUrl = cfg.supabaseUrl.replace(/\/+$/, "");
+    const safeBucket = encodeURIComponent(bucket);
+    const safePath = String(path).split("/").map(encodeURIComponent).join("/");
+    return `${baseUrl}/storage/v1/object/${safeBucket}/${safePath}`;
+  }
+
+  function validateUploadImage(image, path, user) {
+    if (!user || !user.id) {
+      throw new Error("Sign in required before upload.");
+    }
+    if (!image || !(image.file instanceof Blob)) {
+      throw new Error("Upload original image failed. Code: invalid-file. Selected image is not a valid browser file. Auth: signed in.");
+    }
+    if (!String(image.type || image.file.type || "").startsWith("image/")) {
+      throw new Error("Upload original image failed. Code: invalid-content-type. Selected file is not an image. Auth: signed in.");
+    }
+    if (!String(path || "").startsWith(`${user.id}/`) || path.includes("//")) {
+      throw new Error("Upload original image failed. Code: invalid-path. Object path is not scoped to the signed-in operator. Auth: signed in.");
+    }
+  }
+
+  async function uploadOriginalImage(cfg, path, image, user, session) {
+    validateUploadImage(image, path, user);
+    if (!session || !session.access_token) {
+      throw new Error("Upload original image failed. Code: missing-auth-token. Sign in required before upload. Auth: signed in; user bearer token missing.");
+    }
+    const response = await fetch(storageObjectUrl(cfg, cfg.originalImageBucket, path), {
+      method: "POST",
+      headers: {
+        apikey: cfg.supabaseAnonKey,
+        Authorization: `Bearer ${session.access_token}`,
+        "Cache-Control": "3600",
+        "Content-Type": image.type || image.file.type || "image/jpeg",
+        "x-upsert": "false"
+      },
+      body: image.file
+    });
+    if (response.ok) {
+      return;
+    }
+    const responseText = await response.text();
+    let body = responseText;
+    try {
+      body = JSON.parse(responseText);
+    } catch (_exc) {
+      body = responseText;
+    }
+    if (response.status === 400 && String(storageErrorDetails("Upload original image", response, body, user, session)).toLowerCase().includes("already exists")) {
+      return;
+    }
+    throw new Error(storageErrorDetails("Upload original image", response, body, user, session));
+  }
+
+  async function submitCapture(client, session, images, cfg, user, authSession) {
     session.status = "UPLOADING";
     saveStoredSession(session.etb_location.split("-").slice(0, 2).join("-"), session.etb_location.split("-")[2], session);
     updateCaptureSummary(session);
@@ -383,14 +448,7 @@
       const path = `${user.id}/${session.etb_location}/${session.capture_session_id}/${String(index + 1).padStart(4, "0")}-${image.id}.${ext}`;
       const progress = 10 + Math.round(((index + 1) / images.length) * 70);
       setProgress(progress, `Uploading ${index + 1} of ${images.length}...`);
-      const upload = await client.storage.from(cfg.originalImageBucket).upload(path, image.file, {
-        cacheControl: "3600",
-        contentType: image.type || "image/jpeg",
-        upsert: false
-      });
-      if (upload.error && !String(upload.error.message || "").toLowerCase().includes("already exists")) {
-        throw upload.error;
-      }
+      await uploadOriginalImage(cfg, path, image, user, authSession);
       const row = {
         image_id: image.id,
         capture_session_id: session.capture_session_id,
@@ -493,9 +551,14 @@
           throw new Error("This session is already pending conversion.");
         }
         const auth = await client.auth.getSession();
-        const user = auth.data && auth.data.session ? auth.data.session.user : null;
+        const authSession = auth.data && auth.data.session ? auth.data.session : null;
+        const user = authSession ? authSession.user : null;
         if (!user) {
           setText("capture-operator", "Operator: not signed in");
+          setProgress(0, "Sign in required before upload.");
+          return;
+        }
+        if (!authSession.access_token) {
           setProgress(0, "Sign in required before upload.");
           return;
         }
@@ -504,7 +567,7 @@
         if (!images.length) {
           throw new Error("Capture at least one image before upload.");
         }
-        await submitCapture(client, session, images, cfg, user);
+        await submitCapture(client, session, images, cfg, user, authSession);
       } catch (exc) {
         if (session) {
           session.status = "FAILED";
