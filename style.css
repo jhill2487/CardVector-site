@@ -459,8 +459,59 @@ h3 {
   color: var(--muted);
 }
 
-.marketplace-card .button {
+.marketplace-card .button,
+.marketplace-card .marketplace-shop-button {
   margin-top: auto;
+}
+
+.marketplace-shop-button {
+  width: 100%;
+  min-height: 66px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 9px;
+  padding: 14px 18px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  font-family: inherit;
+}
+
+.marketplace-shop-button span:first-child {
+  font-size: .82rem;
+  font-weight: 750;
+}
+
+.marketplace-shop-button strong {
+  font-size: 1.35rem;
+  letter-spacing: 0;
+}
+
+.marketplace-shop-button span:last-child {
+  font-size: 1.25rem;
+}
+
+.marketplace-shop-primary {
+  color: white;
+  background: var(--blue-700);
+  box-shadow: 0 14px 30px rgba(31, 95, 191, .20);
+}
+
+.marketplace-shop-primary:hover {
+  color: white;
+  background: var(--blue-950);
+}
+
+.marketplace-shop-secondary {
+  color: var(--blue-950);
+  background: var(--blue-50);
+  border-color: #b8cbea;
+}
+
+.marketplace-shop-secondary:hover {
+  color: var(--blue-950);
+  background: var(--blue-100);
+  border-color: var(--blue-700);
 }
 
 .marketplace-label {
@@ -473,10 +524,7 @@ h3 {
 }
 
 .whatnot-callout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 32px;
+  display: block;
   margin-top: 22px;
   padding: 34px;
   color: white;
@@ -493,27 +541,64 @@ h3 {
   color: white;
 }
 
-.whatnot-callout p:not(.eyebrow) {
+.whatnot-heading {
   max-width: 700px;
 }
 
+.whatnot-referral-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.whatnot-referral-card {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 24px;
+  color: var(--ink);
+  background: white;
+  border: 1px solid rgba(255, 255, 255, .45);
+  border-radius: 16px;
+}
+
+.whatnot-callout .whatnot-referral-card h3 {
+  color: var(--blue-950);
+}
+
+.whatnot-callout .whatnot-referral-card p {
+  color: var(--muted);
+}
+
+.referral-type {
+  margin-bottom: 16px;
+  color: var(--blue-700);
+  font-size: .75rem;
+  font-weight: 900;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+
 .referral-disclosure {
-  margin-bottom: 0;
+  margin: 18px 0 0;
   color: #dbeafe !important;
   font-size: .9rem;
 }
 
 .button.whatnot-button {
-  max-width: 310px;
-  color: var(--blue-950);
-  background: white;
+  width: 100%;
+  margin-top: auto;
+  color: white;
+  background: var(--blue-700);
   text-align: center;
-  box-shadow: 0 14px 34px rgba(0, 0, 0, .16);
+  box-shadow: none;
 }
 
 .button.whatnot-button:hover {
-  color: var(--blue-950);
-  background: var(--blue-100);
+  color: white;
+  background: var(--blue-950);
 }
 
 .sell-section {
@@ -1178,7 +1263,6 @@ h3 {
   }
 
   .button.whatnot-button {
-    max-width: none;
     width: 100%;
   }
 }
@@ -1277,6 +1361,7 @@ h3 {
   .updates,
   .card-grid,
   .marketplace-grid,
+  .whatnot-referral-grid,
   .sell-options {
     grid-template-columns: 1fr;
   }
