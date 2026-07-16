@@ -47,7 +47,50 @@
     };
   }
 
-  return { calculateCoverCrop, calculateCaptureOutputSize };
+  const locationCodes = Object.freeze(Array.from("ABCDEFGHIJ"));
+
+  function normalizeEtbId(value) {
+    const etbId = String(value || "").trim().toUpperCase();
+    if (!/^ETB-[0-9]{3}$/.test(etbId)) {
+      throw new Error("ETB ID must use ETB-### format.");
+    }
+    return etbId;
+  }
+
+  function normalizeLocationCode(value) {
+    const code = String(value || "").trim().toUpperCase();
+    if (!locationCodes.includes(code)) {
+      throw new Error("Location code must be A-J.");
+    }
+    return code;
+  }
+
+  function canonicalLocationId(etbId, locationCode) {
+    return `${normalizeEtbId(etbId)}-${normalizeLocationCode(locationCode)}`;
+  }
+
+  function nextAvailableLocationCode(locations) {
+    const existing = new Set();
+    for (const item of locations || []) {
+      const value = typeof item === "string" ? item : item && item.location_code;
+      try {
+        existing.add(normalizeLocationCode(value));
+      } catch (_exc) {
+        // Invalid cloud rows are ignored and never become capture destinations.
+      }
+    }
+    return locationCodes.find((code) => !existing.has(code)) || "";
+  }
+
+  return {
+    calculateCoverCrop,
+    calculateCaptureOutputSize,
+    locationCodes,
+    normalizeEtbId,
+    normalizeLocationCode,
+    canonicalLocationId,
+    nextAvailableLocationCode
+  };
 });
 
 (function () {
@@ -102,6 +145,7 @@
   };
   const captureDbName = "cardvector-mobile-capture";
   const captureStoreName = "images";
+  const mobileCore = window.CardVectorCaptureMath;
   let cameraController = null;
 
   function escapeHtml(value) {
@@ -401,12 +445,422 @@
           <input id="capture-files" class="capture-file-input" type="file" accept="image/*" multiple>
           <button class="button primary capture-button" id="upload-capture" type="button">Finish Session</button>
         </div>
+        <button class="entry-back" id="capture-back" type="button">Back</button>
         <div class="capture-progress" aria-live="polite">
           <progress id="capture-progress" max="100" value="0"></progress>
           <span id="capture-progress-text">Ready</span>
         </div>
         <div class="capture-thumbs" id="capture-thumbs" aria-label="Captured photo thumbnails"></div>
       </section>`;
+  }
+
+  function captureRoute(etbId, location, captureType) {
+    const type = captureTypeConfig[normalizeCaptureType(captureType)];
+    return `/capture/${encodeURIComponent(mobileCore.normalizeEtbId(etbId))}/${encodeURIComponent(mobileCore.normalizeLocationCode(location))}/${type.slug}`;
+  }
+
+  function captureEntryShellHtml(title = "Start Mobile Capture") {
+    return `
+      <section class="mobile-capture capture-entry" aria-labelledby="mobile-entry-title">
+        <div class="capture-header">
+          <div>
+            <p class="eyebrow">CardVector Mobile</p>
+            <h2 id="mobile-entry-title">${escapeHtml(title)}</h2>
+            <p>Choose the workflow and destination before starting the camera.</p>
+          </div>
+        </div>
+        <div class="capture-operator" id="mobile-entry-operator" aria-live="polite">Operator: not signed in</div>
+        <div class="capture-auth" id="mobile-entry-auth"></div>
+        <div id="mobile-draft-resume"></div>
+        <div id="mobile-entry-body" aria-live="polite"></div>
+      </section>`;
+  }
+
+  function entrySummaryHtml(state) {
+    const type = state.captureType ? captureTypeConfig[normalizeCaptureType(state.captureType)].shortLabel : "Not selected";
+    return `
+      <div class="entry-summary">
+        <div><span>Capture Type</span><strong>${escapeHtml(type)}</strong></div>
+        <div><span>ETB</span><strong>${escapeHtml(state.etbId || "Not selected")}</strong></div>
+        <div><span>Location</span><strong>${escapeHtml(state.location || "Not selected")}</strong></div>
+      </div>`;
+  }
+
+  async function requireLocationAuthorization(client, user) {
+    const result = await client
+      .from("cardvector_location_operators")
+      .select("user_id,can_manage_locations")
+      .eq("user_id", user.id)
+      .limit(1);
+    if (result.error) {
+      throw new Error(supabaseErrorDetails("Check location authorization", result.error, user));
+    }
+    if (!result.data || !result.data.length || !result.data[0].can_manage_locations) {
+      throw new Error("This signed-in operator is not authorized for location management.");
+    }
+  }
+
+  async function listCloudEtbs(client, user) {
+    const result = await client
+      .from("cardvector_etbs")
+      .select("etb_id,status,capacity,active_location_code,updated_at")
+      .order("etb_id", { ascending: true });
+    if (result.error) {
+      throw new Error(supabaseErrorDetails("Load ETBs", result.error, user));
+    }
+    return (result.data || []).filter((item) => {
+      try {
+        mobileCore.normalizeEtbId(item.etb_id);
+        return true;
+      } catch (_exc) {
+        return false;
+      }
+    });
+  }
+
+  async function listCloudLocations(client, user, etbId) {
+    const canonicalEtb = mobileCore.normalizeEtbId(etbId);
+    const result = await client
+      .from("cardvector_locations")
+      .select("location_id,etb_id,location_code,status,capacity,stored_count,assigned_batch,updated_at")
+      .eq("etb_id", canonicalEtb)
+      .order("location_code", { ascending: true });
+    if (result.error) {
+      throw new Error(supabaseErrorDetails("Load locations", result.error, user));
+    }
+    return (result.data || []).filter((item) => {
+      try {
+        return item.location_id === mobileCore.canonicalLocationId(item.etb_id, item.location_code);
+      } catch (_exc) {
+        return false;
+      }
+    });
+  }
+
+  async function createCloudNextLocation(client, user, etbId, expectedCode) {
+    const canonicalEtb = mobileCore.normalizeEtbId(etbId);
+    const expected = mobileCore.normalizeLocationCode(expectedCode);
+    const result = await client.rpc("cardvector_create_next_location", {
+      p_etb_id: canonicalEtb,
+      p_expected_location_code: expected
+    });
+    if (result.error) {
+      throw new Error(supabaseErrorDetails("Create next location", result.error, user));
+    }
+    const row = Array.isArray(result.data) ? result.data[0] : result.data;
+    if (!row || row.location_id !== mobileCore.canonicalLocationId(canonicalEtb, row.location_code)) {
+      throw new Error("Location creation returned an invalid canonical location.");
+    }
+    return row;
+  }
+
+  function localDraftSessionsForUser(userId) {
+    const drafts = [];
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index);
+      if (!key || !key.startsWith("cardvector.mobileCapture.")) {
+        continue;
+      }
+      try {
+        const session = JSON.parse(localStorage.getItem(key) || "null");
+        if (!session || session.status !== "DRAFT" || session.operator_id !== userId) {
+          continue;
+        }
+        const match = String(session.etb_location || "").match(/^(ETB-[0-9]{3})-([A-J])$/);
+        if (!match) {
+          continue;
+        }
+        drafts.push({ key, session, etbId: match[1], location: match[2] });
+      } catch (_exc) {
+        // Corrupt local state is ignored; IndexedDB content is not deleted.
+      }
+    }
+    return drafts.sort((left, right) => String(right.session.created_at || "").localeCompare(String(left.session.created_at || "")));
+  }
+
+  async function renderRecentDraft(user) {
+    const target = document.getElementById("mobile-draft-resume");
+    if (!target || !user) {
+      return;
+    }
+    const draft = localDraftSessionsForUser(user.id)[0];
+    if (!draft) {
+      target.innerHTML = "";
+      return;
+    }
+    const images = await loadDraftImages(draft.session.capture_session_id);
+    if (!images.length) {
+      target.innerHTML = "";
+      return;
+    }
+    const type = normalizeCaptureType(draft.session.capture_type);
+    target.innerHTML = `
+      <aside class="draft-resume">
+        <div>
+          <strong>Unfinished Draft</strong>
+          <span>${escapeHtml(draft.session.etb_location)} · ${images.length} image${images.length === 1 ? "" : "s"}</span>
+        </div>
+        <div class="entry-actions">
+          <a class="button primary" href="${captureRoute(draft.etbId, draft.location, type)}">Resume Draft</a>
+          <button class="button secondary" id="discard-mobile-draft" type="button">Discard Draft</button>
+        </div>
+      </aside>`;
+    document.getElementById("discard-mobile-draft").addEventListener("click", async () => {
+      if (!window.confirm("Discard this unfinished draft and its local images?")) {
+        return;
+      }
+      await clearDraftImages(draft.session.capture_session_id);
+      localStorage.removeItem(draft.key);
+      await renderRecentDraft(user);
+    });
+  }
+
+  async function initializeCaptureEntry(options = {}) {
+    const target = document.getElementById("mobile-entry-body");
+    const client = configuredSupabase();
+    if (!target || !client) {
+      if (target) {
+        target.innerHTML = '<p class="entry-message error">Mobile capture backend is not configured.</p>';
+      }
+      return;
+    }
+
+    const fixedEtb = options.fixedEtb ? mobileCore.normalizeEtbId(options.fixedEtb) : "";
+    const state = {
+      captureType: "",
+      etbId: fixedEtb,
+      location: "",
+      etbs: [],
+      locations: [],
+      user: null,
+      landing: Boolean(options.landing && fixedEtb),
+      createAfterType: false,
+      viewOnly: false
+    };
+
+    function showError(error) {
+      target.innerHTML = `${entrySummaryHtml(state)}<p class="entry-message error">${escapeHtml(error.message || error)}</p>`;
+    }
+
+    function bind(selector, handler) {
+      const element = target.querySelector(selector);
+      if (element) {
+        element.addEventListener("click", handler);
+      }
+    }
+
+    async function refreshLocations() {
+      state.locations = await listCloudLocations(client, state.user, state.etbId);
+      return state.locations;
+    }
+
+    function renderTypeSelection(backTarget = "") {
+      state.location = "";
+      target.innerHTML = `
+        ${entrySummaryHtml(state)}
+        <h3>Choose Capture Type</h3>
+        <div class="entry-grid">
+          <button class="entry-card" data-capture-type="NEW_CAPTURE" type="button"><strong>New Inventory Capture</strong><span>Capture newly acquired cards.</span></button>
+          <button class="entry-card" data-capture-type="PHYSICAL_INVENTORY" type="button"><strong>Physical Inventory Conversion</strong><span>Convert cards already stored in this location.</span></button>
+        </div>
+        ${backTarget ? '<button class="entry-back" id="entry-back" type="button">Back</button>' : ""}`;
+      target.querySelectorAll("[data-capture-type]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          state.captureType = normalizeCaptureType(button.dataset.captureType);
+          try {
+            if (state.etbId) {
+              await refreshLocations();
+              if (state.createAfterType) {
+                renderCreateProposal();
+              } else {
+                renderLocationSelection();
+              }
+            } else {
+              renderEtbSelection();
+            }
+          } catch (error) {
+            showError(error);
+          }
+        });
+      });
+      bind("#entry-back", () => {
+        if (backTarget === "landing") {
+          renderEtbLanding();
+        } else if (backTarget === "etbs") {
+          renderEtbSelection();
+        }
+      });
+    }
+
+    function renderEtbSelection() {
+      state.etbId = "";
+      state.location = "";
+      const cards = state.etbs.map((etb) => `
+        <button class="entry-card" data-etb-id="${escapeHtml(etb.etb_id)}" type="button">
+          <strong>${escapeHtml(etb.etb_id)}</strong>
+          <span>${escapeHtml(etb.status || "Empty")}</span>
+        </button>`).join("");
+      target.innerHTML = `
+        ${entrySummaryHtml(state)}
+        <h3>Choose ETB</h3>
+        ${cards ? `<div class="entry-grid">${cards}</div>` : '<p class="entry-message">No synchronized ETBs are available. Run desktop location sync after applying the migration.</p>'}
+        <button class="entry-back" id="entry-back" type="button">Back</button>`;
+      target.querySelectorAll("[data-etb-id]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          try {
+            state.etbId = mobileCore.normalizeEtbId(button.dataset.etbId);
+            await refreshLocations();
+            renderLocationSelection();
+          } catch (error) {
+            showError(error);
+          }
+        });
+      });
+      bind("#entry-back", () => renderTypeSelection());
+    }
+
+    function renderLocationSelection() {
+      state.location = "";
+      const cards = state.locations.map((location) => {
+        const occupancy = `${Number(location.stored_count || 0)}/${Number(location.capacity || 40)}`;
+        if (state.viewOnly) {
+          return `<article class="entry-card static"><strong>Location ${escapeHtml(location.location_code)}</strong><span>${escapeHtml(occupancy)} · ${escapeHtml(location.status || "Empty")}</span></article>`;
+        }
+        return `<button class="entry-card" data-location-code="${escapeHtml(location.location_code)}" type="button"><strong>Location ${escapeHtml(location.location_code)}</strong><span>${escapeHtml(occupancy)} · ${escapeHtml(location.status || "Empty")}</span></button>`;
+      }).join("");
+      const nextCode = mobileCore.nextAvailableLocationCode(state.locations);
+      target.innerHTML = `
+        ${entrySummaryHtml(state)}
+        <h3>${state.viewOnly ? "Locations" : "Choose Location"}</h3>
+        ${cards ? `<div class="entry-grid location-grid">${cards}</div>` : '<p class="entry-message">No locations have been provisioned for this ETB.</p>'}
+        ${!state.viewOnly && nextCode ? '<button class="button secondary entry-wide-action" id="entry-create-location" type="button">Create Next Location</button>' : ""}
+        ${!state.viewOnly && !nextCode ? '<p class="entry-message warning">All valid locations A-J are already provisioned.</p>' : ""}
+        <button class="entry-back" id="entry-back" type="button">Back</button>`;
+      target.querySelectorAll("[data-location-code]").forEach((button) => {
+        button.addEventListener("click", () => {
+          state.location = mobileCore.normalizeLocationCode(button.dataset.locationCode);
+          renderReview();
+        });
+      });
+      bind("#entry-create-location", renderCreateProposal);
+      bind("#entry-back", () => {
+        state.viewOnly = false;
+        if (fixedEtb) {
+          renderEtbLanding();
+        } else {
+          renderEtbSelection();
+        }
+      });
+    }
+
+    function renderCreateProposal() {
+      const nextCode = mobileCore.nextAvailableLocationCode(state.locations);
+      if (!nextCode) {
+        target.innerHTML = `${entrySummaryHtml(state)}<p class="entry-message warning">No valid location remains. This ETB already has locations A-J.</p><button class="entry-back" id="entry-back" type="button">Back</button>`;
+        bind("#entry-back", renderLocationSelection);
+        return;
+      }
+      const proposedId = mobileCore.canonicalLocationId(state.etbId, nextCode);
+      target.innerHTML = `
+        ${entrySummaryHtml(state)}
+        <h3>Create New Location</h3>
+        <div class="location-proposal"><span>Next available location</span><strong>${escapeHtml(proposedId)}</strong></div>
+        <p class="entry-message">Confirm to create this canonical location. Existing locations will not be overwritten.</p>
+        <div class="entry-actions">
+          <button class="button primary" id="entry-confirm-create" type="button">Confirm Create Location</button>
+          <button class="button secondary" id="entry-back" type="button">Back</button>
+        </div>`;
+      bind("#entry-confirm-create", async (event) => {
+        event.currentTarget.disabled = true;
+        try {
+          const created = await createCloudNextLocation(client, state.user, state.etbId, nextCode);
+          await refreshLocations();
+          state.location = mobileCore.normalizeLocationCode(created.location_code);
+          renderReview();
+        } catch (error) {
+          showError(error);
+        }
+      });
+      bind("#entry-back", renderLocationSelection);
+    }
+
+    function renderReview() {
+      const type = captureTypeConfig[normalizeCaptureType(state.captureType)];
+      const canonicalId = mobileCore.canonicalLocationId(state.etbId, state.location);
+      target.innerHTML = `
+        ${entrySummaryHtml(state)}
+        <h3>Review Destination</h3>
+        <div class="location-proposal"><span>${escapeHtml(type.label)}</span><strong>${escapeHtml(canonicalId)}</strong></div>
+        <div class="entry-actions">
+          <button class="button primary" id="entry-start-capture" type="button">Start Capture</button>
+          <button class="button secondary" id="entry-back" type="button">Back</button>
+        </div>`;
+      bind("#entry-start-capture", () => window.location.assign(captureRoute(state.etbId, state.location, state.captureType)));
+      bind("#entry-back", renderLocationSelection);
+    }
+
+    function renderEtbLanding() {
+      state.captureType = "";
+      state.location = "";
+      state.createAfterType = false;
+      state.viewOnly = false;
+      target.innerHTML = `
+        ${entrySummaryHtml(state)}
+        <h3>Choose Action</h3>
+        <div class="entry-grid">
+          <button class="entry-card" data-etb-action="NEW_CAPTURE" type="button"><strong>New Inventory Capture</strong><span>Select or create a location.</span></button>
+          <button class="entry-card" data-etb-action="PHYSICAL_INVENTORY" type="button"><strong>Physical Inventory Conversion</strong><span>Select or create a location.</span></button>
+          <button class="entry-card" data-etb-action="view" type="button"><strong>View Locations</strong><span>Review synchronized A-J locations.</span></button>
+          <button class="entry-card" data-etb-action="create" type="button"><strong>Create New Location</strong><span>Choose capture type, then confirm the next location.</span></button>
+        </div>`;
+      target.querySelectorAll("[data-etb-action]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          try {
+            const action = button.dataset.etbAction;
+            if (action === "view") {
+              state.viewOnly = true;
+              await refreshLocations();
+              renderLocationSelection();
+              return;
+            }
+            if (action === "create") {
+              state.createAfterType = true;
+              renderTypeSelection("landing");
+              return;
+            }
+            state.captureType = normalizeCaptureType(action);
+            await refreshLocations();
+            renderLocationSelection();
+          } catch (error) {
+            showError(error);
+          }
+        });
+      });
+    }
+
+    await ensureAuth(client, {
+      authId: "mobile-entry-auth",
+      operatorId: "mobile-entry-operator",
+      idPrefix: "mobile-entry",
+      onAuthenticated: async (user) => {
+        try {
+          state.user = user;
+          await requireLocationAuthorization(client, user);
+          state.etbs = await listCloudEtbs(client, user);
+          if (fixedEtb && !state.etbs.some((item) => item.etb_id === fixedEtb)) {
+            throw new Error(`${fixedEtb} is not synchronized to CardVector Cloud yet. Run desktop location sync.`);
+          }
+          await renderRecentDraft(user);
+          if (state.landing) {
+            renderEtbLanding();
+          } else {
+            renderTypeSelection();
+          }
+        } catch (error) {
+          showError(error);
+        }
+      }
+    });
   }
 
   function setText(id, value) {
@@ -485,33 +939,47 @@
     setCaptureStatus(session.status);
   }
 
-  async function ensureAuth(client) {
-    const auth = document.getElementById("capture-auth");
+  async function ensureAuth(client, options = {}) {
+    const authId = options.authId || "capture-auth";
+    const operatorId = options.operatorId || "capture-operator";
+    const idPrefix = options.idPrefix || "capture";
+    const onAuthenticated = typeof options.onAuthenticated === "function" ? options.onAuthenticated : null;
+    const auth = document.getElementById(authId);
     if (!client || !auth) {
       return null;
     }
     const current = await client.auth.getSession();
     if (current.data && current.data.session) {
       auth.innerHTML = `<span class="capture-auth-state">Signed in</span>`;
-      setText("capture-operator", `Operator: ${authStateLabel(current.data.session.user)}`);
+      setText(operatorId, `Operator: ${authStateLabel(current.data.session.user)}`);
+      if (onAuthenticated) {
+        await onAuthenticated(current.data.session.user);
+      }
       return current.data.session.user;
     }
+    const emailId = `${idPrefix}-email`;
+    const passwordId = `${idPrefix}-password`;
+    const signInId = `${idPrefix}-sign-in`;
+    const stateId = `${idPrefix}-auth-state`;
     auth.innerHTML = `
-      <label>Email <input id="capture-email" type="email" autocomplete="email" placeholder="operator@example.com"></label>
-      <label>Password <input id="capture-password" type="password" autocomplete="current-password" placeholder="Password"></label>
-      <button class="button secondary" id="capture-sign-in" type="button">Sign In</button>
-      <span class="capture-auth-state" id="capture-auth-state">Sign in before upload.</span>`;
-    document.getElementById("capture-sign-in").addEventListener("click", async () => {
-      const email = document.getElementById("capture-email").value.trim();
-      const password = document.getElementById("capture-password").value;
+      <label>Email <input id="${emailId}" type="email" autocomplete="email" placeholder="operator@example.com"></label>
+      <label>Password <input id="${passwordId}" type="password" autocomplete="current-password" placeholder="Password"></label>
+      <button class="button secondary" id="${signInId}" type="button">Sign In</button>
+      <span class="capture-auth-state" id="${stateId}">Sign in to continue.</span>`;
+    document.getElementById(signInId).addEventListener("click", async () => {
+      const email = document.getElementById(emailId).value.trim();
+      const password = document.getElementById(passwordId).value;
       const result = await client.auth.signInWithPassword({ email, password });
       if (result.error) {
-        setText("capture-auth-state", supabaseErrorDetails("Sign in", result.error, null));
+        setText(stateId, supabaseErrorDetails("Sign in", result.error, null));
         return;
       }
       const user = result.data && result.data.user ? result.data.user : null;
-      setText("capture-auth-state", "Signed in.");
-      setText("capture-operator", `Operator: ${authStateLabel(user)}`);
+      setText(stateId, "Signed in.");
+      setText(operatorId, `Operator: ${authStateLabel(user)}`);
+      if (onAuthenticated) {
+        await onAuthenticated(user);
+      }
     });
     return null;
   }
@@ -764,9 +1232,26 @@
         auth.innerHTML = `<span class="capture-auth-state">Configure Supabase before uploads are enabled.</span>`;
       }
     } else {
-      ensureAuth(client);
+      ensureAuth(client, {
+        onAuthenticated: async (user) => {
+          if (!session || !user) {
+            return;
+          }
+          session.operator_id = user.id;
+          session.operator = user.email || "";
+          saveStoredSession(etbId, location, session);
+        }
+      });
     }
     await startCamera();
+    document.getElementById("capture-back").addEventListener("click", () => {
+      stopCamera();
+      if (window.history.length > 1) {
+        window.history.back();
+      } else {
+        window.location.assign(`/location/${encodeURIComponent(etbId)}/${encodeURIComponent(location)}`);
+      }
+    });
     document.getElementById("camera-shutter").addEventListener("click", async () => {
       try {
         if (!session || session.status !== "DRAFT") {
@@ -865,9 +1350,11 @@
         detailRow("ETB ID", escapeHtml(etbId)) +
         detailRow("Inventory Details", "Private") +
         detailRow("Owner", "Putnam Collectibles") +
-        detailRow("Powered By", "CardVector")
+        detailRow("Powered By", "CardVector"),
+      captureEntryShellHtml(`Capture from ${etbId}`)
     );
     document.title = `${etbId} | Putnam Collectibles`;
+    initializeCaptureEntry({ fixedEtb: etbId, landing: true });
     return;
   }
 
@@ -886,6 +1373,20 @@
       captureChoiceHtml(etbId, location)
     );
     document.title = `${etbId} Location ${location} | Putnam Collectibles`;
+    return;
+  }
+
+  if (route === "capture" && !parts[1]) {
+    renderQrView(
+      "Mobile Capture",
+      "Start a CardVector capture session without scanning a location QR.",
+      detailRow("Workflow", "Authenticated operator") +
+        detailRow("Camera", "Starts only after destination review") +
+        detailRow("Powered By", "CardVector"),
+      captureEntryShellHtml("Start Mobile Capture")
+    );
+    document.title = "Mobile Capture | CardVector";
+    initializeCaptureEntry();
     return;
   }
 
