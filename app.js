@@ -31,8 +31,23 @@
     "FAILED",
     "CANCELLED"
   ]);
+  const captureTypeConfig = {
+    NEW_CAPTURE: {
+      title: "New Inventory Capture",
+      label: "New Inventory Capture",
+      slug: "new-inventory",
+      shortLabel: "New Inventory"
+    },
+    PHYSICAL_INVENTORY: {
+      title: "Physical Inventory Conversion",
+      label: "Physical Inventory Conversion",
+      slug: "physical-inventory",
+      shortLabel: "Physical Inventory"
+    }
+  };
   const captureDbName = "cardvector-mobile-capture";
   const captureStoreName = "images";
+  let cameraController = null;
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -109,8 +124,24 @@
     return `${operation} failed. Code: ${sanitizeErrorMessage(code)}. ${sanitizeErrorMessage(message)}. Auth: ${authStateLabel(user)}; ${authTokenStateLabel(session)}.`;
   }
 
-  function sessionKey(etbId, location) {
-    return `cardvector.mobileCapture.${etbId}.${location}`;
+  function normalizeCaptureType(value) {
+    const normalized = String(value || "").trim().toUpperCase().replace(/[-\s]+/g, "_");
+    if (["NEW", "NEW_CAPTURE", "NEW_INVENTORY", "NEW_INVENTORY_CAPTURE"].includes(normalized)) {
+      return "NEW_CAPTURE";
+    }
+    return "PHYSICAL_INVENTORY";
+  }
+
+  function captureTypeFromSlug(value) {
+    const slug = String(value || "").trim().toLowerCase();
+    if (["new", "new-capture", "new-inventory", "new-inventory-capture"].includes(slug)) {
+      return "NEW_CAPTURE";
+    }
+    return "PHYSICAL_INVENTORY";
+  }
+
+  function sessionKey(etbId, location, captureType) {
+    return `cardvector.mobileCapture.${normalizeCaptureType(captureType)}.${etbId}.${location}`;
   }
 
   function uuid() {
@@ -120,23 +151,30 @@
     return `capture-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
 
-  function getStoredSession(etbId, location) {
+  function getStoredSession(etbId, location, captureType) {
     try {
-      return JSON.parse(localStorage.getItem(sessionKey(etbId, location)) || "null");
+      const session = JSON.parse(localStorage.getItem(sessionKey(etbId, location, captureType)) || "null");
+      if (session) {
+        session.capture_type = normalizeCaptureType(session.capture_type || captureType);
+      }
+      return session;
     } catch (_exc) {
       return null;
     }
   }
 
   function saveStoredSession(etbId, location, session) {
-    localStorage.setItem(sessionKey(etbId, location), JSON.stringify(session));
+    const captureType = normalizeCaptureType(session && session.capture_type);
+    localStorage.setItem(sessionKey(etbId, location, captureType), JSON.stringify(session));
   }
 
-  function newDraft(etbId, location) {
+  function newDraft(etbId, location, captureType) {
     const createdAt = new Date().toISOString();
+    const normalizedType = normalizeCaptureType(captureType);
     return {
       capture_session_id: uuid(),
       etb_location: `${etbId}-${location}`,
+      capture_type: normalizedType,
       created_at: createdAt,
       submitted_at: null,
       status: "DRAFT",
@@ -146,7 +184,8 @@
       device: {
         userAgent: navigator.userAgent,
         language: navigator.language,
-        platform: navigator.platform || ""
+        platform: navigator.platform || "",
+        capture_type: normalizedType
       },
       image_count: 0,
       original_image_locations: [],
@@ -193,6 +232,26 @@
     db.close();
   }
 
+  async function saveDraftBlob(sessionId, blob, name) {
+    const db = await openCaptureDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(captureStoreName, "readwrite");
+      const id = uuid();
+      tx.objectStore(captureStoreName).put({
+        id,
+        sessionId,
+        file: blob,
+        name: name || `${id}.jpg`,
+        type: blob.type || "image/jpeg",
+        size: blob.size || 0,
+        createdAt: new Date().toISOString()
+      });
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  }
+
   async function loadDraftImages(sessionId) {
     const db = await openCaptureDb();
     const rows = await new Promise((resolve, reject) => {
@@ -230,28 +289,59 @@
     db.close();
   }
 
-  function capturePanelHtml(etbId, location) {
+  function captureChoiceHtml(etbId, location) {
     return `
-      <section class="mobile-capture" aria-labelledby="capture-title">
+      <section class="mobile-capture capture-choice" aria-labelledby="capture-choice-title">
         <div class="capture-header">
           <div>
             <p class="eyebrow">Mobile Capture</p>
-            <h2 id="capture-title">Capture Inventory</h2>
+            <h2 id="capture-choice-title">Choose capture type</h2>
+            <p>Scanning this QR opens the location check only. Start camera capture when you are ready.</p>
+          </div>
+        </div>
+        <div class="capture-type-grid">
+          <a class="capture-type-card" href="/capture/${encodeURIComponent(etbId)}/${encodeURIComponent(location)}/${captureTypeConfig.NEW_CAPTURE.slug}">
+            <strong>New Inventory Capture</strong>
+            <span>Use for new card intake sessions.</span>
+          </a>
+          <a class="capture-type-card" href="/capture/${encodeURIComponent(etbId)}/${encodeURIComponent(location)}/${captureTypeConfig.PHYSICAL_INVENTORY.slug}">
+            <strong>Physical Inventory Conversion</strong>
+            <span>Use for converting cards already stored in this location.</span>
+          </a>
+        </div>
+      </section>`;
+  }
+
+  function captureScreenHtml(etbId, location, captureType) {
+    const type = captureTypeConfig[normalizeCaptureType(captureType)];
+    return `
+      <section class="mobile-capture capture-screen" aria-labelledby="capture-title">
+        <div class="capture-header">
+          <div>
+            <p class="eyebrow">Mobile Capture</p>
+            <h2 id="capture-title">${escapeHtml(type.title)}</h2>
+            <p>Use the rear camera when available. Each shutter press saves one still to this phone before upload.</p>
           </div>
           <span class="capture-status" id="capture-status">DRAFT</span>
         </div>
         <div class="capture-summary" aria-live="polite">
           <div><span>ETB Location</span><strong id="capture-location">${escapeHtml(etbId)}-${escapeHtml(location)}</strong></div>
+          <div><span>Capture Type</span><strong id="capture-type-label">${escapeHtml(type.shortLabel)}</strong></div>
           <div><span>Session</span><strong id="capture-session-id">Not started</strong></div>
           <div><span>Images</span><strong id="capture-image-count">0</strong></div>
         </div>
         <div class="capture-operator" id="capture-operator" aria-live="polite">Operator: not signed in</div>
         <div class="capture-auth" id="capture-auth"></div>
-        <div class="capture-actions">
-          <button class="button primary capture-button" id="start-capture" type="button">Start Capture Session</button>
-          <label class="button secondary capture-file-label" for="capture-files">Capture Photos</label>
-          <input id="capture-files" class="capture-file-input" type="file" accept="image/*" capture="environment" multiple>
-          <button class="button primary capture-button" id="upload-capture" type="button">Upload</button>
+        <div class="camera-shell">
+          <video id="capture-video" playsinline muted autoplay></video>
+          <canvas id="capture-canvas" hidden></canvas>
+          <div class="camera-fallback" id="camera-fallback">Camera not started.</div>
+        </div>
+        <div class="capture-actions capture-actions-main">
+          <button class="button primary capture-button shutter-button" id="camera-shutter" type="button">Capture Photo</button>
+          <label class="button secondary capture-file-label" for="capture-files">Choose from Photo Library</label>
+          <input id="capture-files" class="capture-file-input" type="file" accept="image/*" multiple>
+          <button class="button primary capture-button" id="upload-capture" type="button">Finish Session</button>
         </div>
         <div class="capture-progress" aria-live="polite">
           <progress id="capture-progress" max="100" value="0"></progress>
@@ -287,9 +377,11 @@
       return;
     }
     const images = await loadDraftImages(session.capture_session_id);
+    const urls = [];
     target.innerHTML = "";
     images.forEach((image, index) => {
       const url = URL.createObjectURL(image.file);
+      urls.push(url);
       const item = document.createElement("figure");
       item.className = "capture-thumb";
       item.innerHTML = `
@@ -300,15 +392,20 @@
         </figcaption>`;
       target.appendChild(item);
     });
+    target.dataset.objectUrls = JSON.stringify(urls);
     target.querySelectorAll("[data-remove-image]").forEach((button) => {
       button.addEventListener("click", async () => {
         await removeDraftImage(button.getAttribute("data-remove-image"));
         session.image_count = (await loadDraftImages(session.capture_session_id)).length;
-        saveStoredSession(session.etb_location.split("-").slice(0, 2).join("-"), session.etb_location.split("-")[2], session);
+        const parts = session.etb_location.split("-");
+        saveStoredSession(parts.slice(0, 2).join("-"), parts[2], session);
         updateCaptureSummary(session);
         renderThumbnails(session);
       });
     });
+    setTimeout(() => {
+      urls.forEach((url) => URL.revokeObjectURL(url));
+    }, 30000);
   }
 
   function updateCaptureSummary(session) {
@@ -369,6 +466,7 @@
       user_id: user ? user.id : null,
       device: session.device,
       source_device: session.device,
+      capture_type: normalizeCaptureType(session.capture_type),
       image_count: images.length,
       original_image_locations: [],
       conversion_status: "UPLOADING",
@@ -476,6 +574,7 @@
       .from("mobile_capture_sessions")
       .update({
         status: "PENDING_CONVERSION",
+        capture_type: normalizeCaptureType(session.capture_type),
         updated_at: submittedAt,
         submitted_at: submittedAt,
         image_count: images.length,
@@ -498,10 +597,79 @@
     setProgress(100, "Uploaded. Pending conversion.");
   }
 
-  async function initializeCapture(etbId, location) {
+  function stopCamera() {
+    if (cameraController && cameraController.stream) {
+      cameraController.stream.getTracks().forEach((track) => track.stop());
+    }
+    cameraController = null;
+  }
+
+  async function startCamera() {
+    const video = document.getElementById("capture-video");
+    const fallback = document.getElementById("camera-fallback");
+    if (!video || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      if (fallback) {
+        fallback.hidden = false;
+        fallback.textContent = "Camera is not available in this browser. Use Photo Library instead.";
+      }
+      return;
+    }
+    try {
+      stopCamera();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1920 },
+          height: { ideal: 2560 }
+        },
+        audio: false
+      });
+      video.srcObject = stream;
+      cameraController = { stream };
+      if (fallback) {
+        fallback.hidden = true;
+        fallback.textContent = "";
+      }
+    } catch (exc) {
+      if (fallback) {
+        fallback.hidden = false;
+        fallback.textContent = `Camera unavailable: ${sanitizeErrorMessage(exc.message || exc)}. Use Photo Library instead.`;
+      }
+    }
+  }
+
+  async function captureStillFromVideo() {
+    const video = document.getElementById("capture-video");
+    const canvas = document.getElementById("capture-canvas");
+    if (!video || !canvas || !video.videoWidth || !video.videoHeight) {
+      throw new Error("Camera preview is not ready yet.");
+    }
+    const maxEdge = 1800;
+    const scale = Math.min(1, maxEdge / Math.max(video.videoWidth, video.videoHeight));
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+    const context = canvas.getContext("2d");
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    return new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error("Unable to capture camera image."));
+          return;
+        }
+        resolve(blob);
+      }, "image/jpeg", 0.9);
+    });
+  }
+
+  async function initializeCapture(etbId, location, captureType) {
+    const normalizedType = normalizeCaptureType(captureType);
     const cfg = captureConfig();
     const client = configuredSupabase();
-    let session = getStoredSession(etbId, location);
+    let session = getStoredSession(etbId, location, normalizedType);
+    if (!session || session.status === "PENDING_CONVERSION") {
+      session = newDraft(etbId, location, normalizedType);
+      saveStoredSession(etbId, location, session);
+    }
     updateCaptureSummary(session);
     if (session) {
       renderThumbnails(session);
@@ -515,16 +683,27 @@
     } else {
       ensureAuth(client);
     }
-    document.getElementById("start-capture").addEventListener("click", async () => {
-      session = newDraft(etbId, location);
-      saveStoredSession(etbId, location, session);
-      updateCaptureSummary(session);
-      setProgress(0, "Draft ready.");
-      await renderThumbnails(session);
+    await startCamera();
+    document.getElementById("camera-shutter").addEventListener("click", async () => {
+      try {
+        if (!session || session.status !== "DRAFT") {
+          session = newDraft(etbId, location, normalizedType);
+        }
+        const blob = await captureStillFromVideo();
+        const imageNumber = (await loadDraftImages(session.capture_session_id)).length + 1;
+        await saveDraftBlob(session.capture_session_id, blob, `${session.capture_session_id}-${String(imageNumber).padStart(4, "0")}.jpg`);
+        session.image_count = (await loadDraftImages(session.capture_session_id)).length;
+        saveStoredSession(etbId, location, session);
+        updateCaptureSummary(session);
+        await renderThumbnails(session);
+        setProgress(0, `Captured ${session.image_count} image${session.image_count === 1 ? "" : "s"} on this phone.`);
+      } catch (exc) {
+        setProgress(0, exc.message || String(exc));
+      }
     });
     document.getElementById("capture-files").addEventListener("change", async (event) => {
       if (!session || session.status !== "DRAFT") {
-        session = newDraft(etbId, location);
+        session = newDraft(etbId, location, normalizedType);
       }
       const files = Array.from(event.target.files || []).filter((file) => file.type.startsWith("image/"));
       if (!files.length) {
@@ -568,6 +747,7 @@
           throw new Error("Capture at least one image before upload.");
         }
         await submitCapture(client, session, images, cfg, user, authSession);
+        stopCamera();
       } catch (exc) {
         if (session) {
           session.status = "FAILED";
@@ -577,6 +757,15 @@
         setProgress(0, exc.message || String(exc));
       }
     });
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        stopCamera();
+      } else if (session && session.status === "DRAFT") {
+        startCamera();
+      }
+    });
+    window.addEventListener("pagehide", stopCamera);
+    window.addEventListener("beforeunload", stopCamera);
   }
 
   if (route === "etb" && parts[1]) {
@@ -602,14 +791,32 @@
       "Putnam Collectibles inventory location check.",
       detailRow("Type", "Location Label") +
         detailRow("ETB ID", escapeHtml(etbId)) +
-        detailRow("Location", escapeHtml(location)) +
+      detailRow("Location", escapeHtml(location)) +
         detailRow("Inventory Details", "Private") +
         detailRow("Owner", "Putnam Collectibles") +
         detailRow("Powered By", "CardVector"),
-      capturePanelHtml(etbId, location)
+      captureChoiceHtml(etbId, location)
     );
     document.title = `${etbId} Location ${location} | Putnam Collectibles`;
-    initializeCapture(etbId, location);
+    return;
+  }
+
+  if (route === "capture" && parts[1] && parts[2]) {
+    const etbId = parts[1].toUpperCase();
+    const location = parts[2].toUpperCase();
+    const captureType = captureTypeFromSlug(parts[3] || "physical-inventory");
+    const type = captureTypeConfig[captureType];
+    renderQrView(
+      type.title,
+      `${etbId} Location ${location}`,
+      detailRow("ETB ID", escapeHtml(etbId)) +
+        detailRow("Location", escapeHtml(location)) +
+        detailRow("Capture Type", escapeHtml(type.label)) +
+        detailRow("Upload Status", "Private CardVector workflow"),
+      captureScreenHtml(etbId, location, captureType)
+    );
+    document.title = `${type.title} | ${etbId} ${location}`;
+    initializeCapture(etbId, location, captureType);
     return;
   }
 
