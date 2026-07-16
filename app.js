@@ -102,19 +102,45 @@
     year.textContent = new Date().getFullYear();
   }
 
+  const navigationMenu = document.querySelector(".nav-menu");
+  const mobileNavigation = window.matchMedia("(max-width: 900px)");
+  function syncNavigationMode() {
+    if (!navigationMenu) {
+      return;
+    }
+    navigationMenu.toggleAttribute("open", !mobileNavigation.matches);
+  }
+  syncNavigationMode();
+  if (typeof mobileNavigation.addEventListener === "function") {
+    mobileNavigation.addEventListener("change", syncNavigationMode);
+  }
+  if (navigationMenu) {
+    navigationMenu.addEventListener("click", (event) => {
+      if (mobileNavigation.matches && event.target.closest("a")) {
+        navigationMenu.removeAttribute("open");
+      }
+    });
+  }
+
   const parts = window.location.pathname.split("/").filter(Boolean).map(decodeURIComponent);
   if (!parts.length) {
     return;
   }
 
   const route = parts[0].toLowerCase();
-  const collectionInquiryUrl = "https://tally.so/r/ob1ABN";
+  const siteLinks = Object.freeze({
+    EBAY_STORE_URL: "https://ebay.io/m/gttiV0",
+    TCGPLAYER_STORE_URL: "https://www.tcgplayer.com/sellers/Putnam-Collectibles/747c057d",
+    WHATNOT_REFERRAL_URL: "https://whatnot.com/invite/putnam_collectibles",
+    COLLECTION_INQUIRY_URL: "https://tally.so/r/ob1ABN"
+  });
   if (route === "contact") {
-    window.location.replace(collectionInquiryUrl);
+    window.location.replace(siteLinks.COLLECTION_INQUIRY_URL);
     return;
   }
 
-  const knownPlaceholderRoutes = new Set(["buylist", "bulk", "events", "about"]);
+  const sellRoutes = new Set(["sell", "bulk", "buylist"]);
+  const knownPlaceholderRoutes = new Set(["events", "about"]);
   const main = document.getElementById("main");
   if (!main) {
     return;
@@ -173,6 +199,33 @@
           <p class="qr-note">This public page is the permanent CardVector QR destination. Inventory details expand through authenticated CardVector Mobile workflows.</p>
         </article>
       </section>`;
+  }
+
+  function renderSellCollectionPage() {
+    main.innerHTML = `
+      <section class="qr-view wrap" aria-labelledby="sell-route-title">
+        <article class="qr-card sell-route-card">
+          <p class="eyebrow">Putnam Collectibles</p>
+          <h1 id="sell-route-title">Sell Your Collection</h1>
+          <p class="hero-lede">Selling a collection or Near Mint English bulk? Tell us what you have and we&rsquo;ll review it.</p>
+          <div class="sell-options" aria-label="Items Putnam Collectibles currently reviews">
+            <div>
+              <strong>Full or Partial Collections</strong>
+              <span>Share the size, games, highlights, and condition.</span>
+            </div>
+            <div>
+              <strong>Near Mint English Bulk</strong>
+              <span>Holo and reverse-holo bulk inquiries are welcome.</span>
+            </div>
+          </div>
+          <div class="entry-actions sell-route-actions">
+            <a class="button primary button-large" href="${siteLinks.COLLECTION_INQUIRY_URL}" target="_blank" rel="noopener noreferrer" aria-label="Submit a collection or bulk card inquiry to Putnam Collectibles">Submit Collection Inquiry</a>
+            <a class="button secondary" href="/">Return Home</a>
+          </div>
+          <p class="qr-note">Near Mint English cards only at this time.</p>
+        </article>
+      </section>`;
+    document.title = "Sell Your Collection | Putnam Collectibles";
   }
 
   function captureConfig() {
@@ -1339,6 +1392,11 @@
     });
     window.addEventListener("pagehide", stopCamera);
     window.addEventListener("beforeunload", stopCamera);
+  }
+
+  if (sellRoutes.has(route)) {
+    renderSellCollectionPage();
+    return;
   }
 
   if (route === "etb" && parts[1]) {
