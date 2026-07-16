@@ -683,7 +683,22 @@ h3 {
   width: 100%;
   height: min(64vh, 620px);
   object-fit: cover;
+  object-position: 50% 50%;
   background: #071327;
+}
+
+.camera-card-guide {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  height: min(72%, 430px);
+  max-width: 66%;
+  aspect-ratio: 63 / 88;
+  pointer-events: none;
+  border: 2px solid rgba(255, 255, 255, .82);
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px rgba(11, 31, 68, .42), inset 0 0 0 1px rgba(11, 31, 68, .3);
+  transform: translate(-50%, -50%);
 }
 
 .camera-fallback {

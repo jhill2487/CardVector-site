@@ -1,4 +1,59 @@
+(function (root, factory) {
+  const api = factory();
+  if (typeof module === "object" && module.exports) {
+    module.exports = api;
+  }
+  root.CardVectorCaptureMath = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  function positiveDimension(value, name) {
+    const dimension = Number(value);
+    if (!Number.isFinite(dimension) || dimension <= 0) {
+      throw new Error(`${name} must be greater than zero.`);
+    }
+    return dimension;
+  }
+
+  // Match a centered CSS object-fit: cover preview without distorting the frame.
+  function calculateCoverCrop(sourceWidth, sourceHeight, previewWidth, previewHeight) {
+    const sw = positiveDimension(sourceWidth, "sourceWidth");
+    const sh = positiveDimension(sourceHeight, "sourceHeight");
+    const pw = positiveDimension(previewWidth, "previewWidth");
+    const ph = positiveDimension(previewHeight, "previewHeight");
+    const scale = Math.max(pw / sw, ph / sh);
+    const visibleSourceWidth = Math.min(sw, pw / scale);
+    const visibleSourceHeight = Math.min(sh, ph / scale);
+    const sourceX = Math.max(0, Math.min(sw - visibleSourceWidth, (sw - visibleSourceWidth) / 2));
+    const sourceY = Math.max(0, Math.min(sh - visibleSourceHeight, (sh - visibleSourceHeight) / 2));
+
+    return {
+      sourceX,
+      sourceY,
+      sourceWidth: visibleSourceWidth,
+      sourceHeight: visibleSourceHeight,
+      previewWidth: pw,
+      previewHeight: ph,
+      scale
+    };
+  }
+
+  function calculateCaptureOutputSize(crop, maxEdge = 1800) {
+    const width = positiveDimension(crop && crop.sourceWidth, "crop.sourceWidth");
+    const height = positiveDimension(crop && crop.sourceHeight, "crop.sourceHeight");
+    const edge = positiveDimension(maxEdge, "maxEdge");
+    const scale = Math.min(1, edge / Math.max(width, height));
+    return {
+      width: Math.max(1, Math.round(width * scale)),
+      height: Math.max(1, Math.round(height * scale))
+    };
+  }
+
+  return { calculateCoverCrop, calculateCaptureOutputSize };
+});
+
 (function () {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return;
+  }
   const year = document.getElementById("year");
   if (year) {
     year.textContent = new Date().getFullYear();
@@ -223,6 +278,7 @@
           name: file.name || `${id}.jpg`,
           type: file.type || "image/jpeg",
           size: file.size || 0,
+          origin: "PHOTO_LIBRARY",
           createdAt: new Date().toISOString()
         });
       });
@@ -232,7 +288,7 @@
     db.close();
   }
 
-  async function saveDraftBlob(sessionId, blob, name) {
+  async function saveDraftBlob(sessionId, blob, name, origin = "LIVE_CAMERA") {
     const db = await openCaptureDb();
     await new Promise((resolve, reject) => {
       const tx = db.transaction(captureStoreName, "readwrite");
@@ -244,6 +300,7 @@
         name: name || `${id}.jpg`,
         type: blob.type || "image/jpeg",
         size: blob.size || 0,
+        origin,
         createdAt: new Date().toISOString()
       });
       tx.oncomplete = resolve;
@@ -335,6 +392,7 @@
         <div class="camera-shell">
           <video id="capture-video" playsinline muted autoplay></video>
           <canvas id="capture-canvas" hidden></canvas>
+          <div class="camera-card-guide" aria-hidden="true"></div>
           <div class="camera-fallback" id="camera-fallback">Camera not started.</div>
         </div>
         <div class="capture-actions capture-actions-main">
@@ -377,6 +435,11 @@
       return;
     }
     const images = await loadDraftImages(session.capture_session_id);
+    try {
+      JSON.parse(target.dataset.objectUrls || "[]").forEach((url) => URL.revokeObjectURL(url));
+    } catch (_exc) {
+      // A stale cache hint must never block thumbnail recovery.
+    }
     const urls = [];
     target.innerHTML = "";
     images.forEach((image, index) => {
@@ -390,6 +453,10 @@
           <span>${index + 1}</span>
           <button type="button" data-remove-image="${escapeHtml(image.id)}" aria-label="Remove image ${index + 1}">Remove</button>
         </figcaption>`;
+      const imageElement = item.querySelector("img");
+      const releaseUrl = () => URL.revokeObjectURL(url);
+      imageElement.addEventListener("load", releaseUrl, { once: true });
+      imageElement.addEventListener("error", releaseUrl, { once: true });
       target.appendChild(item);
     });
     target.dataset.objectUrls = JSON.stringify(urls);
@@ -403,9 +470,7 @@
         renderThumbnails(session);
       });
     });
-    setTimeout(() => {
-      urls.forEach((url) => URL.revokeObjectURL(url));
-    }, 30000);
+    setTimeout(() => urls.forEach((url) => URL.revokeObjectURL(url)), 5000);
   }
 
   function updateCaptureSummary(session) {
@@ -644,12 +709,30 @@
     if (!video || !canvas || !video.videoWidth || !video.videoHeight) {
       throw new Error("Camera preview is not ready yet.");
     }
-    const maxEdge = 1800;
-    const scale = Math.min(1, maxEdge / Math.max(video.videoWidth, video.videoHeight));
-    canvas.width = Math.round(video.videoWidth * scale);
-    canvas.height = Math.round(video.videoHeight * scale);
+    const preview = video.getBoundingClientRect();
+    const crop = window.CardVectorCaptureMath.calculateCoverCrop(
+      video.videoWidth,
+      video.videoHeight,
+      preview.width,
+      preview.height
+    );
+    const output = window.CardVectorCaptureMath.calculateCaptureOutputSize(crop, 1800);
+    canvas.width = output.width;
+    canvas.height = output.height;
     const context = canvas.getContext("2d");
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+    context.drawImage(
+      video,
+      crop.sourceX,
+      crop.sourceY,
+      crop.sourceWidth,
+      crop.sourceHeight,
+      0,
+      0,
+      canvas.width,
+      canvas.height
+    );
     return new Promise((resolve, reject) => {
       canvas.toBlob((blob) => {
         if (!blob) {
@@ -691,7 +774,12 @@
         }
         const blob = await captureStillFromVideo();
         const imageNumber = (await loadDraftImages(session.capture_session_id)).length + 1;
-        await saveDraftBlob(session.capture_session_id, blob, `${session.capture_session_id}-${String(imageNumber).padStart(4, "0")}.jpg`);
+        await saveDraftBlob(
+          session.capture_session_id,
+          blob,
+          `${session.capture_session_id}-${String(imageNumber).padStart(4, "0")}.jpg`,
+          "LIVE_CAMERA"
+        );
         session.image_count = (await loadDraftImages(session.capture_session_id)).length;
         saveStoredSession(etbId, location, session);
         updateCaptureSummary(session);
