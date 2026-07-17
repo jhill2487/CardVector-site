@@ -169,6 +169,20 @@
       shortLabel: "Physical Inventory"
     }
   };
+  const captureLayoutConfig = {
+    FRONT_ONLY: {
+      label: "Front only",
+      shortLabel: "Front only",
+      slug: "front-only",
+      description: "Capture one front image for each card."
+    },
+    FRONT_BACK: {
+      label: "Front + back",
+      shortLabel: "Front + back",
+      slug: "front-back",
+      description: "Capture the front, then the back, for each card."
+    }
+  };
   const captureDbName = "cardvector-mobile-capture";
   const captureStoreName = "images";
   const mobileCore = window.CardVectorCaptureMath;
@@ -292,8 +306,115 @@
     return "PHYSICAL_INVENTORY";
   }
 
-  function sessionKey(etbId, location, captureType) {
+  function normalizeCaptureLayout(value) {
+    const normalized = String(value || "").trim().toUpperCase().replace(/[-+\s]+/g, "_");
+    if (["FRONT_BACK", "FRONT_AND_BACK", "BOTH", "PAIRED"].includes(normalized)) {
+      return "FRONT_BACK";
+    }
+    return "FRONT_ONLY";
+  }
+
+  function captureLayoutFromSlug(value) {
+    const slug = String(value || "").trim().toLowerCase();
+    if (["front-back", "front-and-back", "both", "paired"].includes(slug)) {
+      return "FRONT_BACK";
+    }
+    if (["front", "front-only"].includes(slug)) {
+      return "FRONT_ONLY";
+    }
+    return "";
+  }
+
+  function capturePositionForOrder(order, captureLayout) {
+    const sequence = Math.max(1, Number(order) || 1);
+    if (normalizeCaptureLayout(captureLayout) === "FRONT_BACK") {
+      return {
+        cardNumber: Math.floor((sequence - 1) / 2) + 1,
+        side: sequence % 2 === 1 ? "front" : "back"
+      };
+    }
+    return { cardNumber: sequence, side: "front" };
+  }
+
+  function imageCapturePosition(image, index, captureLayout) {
+    const cardNumber = Number(image && image.cardNumber);
+    const side = String(image && image.side || "").toLowerCase();
+    if (cardNumber > 0 && ["front", "back"].includes(side)) {
+      return { cardNumber, side };
+    }
+    return capturePositionForOrder(index + 1, captureLayout);
+  }
+
+  function orderedCaptureImages(images, captureLayout) {
+    return Array.from(images || [])
+      .map((image, index) => ({ image, position: imageCapturePosition(image, index, captureLayout), index }))
+      .sort((left, right) => {
+        const cardDifference = left.position.cardNumber - right.position.cardNumber;
+        if (cardDifference) {
+          return cardDifference;
+        }
+        const sideDifference = (left.position.side === "front" ? 0 : 1) - (right.position.side === "front" ? 0 : 1);
+        return sideDifference || left.index - right.index;
+      })
+      .map((item) => item.image);
+  }
+
+  function nextCapturePosition(images, captureLayout) {
+    const normalizedLayout = normalizeCaptureLayout(captureLayout);
+    const occupied = new Map();
+    Array.from(images || []).forEach((image, index) => {
+      const position = imageCapturePosition(image, index, normalizedLayout);
+      if (!occupied.has(position.cardNumber)) {
+        occupied.set(position.cardNumber, new Set());
+      }
+      occupied.get(position.cardNumber).add(position.side);
+    });
+    let cardNumber = 1;
+    while (occupied.has(cardNumber)) {
+      const sides = occupied.get(cardNumber);
+      if (!sides.has("front")) {
+        return { cardNumber, side: "front" };
+      }
+      if (normalizedLayout === "FRONT_BACK" && !sides.has("back")) {
+        return { cardNumber, side: "back" };
+      }
+      cardNumber += 1;
+    }
+    return { cardNumber, side: "front" };
+  }
+
+  function captureLayoutIsComplete(images, captureLayout) {
+    if (!images.length) {
+      return false;
+    }
+    if (normalizeCaptureLayout(captureLayout) === "FRONT_ONLY") {
+      return true;
+    }
+    const cards = new Map();
+    Array.from(images || []).forEach((image, index) => {
+      const position = imageCapturePosition(image, index, captureLayout);
+      if (!cards.has(position.cardNumber)) {
+        cards.set(position.cardNumber, new Set());
+      }
+      cards.get(position.cardNumber).add(position.side);
+    });
+    return Array.from(cards.values()).every((sides) => sides.has("front") && sides.has("back"));
+  }
+
+  function captureCardCount(images, captureLayout) {
+    const cards = new Set();
+    Array.from(images || []).forEach((image, index) => {
+      cards.add(imageCapturePosition(image, index, captureLayout).cardNumber);
+    });
+    return cards.size;
+  }
+
+  function legacySessionKey(etbId, location, captureType) {
     return `cardvector.mobileCapture.${normalizeCaptureType(captureType)}.${etbId}.${location}`;
+  }
+
+  function sessionKey(etbId, location, captureType, captureLayout) {
+    return `${legacySessionKey(etbId, location, captureType)}.${normalizeCaptureLayout(captureLayout)}`;
   }
 
   function uuid() {
@@ -303,11 +424,23 @@
     return `capture-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
 
-  function getStoredSession(etbId, location, captureType) {
+  function getStoredSession(etbId, location, captureType, captureLayout) {
     try {
-      const session = JSON.parse(localStorage.getItem(sessionKey(etbId, location, captureType)) || "null");
+      const stored = localStorage.getItem(sessionKey(etbId, location, captureType, captureLayout))
+        || localStorage.getItem(legacySessionKey(etbId, location, captureType));
+      const session = JSON.parse(stored || "null");
       if (session) {
         session.capture_type = normalizeCaptureType(session.capture_type || captureType);
+        session.capture_layout = normalizeCaptureLayout(
+          session.capture_layout
+          || (session.device && session.device.capture_layout)
+          || captureLayout
+        );
+        session.device = {
+          ...(session.device || {}),
+          capture_type: session.capture_type,
+          capture_layout: session.capture_layout
+        };
       }
       return session;
     } catch (_exc) {
@@ -317,16 +450,20 @@
 
   function saveStoredSession(etbId, location, session) {
     const captureType = normalizeCaptureType(session && session.capture_type);
-    localStorage.setItem(sessionKey(etbId, location, captureType), JSON.stringify(session));
+    const captureLayout = normalizeCaptureLayout(session && session.capture_layout);
+    localStorage.setItem(sessionKey(etbId, location, captureType, captureLayout), JSON.stringify(session));
+    localStorage.removeItem(legacySessionKey(etbId, location, captureType));
   }
 
-  function newDraft(etbId, location, captureType) {
+  function newDraft(etbId, location, captureType, captureLayout) {
     const createdAt = new Date().toISOString();
     const normalizedType = normalizeCaptureType(captureType);
+    const normalizedLayout = normalizeCaptureLayout(captureLayout);
     return {
       capture_session_id: uuid(),
       etb_location: `${etbId}-${location}`,
       capture_type: normalizedType,
+      capture_layout: normalizedLayout,
       created_at: createdAt,
       submitted_at: null,
       status: "DRAFT",
@@ -337,7 +474,8 @@
         userAgent: navigator.userAgent,
         language: navigator.language,
         platform: navigator.platform || "",
-        capture_type: normalizedType
+        capture_type: normalizedType,
+        capture_layout: normalizedLayout
       },
       image_count: 0,
       original_image_locations: [],
@@ -361,14 +499,18 @@
     });
   }
 
-  async function saveDraftImages(sessionId, files) {
+  async function saveDraftImages(sessionId, files, captureLayout = "FRONT_ONLY") {
+    const normalizedLayout = normalizeCaptureLayout(captureLayout);
+    const existing = await loadDraftImages(sessionId);
+    const virtualImages = [...existing];
     const db = await openCaptureDb();
     await new Promise((resolve, reject) => {
       const tx = db.transaction(captureStoreName, "readwrite");
       const store = tx.objectStore(captureStoreName);
       Array.from(files).forEach((file) => {
         const id = uuid();
-        store.put({
+        const position = nextCapturePosition(virtualImages, normalizedLayout);
+        const row = {
           id,
           sessionId,
           file,
@@ -376,8 +518,13 @@
           type: file.type || "image/jpeg",
           size: file.size || 0,
           origin: "PHOTO_LIBRARY",
+          captureLayout: normalizedLayout,
+          cardNumber: position.cardNumber,
+          side: position.side,
           createdAt: new Date().toISOString()
-        });
+        };
+        store.put(row);
+        virtualImages.push(row);
       });
       tx.oncomplete = resolve;
       tx.onerror = () => reject(tx.error);
@@ -385,7 +532,10 @@
     db.close();
   }
 
-  async function saveDraftBlob(sessionId, blob, name, origin = "LIVE_CAMERA") {
+  async function saveDraftBlob(sessionId, blob, name, origin = "LIVE_CAMERA", captureLayout = "FRONT_ONLY") {
+    const normalizedLayout = normalizeCaptureLayout(captureLayout);
+    const existing = await loadDraftImages(sessionId);
+    const position = nextCapturePosition(existing, normalizedLayout);
     const db = await openCaptureDb();
     await new Promise((resolve, reject) => {
       const tx = db.transaction(captureStoreName, "readwrite");
@@ -398,6 +548,9 @@
         type: blob.type || "image/jpeg",
         size: blob.size || 0,
         origin,
+        captureLayout: normalizedLayout,
+        cardNumber: position.cardNumber,
+        side: position.side,
         createdAt: new Date().toISOString()
       });
       tx.oncomplete = resolve;
@@ -466,21 +619,46 @@
       </section>`;
   }
 
-  function captureScreenHtml(etbId, location, captureType) {
+  function captureLayoutChoiceHtml(etbId, location, captureType) {
     const type = captureTypeConfig[normalizeCaptureType(captureType)];
+    return `
+      <section class="mobile-capture capture-choice" aria-labelledby="capture-layout-title">
+        <div class="capture-header">
+          <div>
+            <p class="eyebrow">${escapeHtml(type.shortLabel)}</p>
+            <h2 id="capture-layout-title">Choose photo mode</h2>
+            <p>Choose whether each card needs a front image only or a matched front-and-back pair.</p>
+          </div>
+        </div>
+        <div class="capture-type-grid">
+          ${Object.entries(captureLayoutConfig).map(([layout, config]) => `
+            <a class="capture-type-card" href="${captureRoute(etbId, location, captureType, layout)}">
+              <strong>${escapeHtml(config.label)}</strong>
+              <span>${escapeHtml(config.description)}</span>
+            </a>`).join("")}
+        </div>
+        <button class="entry-back" id="capture-layout-back" type="button">Back</button>
+      </section>`;
+  }
+
+  function captureScreenHtml(etbId, location, captureType, captureLayout) {
+    const type = captureTypeConfig[normalizeCaptureType(captureType)];
+    const layout = captureLayoutConfig[normalizeCaptureLayout(captureLayout)];
     return `
       <section class="mobile-capture capture-screen" aria-labelledby="capture-title">
         <div class="capture-header">
           <div>
             <p class="eyebrow">Mobile Capture</p>
             <h2 id="capture-title">${escapeHtml(type.title)}</h2>
-            <p>Use the rear camera when available. Each shutter press saves one still to this phone before upload.</p>
+            <p>${escapeHtml(layout.description)} Use the rear camera when available.</p>
           </div>
           <span class="capture-status" id="capture-status">DRAFT</span>
         </div>
         <div class="capture-summary" aria-live="polite">
           <div><span>ETB Location</span><strong id="capture-location">${escapeHtml(etbId)}-${escapeHtml(location)}</strong></div>
           <div><span>Capture Type</span><strong id="capture-type-label">${escapeHtml(type.shortLabel)}</strong></div>
+          <div><span>Photo Mode</span><strong id="capture-layout-label">${escapeHtml(layout.shortLabel)}</strong></div>
+          <div><span>Next Photo</span><strong id="capture-next-photo">Card 1 Front</strong></div>
           <div><span>Session</span><strong id="capture-session-id">Not started</strong></div>
           <div><span>Images</span><strong id="capture-image-count">0</strong></div>
         </div>
@@ -507,9 +685,13 @@
       </section>`;
   }
 
-  function captureRoute(etbId, location, captureType) {
+  function captureRoute(etbId, location, captureType, captureLayout = "") {
     const type = captureTypeConfig[normalizeCaptureType(captureType)];
-    return `/capture/${encodeURIComponent(mobileCore.normalizeEtbId(etbId))}/${encodeURIComponent(mobileCore.normalizeLocationCode(location))}/${type.slug}`;
+    const base = `/capture/${encodeURIComponent(mobileCore.normalizeEtbId(etbId))}/${encodeURIComponent(mobileCore.normalizeLocationCode(location))}/${type.slug}`;
+    if (!captureLayout) {
+      return base;
+    }
+    return `${base}/${captureLayoutConfig[normalizeCaptureLayout(captureLayout)].slug}`;
   }
 
   function captureEntryShellHtml(title = "Start Mobile Capture") {
@@ -531,9 +713,11 @@
 
   function entrySummaryHtml(state) {
     const type = state.captureType ? captureTypeConfig[normalizeCaptureType(state.captureType)].shortLabel : "Not selected";
+    const layout = state.captureLayout ? captureLayoutConfig[normalizeCaptureLayout(state.captureLayout)].shortLabel : "Not selected";
     return `
       <div class="entry-summary">
         <div><span>Capture Type</span><strong>${escapeHtml(type)}</strong></div>
+        <div><span>Photo Mode</span><strong>${escapeHtml(layout)}</strong></div>
         <div><span>ETB</span><strong>${escapeHtml(state.etbId || "Not selected")}</strong></div>
         <div><span>Location</span><strong>${escapeHtml(state.location || "Not selected")}</strong></div>
       </div>`;
@@ -647,6 +831,10 @@
       return;
     }
     const type = normalizeCaptureType(draft.session.capture_type);
+    const layout = normalizeCaptureLayout(
+      draft.session.capture_layout
+      || (draft.session.device && draft.session.device.capture_layout)
+    );
     target.innerHTML = `
       <aside class="draft-resume">
         <div>
@@ -654,7 +842,7 @@
           <span>${escapeHtml(draft.session.etb_location)} · ${images.length} image${images.length === 1 ? "" : "s"}</span>
         </div>
         <div class="entry-actions">
-          <a class="button primary" href="${captureRoute(draft.etbId, draft.location, type)}">Resume Draft</a>
+          <a class="button primary" href="${captureRoute(draft.etbId, draft.location, type, layout)}">Resume Draft</a>
           <button class="button secondary" id="discard-mobile-draft" type="button">Discard Draft</button>
         </div>
       </aside>`;
@@ -681,6 +869,7 @@
     const fixedEtb = options.fixedEtb ? mobileCore.normalizeEtbId(options.fixedEtb) : "";
     const state = {
       captureType: "",
+      captureLayout: "",
       etbId: fixedEtb,
       location: "",
       etbs: [],
@@ -709,6 +898,7 @@
 
     function renderTypeSelection(backTarget = "") {
       state.location = "";
+      state.captureLayout = "";
       target.innerHTML = `
         ${entrySummaryHtml(state)}
         <h3>Choose Capture Type</h3>
@@ -840,20 +1030,38 @@
     function renderReview() {
       const type = captureTypeConfig[normalizeCaptureType(state.captureType)];
       const canonicalId = mobileCore.canonicalLocationId(state.etbId, state.location);
+      const layoutCards = Object.entries(captureLayoutConfig).map(([layout, config]) => `
+        <button class="entry-card${state.captureLayout === layout ? " selected" : ""}" data-capture-layout="${layout}" type="button">
+          <strong>${escapeHtml(config.label)}</strong>
+          <span>${escapeHtml(config.description)}</span>
+        </button>`).join("");
       target.innerHTML = `
         ${entrySummaryHtml(state)}
         <h3>Review Destination</h3>
         <div class="location-proposal"><span>${escapeHtml(type.label)}</span><strong>${escapeHtml(canonicalId)}</strong></div>
+        <h3>Choose Photo Mode</h3>
+        <div class="entry-grid">${layoutCards}</div>
         <div class="entry-actions">
-          <button class="button primary" id="entry-start-capture" type="button">Start Capture</button>
+          <button class="button primary" id="entry-start-capture" type="button"${state.captureLayout ? "" : " disabled"}>Start Capture</button>
           <button class="button secondary" id="entry-back" type="button">Back</button>
         </div>`;
-      bind("#entry-start-capture", () => window.location.assign(captureRoute(state.etbId, state.location, state.captureType)));
+      target.querySelectorAll("[data-capture-layout]").forEach((button) => {
+        button.addEventListener("click", () => {
+          state.captureLayout = normalizeCaptureLayout(button.dataset.captureLayout);
+          renderReview();
+        });
+      });
+      bind("#entry-start-capture", () => {
+        if (state.captureLayout) {
+          window.location.assign(captureRoute(state.etbId, state.location, state.captureType, state.captureLayout));
+        }
+      });
       bind("#entry-back", renderLocationSelection);
     }
 
     function renderEtbLanding() {
       state.captureType = "";
+      state.captureLayout = "";
       state.location = "";
       state.createAfterType = false;
       state.viewOnly = false;
@@ -949,16 +1157,17 @@
     }
     const urls = [];
     target.innerHTML = "";
-    images.forEach((image, index) => {
+    orderedCaptureImages(images, session.capture_layout).forEach((image, index) => {
+      const position = imageCapturePosition(image, index, session.capture_layout);
       const url = URL.createObjectURL(image.file);
       urls.push(url);
       const item = document.createElement("figure");
       item.className = "capture-thumb";
       item.innerHTML = `
-        <img src="${url}" alt="Captured card ${index + 1}">
+        <img src="${url}" alt="Card ${position.cardNumber} ${position.side}">
         <figcaption>
-          <span>${index + 1}</span>
-          <button type="button" data-remove-image="${escapeHtml(image.id)}" aria-label="Remove image ${index + 1}">Remove</button>
+          <span>Card ${position.cardNumber} ${position.side === "front" ? "Front" : "Back"}</span>
+          <button type="button" data-remove-image="${escapeHtml(image.id)}" aria-label="Remove card ${position.cardNumber} ${position.side}">Remove</button>
         </figcaption>`;
       const imageElement = item.querySelector("img");
       const releaseUrl = () => URL.revokeObjectURL(url);
@@ -989,6 +1198,10 @@
     }
     setText("capture-session-id", session.capture_session_id);
     setText("capture-image-count", String(session.image_count || 0));
+    loadDraftImages(session.capture_session_id).then((images) => {
+      const next = nextCapturePosition(images, session.capture_layout);
+      setText("capture-next-photo", `Card ${next.cardNumber} ${next.side === "front" ? "Front" : "Back"}`);
+    }).catch(() => setText("capture-next-photo", "Unavailable"));
     setCaptureStatus(session.status);
   }
 
@@ -1038,6 +1251,14 @@
   }
 
   function buildSessionPayload(session, images, user) {
+    const captureType = normalizeCaptureType(session.capture_type);
+    const captureLayout = normalizeCaptureLayout(session.capture_layout);
+    const sourceDevice = {
+      ...(session.device || {}),
+      capture_type: captureType,
+      capture_layout: captureLayout
+    };
+    session.device = sourceDevice;
     return {
       capture_session_id: session.capture_session_id,
       etb_location: session.etb_location,
@@ -1050,9 +1271,9 @@
       operator: user ? user.email : "",
       operator_id: user ? user.id : null,
       user_id: user ? user.id : null,
-      device: session.device,
-      source_device: session.device,
-      capture_type: normalizeCaptureType(session.capture_type),
+      device: sourceDevice,
+      source_device: sourceDevice,
+      capture_type: captureType,
       image_count: images.length,
       original_image_locations: [],
       conversion_status: "UPLOADING",
@@ -1115,23 +1336,26 @@
   }
 
   async function submitCapture(client, session, images, cfg, user, authSession) {
+    const captureLayout = normalizeCaptureLayout(session.capture_layout);
+    const orderedImages = orderedCaptureImages(images, captureLayout);
     session.status = "UPLOADING";
     saveStoredSession(session.etb_location.split("-").slice(0, 2).join("-"), session.etb_location.split("-")[2], session);
     updateCaptureSummary(session);
     setProgress(5, "Creating capture session...");
-    const sessionPayload = buildSessionPayload(session, images, user);
+    const sessionPayload = buildSessionPayload(session, orderedImages, user);
     const now = sessionPayload.updated_at;
     const upsert = await client.from("mobile_capture_sessions").upsert(sessionPayload, { onConflict: "capture_session_id" });
     if (upsert.error) {
       throw new Error(supabaseErrorDetails("Create capture session", upsert.error, user));
     }
     const uploaded = [];
-    for (let index = 0; index < images.length; index += 1) {
-      const image = images[index];
+    for (let index = 0; index < orderedImages.length; index += 1) {
+      const image = orderedImages[index];
+      const position = imageCapturePosition(image, index, captureLayout);
       const ext = (image.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
       const path = `${user.id}/${session.etb_location}/${session.capture_session_id}/${String(index + 1).padStart(4, "0")}-${image.id}.${ext}`;
-      const progress = 10 + Math.round(((index + 1) / images.length) * 70);
-      setProgress(progress, `Uploading ${index + 1} of ${images.length}...`);
+      const progress = 10 + Math.round(((index + 1) / orderedImages.length) * 70);
+      setProgress(progress, `Uploading ${index + 1} of ${orderedImages.length}...`);
       await uploadOriginalImage(cfg, path, image, user, authSession);
       const row = {
         image_id: image.id,
@@ -1152,7 +1376,14 @@
       if (imageInsert.error) {
         throw new Error(supabaseErrorDetails("Record uploaded image", imageInsert.error, user));
       }
-      uploaded.push({ bucket: cfg.originalImageBucket, path, image_id: image.id, sequence_number: index + 1 });
+      uploaded.push({
+        bucket: cfg.originalImageBucket,
+        path,
+        image_id: image.id,
+        sequence_number: index + 1,
+        card_number: position.cardNumber,
+        side: position.side
+      });
     }
     setProgress(90, "Submitting for conversion...");
     const submittedAt = new Date().toISOString();
@@ -1163,7 +1394,7 @@
         capture_type: normalizeCaptureType(session.capture_type),
         updated_at: submittedAt,
         submitted_at: submittedAt,
-        image_count: images.length,
+        image_count: orderedImages.length,
         original_image_locations: uploaded,
         conversion_status: "PENDING_CONVERSION"
       })
@@ -1174,7 +1405,8 @@
     }
     session.status = "PENDING_CONVERSION";
     session.submitted_at = submittedAt;
-    session.image_count = images.length;
+    session.image_count = orderedImages.length;
+    session.card_count = captureCardCount(orderedImages, captureLayout);
     session.original_image_locations = uploaded;
     session.conversion_status = "PENDING_CONVERSION";
     saveStoredSession(session.etb_location.split("-").slice(0, 2).join("-"), session.etb_location.split("-")[2], session);
@@ -1265,13 +1497,14 @@
     });
   }
 
-  async function initializeCapture(etbId, location, captureType) {
+  async function initializeCapture(etbId, location, captureType, captureLayout) {
     const normalizedType = normalizeCaptureType(captureType);
+    const normalizedLayout = normalizeCaptureLayout(captureLayout);
     const cfg = captureConfig();
     const client = configuredSupabase();
-    let session = getStoredSession(etbId, location, normalizedType);
+    let session = getStoredSession(etbId, location, normalizedType, normalizedLayout);
     if (!session || session.status === "PENDING_CONVERSION") {
-      session = newDraft(etbId, location, normalizedType);
+      session = newDraft(etbId, location, normalizedType, normalizedLayout);
       saveStoredSession(etbId, location, session);
     }
     updateCaptureSummary(session);
@@ -1308,7 +1541,7 @@
     document.getElementById("camera-shutter").addEventListener("click", async () => {
       try {
         if (!session || session.status !== "DRAFT") {
-          session = newDraft(etbId, location, normalizedType);
+          session = newDraft(etbId, location, normalizedType, normalizedLayout);
         }
         const blob = await captureStillFromVideo();
         const imageNumber = (await loadDraftImages(session.capture_session_id)).length + 1;
@@ -1316,27 +1549,30 @@
           session.capture_session_id,
           blob,
           `${session.capture_session_id}-${String(imageNumber).padStart(4, "0")}.jpg`,
-          "LIVE_CAMERA"
+          "LIVE_CAMERA",
+          normalizedLayout
         );
         session.image_count = (await loadDraftImages(session.capture_session_id)).length;
         saveStoredSession(etbId, location, session);
         updateCaptureSummary(session);
         await renderThumbnails(session);
-        setProgress(0, `Captured ${session.image_count} image${session.image_count === 1 ? "" : "s"} on this phone.`);
+        const images = await loadDraftImages(session.capture_session_id);
+        const next = nextCapturePosition(images, normalizedLayout);
+        setProgress(0, `Captured Card ${next.side === "back" ? next.cardNumber : Math.max(1, next.cardNumber - 1)}. Next: Card ${next.cardNumber} ${next.side}.`);
       } catch (exc) {
         setProgress(0, exc.message || String(exc));
       }
     });
     document.getElementById("capture-files").addEventListener("change", async (event) => {
       if (!session || session.status !== "DRAFT") {
-        session = newDraft(etbId, location, normalizedType);
+        session = newDraft(etbId, location, normalizedType, normalizedLayout);
       }
       const files = Array.from(event.target.files || []).filter((file) => file.type.startsWith("image/"));
       if (!files.length) {
         setProgress(0, "No images selected.");
         return;
       }
-      await saveDraftImages(session.capture_session_id, files);
+      await saveDraftImages(session.capture_session_id, files, normalizedLayout);
       session.image_count = (await loadDraftImages(session.capture_session_id)).length;
       saveStoredSession(etbId, location, session);
       updateCaptureSummary(session);
@@ -1371,6 +1607,10 @@
         const images = await loadDraftImages(session.capture_session_id);
         if (!images.length) {
           throw new Error("Capture at least one image before upload.");
+        }
+        if (!captureLayoutIsComplete(images, normalizedLayout)) {
+          setProgress(0, "Capture the back of the current card, or remove its incomplete front image, before finishing.");
+          return;
         }
         await submitCapture(client, session, images, cfg, user, authSession);
         stopCamera();
@@ -1452,18 +1692,35 @@
     const etbId = parts[1].toUpperCase();
     const location = parts[2].toUpperCase();
     const captureType = captureTypeFromSlug(parts[3] || "physical-inventory");
+    const captureLayout = captureLayoutFromSlug(parts[4] || "");
     const type = captureTypeConfig[captureType];
+    if (!captureLayout) {
+      renderQrView(
+        type.title,
+        `${etbId} Location ${location}`,
+        detailRow("ETB ID", escapeHtml(etbId)) +
+          detailRow("Location", escapeHtml(location)) +
+          detailRow("Capture Type", escapeHtml(type.label)) +
+          detailRow("Camera", "Starts after photo mode selection"),
+        captureLayoutChoiceHtml(etbId, location, captureType)
+      );
+      document.getElementById("capture-layout-back").addEventListener("click", () => window.history.back());
+      document.title = `Choose Photo Mode | ${etbId} ${location}`;
+      return;
+    }
+    const layout = captureLayoutConfig[captureLayout];
     renderQrView(
       type.title,
       `${etbId} Location ${location}`,
       detailRow("ETB ID", escapeHtml(etbId)) +
         detailRow("Location", escapeHtml(location)) +
         detailRow("Capture Type", escapeHtml(type.label)) +
+        detailRow("Photo Mode", escapeHtml(layout.label)) +
         detailRow("Upload Status", "Private CardVector workflow"),
-      captureScreenHtml(etbId, location, captureType)
+      captureScreenHtml(etbId, location, captureType, captureLayout)
     );
     document.title = `${type.title} | ${etbId} ${location}`;
-    initializeCapture(etbId, location, captureType);
+    initializeCapture(etbId, location, captureType, captureLayout);
     return;
   }
 

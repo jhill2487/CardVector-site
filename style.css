@@ -992,6 +992,12 @@ h3 {
   border-color: var(--blue-600);
 }
 
+.entry-card.selected {
+  background: var(--blue-50);
+  border-color: var(--gold);
+  box-shadow: inset 4px 0 0 var(--gold);
+}
+
 .entry-card.static {
   cursor: default;
 }
@@ -1053,6 +1059,11 @@ h3 {
 
 .entry-actions .button {
   min-height: 48px;
+}
+
+.entry-actions .button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
 }
 
 .location-proposal {
