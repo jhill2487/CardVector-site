@@ -142,7 +142,7 @@
     ? hashRoute
     : parts[0].toLowerCase();
   const siteLinks = Object.freeze({
-    EBAY_STORE_URL: "https://ebay.io/m/gttiV0",
+    EBAY_STORE_URL: "https://www.ebay.com/str/jhilltcg?mkcid=1&mkrid=711-53200-19255-0&siteid=0&campid=5339178316&customid=&toolid=10001&mkevt=1",
     TCGPLAYER_STORE_URL: "https://www.tcgplayer.com/sellers/Putnam-Collectibles/747c057d",
     WHATNOT_REFERRAL_URL: "https://whatnot.com/invite/putnam_collectibles",
     COLLECTION_INQUIRY_URL: "https://tally.so/r/ob1ABN"
