@@ -1109,6 +1109,48 @@ h3 {
   border-radius: 18px;
 }
 
+.camera-controls {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr);
+  align-items: center;
+  gap: 8px 12px;
+  margin: 16px 0 -2px;
+  padding: 12px 14px;
+  background: #f8fbff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.camera-controls[hidden] {
+  display: none;
+}
+
+.camera-controls label {
+  color: var(--navy);
+  font-size: .78rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.camera-controls select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  color: var(--navy);
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 700;
+}
+
+.camera-controls span {
+  grid-column: 2;
+  color: var(--muted);
+  font-size: .86rem;
+}
+
 .camera-shell video {
   display: block;
   width: 100%;
@@ -1464,5 +1506,13 @@ h3 {
 
   .capture-thumbs {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .camera-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .camera-controls span {
+    grid-column: 1;
   }
 }
