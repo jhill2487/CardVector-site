@@ -1049,9 +1049,119 @@
       }
     }
 
+    function bindChange(selector, handler) {
+      const element = target.querySelector(selector);
+      if (element) {
+        element.addEventListener("change", handler);
+      }
+    }
+
     async function refreshLocations() {
       state.locations = await listCloudLocations(client, state.user, state.etbId);
       return state.locations;
+    }
+
+    function renderMobileCaptureForm(message = "") {
+      const typeOptions = Object.entries(captureTypeConfig).map(([value, config]) => (
+        `<option value="${escapeHtml(value)}"${state.captureType === value ? " selected" : ""}>${escapeHtml(config.label)}</option>`
+      )).join("");
+      const etbOptions = state.etbs.map((etb) => (
+        `<option value="${escapeHtml(etb.etb_id)}"${state.etbId === etb.etb_id ? " selected" : ""}>${escapeHtml(etb.etb_id)}${etb.status ? ` (${escapeHtml(etb.status)})` : ""}</option>`
+      )).join("");
+      const locationOptions = state.locations.map((location) => {
+        const occupancy = `${Number(location.stored_count || 0)}/${Number(location.capacity || 40)}`;
+        const label = `Location ${location.location_code} (${occupancy}, ${location.status || "Empty"})`;
+        return `<option value="${escapeHtml(location.location_code)}"${state.location === location.location_code ? " selected" : ""}>${escapeHtml(label)}</option>`;
+      }).join("");
+      const layoutOptions = Object.entries(captureLayoutConfig).map(([value, config]) => (
+        `<option value="${escapeHtml(value)}"${state.captureLayout === value ? " selected" : ""}>${escapeHtml(config.label)}</option>`
+      )).join("");
+      const nextCode = state.etbId ? mobileCore.nextAvailableLocationCode(state.locations) : "";
+      const ready = state.captureType && state.etbId && state.location && state.captureLayout;
+      const readyLine = ready
+        ? `<p class="entry-ready">Ready for ${escapeHtml(captureTypeConfig[state.captureType].shortLabel)} at ${escapeHtml(mobileCore.canonicalLocationId(state.etbId, state.location))}.</p>`
+        : "";
+      target.innerHTML = `
+        <form class="entry-form" id="mobile-capture-entry-form">
+          <label class="entry-field" for="mobile-capture-type">
+            <span>Capture type</span>
+            <select id="mobile-capture-type" name="capture_type">
+              <option value="">Choose capture type</option>
+              ${typeOptions}
+            </select>
+          </label>
+          <label class="entry-field" for="mobile-capture-etb">
+            <span>ETB</span>
+            <select id="mobile-capture-etb" name="etb_id"${state.etbs.length ? "" : " disabled"}>
+              <option value="">Choose ETB</option>
+              ${etbOptions}
+            </select>
+          </label>
+          <label class="entry-field" for="mobile-capture-location">
+            <span>Location</span>
+            <select id="mobile-capture-location" name="location_code"${state.etbId && state.locations.length ? "" : " disabled"}>
+              <option value="">${state.etbId ? "Choose location" : "Choose ETB first"}</option>
+              ${locationOptions}
+            </select>
+          </label>
+          <label class="entry-field" for="mobile-capture-layout">
+            <span>Photo mode</span>
+            <select id="mobile-capture-layout" name="capture_layout">
+              <option value="">Choose photo mode</option>
+              ${layoutOptions}
+            </select>
+          </label>
+          ${state.etbs.length ? "" : '<p class="entry-message">No synchronized ETBs are available. Run desktop location sync after applying the migration.</p>'}
+          ${message ? `<p class="entry-message">${escapeHtml(message)}</p>` : ""}
+          ${!state.etbId || state.locations.length || !nextCode ? "" : '<p class="entry-message">No locations have been provisioned for this ETB yet.</p>'}
+          <div class="entry-actions">
+            <button class="button primary" id="entry-start-capture" type="submit"${ready ? "" : " disabled"}>Start Capture</button>
+            ${state.etbId && nextCode ? '<button class="button secondary" id="entry-create-location" type="button">Create Next Location</button>' : ""}
+          </div>
+          ${readyLine}
+        </form>`;
+      bindChange("#mobile-capture-type", (event) => {
+        state.captureType = event.target.value ? normalizeCaptureType(event.target.value) : "";
+        renderMobileCaptureForm();
+      });
+      bindChange("#mobile-capture-etb", async (event) => {
+        state.etbId = event.target.value ? mobileCore.normalizeEtbId(event.target.value) : "";
+        state.location = "";
+        try {
+          state.locations = state.etbId ? await listCloudLocations(client, state.user, state.etbId) : [];
+          renderMobileCaptureForm();
+        } catch (error) {
+          showError(error);
+        }
+      });
+      bindChange("#mobile-capture-location", (event) => {
+        state.location = event.target.value ? mobileCore.normalizeLocationCode(event.target.value) : "";
+        renderMobileCaptureForm();
+      });
+      bindChange("#mobile-capture-layout", (event) => {
+        state.captureLayout = event.target.value ? normalizeCaptureLayout(event.target.value) : "";
+        renderMobileCaptureForm();
+      });
+      bind("#entry-create-location", async (event) => {
+        event.currentTarget.disabled = true;
+        try {
+          const created = await createCloudNextLocation(client, state.user, state.etbId, nextCode);
+          await refreshLocations();
+          state.location = mobileCore.normalizeLocationCode(created.location_code);
+          renderMobileCaptureForm(`Created ${mobileCore.canonicalLocationId(state.etbId, state.location)}.`);
+        } catch (error) {
+          showError(error);
+        }
+      });
+      const form = target.querySelector("#mobile-capture-entry-form");
+      if (form) {
+        form.addEventListener("submit", (event) => {
+          event.preventDefault();
+          if (ready) {
+            window.location.assign(captureRoute(state.etbId, state.location, state.captureType, state.captureLayout));
+          }
+        });
+      }
     }
 
     function renderTypeSelection(backTarget = "") {
@@ -1273,7 +1383,7 @@
           if (state.landing) {
             renderEtbLanding();
           } else {
-            renderTypeSelection();
+            renderMobileCaptureForm();
           }
         } catch (error) {
           showError(error);

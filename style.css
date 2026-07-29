@@ -963,6 +963,66 @@ h3 {
   overflow-wrap: anywhere;
 }
 
+.entry-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.entry-field {
+  display: grid;
+  gap: 7px;
+}
+
+.entry-field span {
+  color: var(--muted);
+  font-size: .78rem;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.entry-field select {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 12px;
+  color: var(--blue-900);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font: inherit;
+  font-size: .96rem;
+  font-weight: 800;
+  letter-spacing: .01em;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .8);
+}
+
+.entry-field select:focus {
+  outline: 3px solid rgba(20, 108, 244, .18);
+  border-color: var(--blue-600);
+}
+
+.entry-field select:disabled {
+  color: var(--muted);
+  background: var(--surface-soft);
+}
+
+.entry-field option {
+  color: var(--blue-900);
+  background: var(--surface);
+  font-weight: 700;
+}
+
+.entry-field option[value=""] {
+  color: var(--muted);
+}
+
+.entry-ready {
+  margin: 2px 0 0;
+  color: var(--blue-700);
+  font-weight: 850;
+}
+
 .entry-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
