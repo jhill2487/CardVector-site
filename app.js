@@ -122,12 +122,25 @@
     });
   }
 
+  const mobileHashRoutes = new Set(["mobile", "mobile-capture"]);
+  function currentHashRoute() {
+    return window.location.hash.replace(/^#\/?/, "").toLowerCase();
+  }
+  window.addEventListener("hashchange", () => {
+    if (mobileHashRoutes.has(currentHashRoute())) {
+      window.location.reload();
+    }
+  });
+
   const parts = window.location.pathname.split("/").filter(Boolean).map(decodeURIComponent);
-  if (!parts.length) {
+  const hashRoute = currentHashRoute();
+  if (!parts.length && !mobileHashRoutes.has(hashRoute)) {
     return;
   }
 
-  const route = parts[0].toLowerCase();
+  const route = mobileHashRoutes.has(hashRoute)
+    ? hashRoute
+    : parts[0].toLowerCase();
   const siteLinks = Object.freeze({
     EBAY_STORE_URL: "https://ebay.io/m/gttiV0",
     TCGPLAYER_STORE_URL: "https://www.tcgplayer.com/sellers/Putnam-Collectibles/747c057d",
