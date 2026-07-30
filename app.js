@@ -122,7 +122,7 @@
     });
   }
 
-  const mobileHashRoutes = new Set(["mobile", "mobile-capture"]);
+  const mobileHashRoutes = new Set(["mobile", "mobile-capture", "operator", "operator-dashboard", "registry", "location-registry"]);
   function currentHashRoute() {
     return window.location.hash.replace(/^#\/?/, "").toLowerCase();
   }
@@ -905,6 +905,316 @@
     });
   }
 
+  function locationStoredLabel(location) {
+    const stored = Number(location && location.stored_count || 0);
+    return stored === 1 ? "1 card" : `${stored} cards`;
+  }
+
+  function compactStatusLabel(value) {
+    const label = String(value || "unknown").replace(/[_-]+/g, " ").trim();
+    return label ? label.replace(/\b\w/g, (match) => match.toUpperCase()) : "Unknown";
+  }
+
+  function safeDateLabel(value) {
+    if (!value) {
+      return "Not available";
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return String(value);
+    }
+    return date.toLocaleString([], {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit"
+    });
+  }
+
+  function locationDisplayCode(location) {
+    return location && (location.display_code || location.location_id || location.legacy_id || location.name) || "";
+  }
+
+  function captureSessionLocationKey(session) {
+    const metadata = session && session.migration_metadata || {};
+    const legacy = session && (session.legacy_etb_location_id || metadata.legacy_etb_location_id || metadata.etb_location_id);
+    return legacy || "";
+  }
+
+  async function queryOptionalTable(client, table, select, applyQuery) {
+    let query = client.from(table).select(select);
+    if (typeof applyQuery === "function") {
+      query = applyQuery(query);
+    }
+    const result = await query;
+    if (result.error) {
+      if (isMissingCanonicalRegistry(result.error)) {
+        return { data: [], missing: true };
+      }
+      throw result.error;
+    }
+    return { data: result.data || [], missing: false };
+  }
+
+  async function loadOperatorRegistry(client, user) {
+    await requireLocationAuthorization(client, user);
+    const locationsResult = await queryOptionalTable(
+      client,
+      "cardvector_storage_locations",
+      "id,name,display_code,parent_location_id,location_type,status,capacity,stored_count,sync_state,legacy_id,legacy_etb_id,legacy_location_code,metadata,updated_at,archived_at",
+      (query) => query.is("archived_at", null).order("display_code", { ascending: true })
+    );
+    const sessionsResult = await queryOptionalTable(
+      client,
+      "cardvector_capture_sessions",
+      "id,legacy_session_id,legacy_etb_location_id,location_id,status,source_application,photo_count,processed_count,recognized_count,failed_count,sync_state,migration_metadata,created_at,updated_at,completed_at,archived_at",
+      (query) => query.is("archived_at", null).order("updated_at", { ascending: false }).limit(40)
+    );
+    const batchesResult = await queryOptionalTable(
+      client,
+      "cardvector_location_carduploader_batches_v",
+      "id,location_id,canonical_location_display_code,location_display_code,etb_display_code,carduploader_batch_id,carduploader_batch_url,carduploader_batch_name,batch_label,event_type,card_count,batch_date,updated_at",
+      (query) => query.order("batch_date", { ascending: false }).limit(80)
+    );
+    return {
+      locations: locationsResult.data,
+      sessions: sessionsResult.data,
+      batches: batchesResult.data,
+      missing: {
+        locations: locationsResult.missing,
+        sessions: sessionsResult.missing,
+        batches: batchesResult.missing
+      }
+    };
+  }
+
+  function renderOperatorDashboard() {
+    main.innerHTML = `
+      <section class="operator-shell wrap" aria-labelledby="operator-title">
+        <div class="operator-hero">
+          <p class="eyebrow">CardVector workspace</p>
+          <h1 id="operator-title">Operator Dashboard</h1>
+          <p>Use CardVector.app as the primary operating surface for capture, ETB locations, batch work, price review, and existing listing review.</p>
+        </div>
+        <div class="operator-grid" aria-label="Operator workflows">
+          <a class="operator-card operator-card-primary" href="/operator/registry">
+            <span>Live Registry</span>
+            <strong>ETB / Location Registry</strong>
+            <p>Review synchronized Supabase ETBs, slots, mobile captures, and CardUploader batch references.</p>
+          </a>
+          <a class="operator-card" href="/#mobile-capture">
+            <span>Capture</span>
+            <strong>Mobile Capture</strong>
+            <p>Start card capture from a workstation, tablet, or phone without scanning a QR code.</p>
+          </a>
+          <article class="operator-card is-disabled" aria-label="Batch workflow coming next">
+            <span>Next</span>
+            <strong>Batch Workflow</strong>
+            <p>CardUploader batch assignment and batch status controls will move here next.</p>
+          </article>
+          <article class="operator-card is-disabled" aria-label="Price review coming next">
+            <span>Next</span>
+            <strong>Price Review</strong>
+            <p>Marketplace Intelligence recommendations and review queues will live in this workspace.</p>
+          </article>
+          <article class="operator-card is-disabled" aria-label="Existing listing review coming next">
+            <span>Next</span>
+            <strong>Existing Listing Review</strong>
+            <p>eBay listing checks will be staged here before any automated marketplace updates exist.</p>
+          </article>
+        </div>
+      </section>`;
+    document.title = "Operator Dashboard | CardVector";
+  }
+
+  function registryWarningHtml(registry) {
+    const warnings = [];
+    if (registry.missing.locations) {
+      warnings.push("Canonical storage-location table is not available yet.");
+    }
+    if (registry.missing.sessions) {
+      warnings.push("Canonical capture-session table is not available yet.");
+    }
+    if (registry.missing.batches) {
+      warnings.push("CardUploader batch-event view is pending migration or not available.");
+    }
+    if (!warnings.length) {
+      return "";
+    }
+    return `<div class="operator-warning" role="status">${warnings.map(escapeHtml).join(" ")}</div>`;
+  }
+
+  function renderSlot(slot, sessionCount, batchCount) {
+    return `
+      <article class="registry-slot">
+        <div>
+          <span>${escapeHtml(locationDisplayCode(slot))}</span>
+          <strong>${escapeHtml(compactStatusLabel(slot.status))}</strong>
+        </div>
+        <dl>
+          <div><dt>Cards</dt><dd>${escapeHtml(locationStoredLabel(slot))}</dd></div>
+          <div><dt>Sync</dt><dd>${escapeHtml(compactStatusLabel(slot.sync_state))}</dd></div>
+          <div><dt>Captures</dt><dd>${sessionCount}</dd></div>
+          <div><dt>Batches</dt><dd>${batchCount}</dd></div>
+        </dl>
+        <p>Updated ${escapeHtml(safeDateLabel(slot.updated_at))}</p>
+      </article>`;
+  }
+
+  function renderEtbCard(etb, slots, sessionsByLocation, batchesByLocation) {
+    const etbCode = locationDisplayCode(etb);
+    const slotHtml = slots.length
+      ? slots.map((slot) => {
+        const key = locationDisplayCode(slot);
+        const sessionCount = (sessionsByLocation.get(slot.id) || sessionsByLocation.get(key) || []).length;
+        const batchCount = (batchesByLocation.get(slot.id) || batchesByLocation.get(key) || []).length;
+        return renderSlot(slot, sessionCount, batchCount);
+      }).join("")
+      : '<p class="operator-empty">No synchronized slots are available for this ETB.</p>';
+    const stored = slots.reduce((total, slot) => total + Number(slot.stored_count || 0), 0);
+    return `
+      <section class="registry-etb-card" aria-labelledby="registry-${escapeHtml(etbCode)}">
+        <header>
+          <div>
+            <span>ETB</span>
+            <h2 id="registry-${escapeHtml(etbCode)}">${escapeHtml(etbCode)}</h2>
+          </div>
+          <span class="registry-state">${escapeHtml(compactStatusLabel(etb.status))}</span>
+        </header>
+        <div class="registry-metrics">
+          <div><span>Cards</span><strong>${stored}</strong></div>
+          <div><span>Slots</span><strong>${slots.length}</strong></div>
+          <div><span>Sync</span><strong>${escapeHtml(compactStatusLabel(etb.sync_state))}</strong></div>
+          <div><span>Updated</span><strong>${escapeHtml(safeDateLabel(etb.updated_at))}</strong></div>
+        </div>
+        <div class="registry-slot-grid">${slotHtml}</div>
+      </section>`;
+  }
+
+  function renderRecentSessions(sessions) {
+    if (!sessions.length) {
+      return '<p class="operator-empty">No canonical capture sessions are available yet.</p>';
+    }
+    return sessions.slice(0, 8).map((session) => `
+      <article class="operator-list-row">
+        <div>
+          <strong>${escapeHtml(session.legacy_session_id || session.id)}</strong>
+          <span>${escapeHtml(session.source_application || "CardVector")} &middot; ${escapeHtml(captureSessionLocationKey(session) || "No location")}</span>
+        </div>
+        <div>
+          <span>${Number(session.photo_count || 0)} photos</span>
+          <strong>${escapeHtml(compactStatusLabel(session.status))}</strong>
+        </div>
+      </article>`).join("");
+  }
+
+  function renderOperatorRegistryView(registry, user) {
+    const etbs = registry.locations.filter((location) => location.location_type === "etb");
+    const slots = registry.locations.filter((location) => location.location_type === "slot");
+    const slotsByParent = new Map();
+    slots.forEach((slot) => {
+      const key = slot.parent_location_id || "";
+      if (!slotsByParent.has(key)) {
+        slotsByParent.set(key, []);
+      }
+      slotsByParent.get(key).push(slot);
+    });
+    const sessionsByLocation = new Map();
+    registry.sessions.forEach((session) => {
+      [session.location_id, captureSessionLocationKey(session)].filter(Boolean).forEach((key) => {
+        if (!sessionsByLocation.has(key)) {
+          sessionsByLocation.set(key, []);
+        }
+        sessionsByLocation.get(key).push(session);
+      });
+    });
+    const batchesByLocation = new Map();
+    registry.batches.forEach((batch) => {
+      [batch.location_id, batch.location_display_code, batch.canonical_location_display_code].filter(Boolean).forEach((key) => {
+        if (!batchesByLocation.has(key)) {
+          batchesByLocation.set(key, []);
+        }
+        batchesByLocation.get(key).push(batch);
+      });
+    });
+    const registryCards = etbs.length
+      ? etbs.map((etb) => renderEtbCard(etb, slotsByParent.get(etb.id) || [], sessionsByLocation, batchesByLocation)).join("")
+      : '<p class="operator-empty">No canonical ETBs are available yet.</p>';
+    main.innerHTML = `
+      <section class="operator-shell wrap registry-shell" aria-labelledby="registry-title">
+        <div class="operator-toolbar">
+          <div>
+            <p class="eyebrow">Supabase-backed registry</p>
+            <h1 id="registry-title">ETB / Location Registry</h1>
+            <p>Signed in as ${escapeHtml(authStateLabel(user))}. This view reads the shared canonical registry used by CardVector.app and CardVector OS.</p>
+          </div>
+          <div class="operator-toolbar-actions">
+            <a class="button secondary" href="/operator">Operator Dashboard</a>
+            <a class="button primary" href="/#mobile-capture">Start Mobile Capture</a>
+          </div>
+        </div>
+        ${registryWarningHtml(registry)}
+        <div class="registry-summary">
+          <div><span>ETBs</span><strong>${etbs.length}</strong></div>
+          <div><span>Locations</span><strong>${slots.length}</strong></div>
+          <div><span>Recent Captures</span><strong>${registry.sessions.length}</strong></div>
+          <div><span>Batch References</span><strong>${registry.batches.length}</strong></div>
+        </div>
+        <div class="registry-layout">
+          <div class="registry-list">${registryCards}</div>
+          <aside class="operator-side-panel" aria-labelledby="recent-captures-title">
+            <h2 id="recent-captures-title">Recent Capture Sessions</h2>
+            ${renderRecentSessions(registry.sessions)}
+          </aside>
+        </div>
+      </section>`;
+    document.title = "ETB Location Registry | CardVector";
+  }
+
+  async function renderOperatorRegistry() {
+    main.innerHTML = `
+      <section class="operator-shell wrap" aria-labelledby="registry-title">
+        <div class="operator-toolbar">
+          <div>
+            <p class="eyebrow">CardVector operator</p>
+            <h1 id="registry-title">ETB / Location Registry</h1>
+            <p>Sign in to load synchronized Supabase ETBs, slots, capture sessions, and CardUploader batch references.</p>
+          </div>
+          <a class="button secondary" href="/operator">Operator Dashboard</a>
+        </div>
+        <div class="capture-operator" id="operator-registry-user" aria-live="polite">Operator: not signed in</div>
+        <div class="capture-auth operator-auth" id="operator-registry-auth"></div>
+        <div id="operator-registry-status" class="operator-loading">Waiting for sign-in.</div>
+      </section>`;
+    document.title = "ETB Location Registry | CardVector";
+    const client = configuredSupabase();
+    const status = document.getElementById("operator-registry-status");
+    if (!client) {
+      if (status) {
+        status.textContent = "Supabase is not configured for this deployment.";
+      }
+      return;
+    }
+    await ensureAuth(client, {
+      authId: "operator-registry-auth",
+      operatorId: "operator-registry-user",
+      idPrefix: "operator-registry",
+      onAuthenticated: async (user) => {
+        if (status) {
+          status.textContent = "Loading synchronized registry...";
+        }
+        try {
+          const registry = await loadOperatorRegistry(client, user);
+          renderOperatorRegistryView(registry, user);
+        } catch (error) {
+          if (status) {
+            status.innerHTML = `<span class="entry-message error">${escapeHtml(error.message || error)}</span>`;
+          }
+        }
+      }
+    });
+  }
+
   async function createCloudNextLocation(client, user, etbId, expectedCode) {
     const canonicalEtb = mobileCore.normalizeEtbId(etbId);
     const expected = mobileCore.normalizeLocationCode(expectedCode);
@@ -1069,8 +1379,7 @@
         `<option value="${escapeHtml(etb.etb_id)}"${state.etbId === etb.etb_id ? " selected" : ""}>${escapeHtml(etb.etb_id)}${etb.status ? ` (${escapeHtml(etb.status)})` : ""}</option>`
       )).join("");
       const locationOptions = state.locations.map((location) => {
-        const occupancy = `${Number(location.stored_count || 0)}/${Number(location.capacity || 40)}`;
-        const label = `Location ${location.location_code} (${occupancy}, ${location.status || "Empty"})`;
+        const label = `Location ${location.location_code} (${locationStoredLabel(location)}, ${location.status || "Empty"})`;
         return `<option value="${escapeHtml(location.location_code)}"${state.location === location.location_code ? " selected" : ""}>${escapeHtml(label)}</option>`;
       }).join("");
       const layoutOptions = Object.entries(captureLayoutConfig).map(([value, config]) => (
@@ -1233,7 +1542,7 @@
     function renderLocationSelection() {
       state.location = "";
       const cards = state.locations.map((location) => {
-        const occupancy = `${Number(location.stored_count || 0)}/${Number(location.capacity || 40)}`;
+        const occupancy = locationStoredLabel(location);
         if (state.viewOnly) {
           return `<article class="entry-card static"><strong>Location ${escapeHtml(location.location_code)}</strong><span>${escapeHtml(occupancy)} · ${escapeHtml(location.status || "Empty")}</span></article>`;
         }
@@ -2116,6 +2425,20 @@
     });
     window.addEventListener("pagehide", stopCamera);
     window.addEventListener("beforeunload", stopCamera);
+  }
+
+  if (route === "operator" || route === "operator-dashboard") {
+    if (parts[1] && ["registry", "locations", "location-registry"].includes(parts[1].toLowerCase())) {
+      renderOperatorRegistry();
+      return;
+    }
+    renderOperatorDashboard();
+    return;
+  }
+
+  if (route === "registry" || route === "location-registry") {
+    renderOperatorRegistry();
+    return;
   }
 
   if (sellRoutes.has(route)) {
