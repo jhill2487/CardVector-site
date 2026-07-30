@@ -758,7 +758,12 @@
 
   function isMissingCanonicalRegistry(error) {
     const text = `${error && (error.code || error.status || error.statusCode || error.message || error.details) || error}`.toLowerCase();
-    return text.includes("404") || text.includes("42p01") || text.includes("not found") || text.includes("does not exist");
+    return text.includes("404")
+      || text.includes("42p01")
+      || text.includes("not found")
+      || text.includes("could not find")
+      || text.includes("schema cache")
+      || text.includes("does not exist");
   }
 
   function canonicalStatusFromLegacy(value) {
