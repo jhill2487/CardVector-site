@@ -122,7 +122,7 @@
     });
   }
 
-  const mobileHashRoutes = new Set(["mobile", "mobile-capture", "operator", "operator-dashboard", "registry", "location-registry"]);
+  const mobileHashRoutes = new Set(["mobile", "mobile-capture", "operator", "operator-dashboard", "registry", "location-registry", "batches", "batch-workflow"]);
   function currentHashRoute() {
     return window.location.hash.replace(/^#\/?/, "").toLowerCase();
   }
@@ -1012,11 +1012,11 @@
             <strong>Mobile Capture</strong>
             <p>Start card capture from a workstation, tablet, or phone without scanning a QR code.</p>
           </a>
-          <article class="operator-card is-disabled" aria-label="Batch workflow coming next">
-            <span>Next</span>
+          <a class="operator-card" href="/operator/batches">
+            <span>Batch</span>
             <strong>Batch Workflow</strong>
-            <p>CardUploader batch assignment and batch status controls will move here next.</p>
-          </article>
+            <p>Review CardUploader batch references, linked ETB locations, and capture-session handoff status.</p>
+          </a>
           <article class="operator-card is-disabled" aria-label="Price review coming next">
             <span>Next</span>
             <strong>Price Review</strong>
@@ -1111,6 +1111,97 @@
           <strong>${escapeHtml(compactStatusLabel(session.status))}</strong>
         </div>
       </article>`).join("");
+  }
+
+  function batchLocationLabel(batch) {
+    return batch && (
+      batch.canonical_location_display_code ||
+      batch.location_display_code ||
+      batch.etb_display_code ||
+      batch.location_id
+    ) || "Unassigned";
+  }
+
+  function batchReferenceLabel(batch) {
+    return batch && (
+      batch.batch_label ||
+      batch.carduploader_batch_name ||
+      batch.carduploader_batch_id
+    ) || "CardUploader batch";
+  }
+
+  function safeCardUploaderUrl(value) {
+    const href = String(value || "").trim();
+    if (/^https:\/\/(www\.)?carduploader\.com\//i.test(href)) {
+      return href;
+    }
+    return "";
+  }
+
+  function renderBatchReferenceRows(batches) {
+    if (!batches.length) {
+      return '<p class="operator-empty">No CardUploader batch references are available yet.</p>';
+    }
+    return batches.slice(0, 80).map((batch) => {
+      const batchUrl = safeCardUploaderUrl(batch.carduploader_batch_url);
+      return `
+        <article class="operator-list-row batch-reference-row">
+          <div>
+            <strong>${escapeHtml(batchReferenceLabel(batch))}</strong>
+            <span>${escapeHtml(batchLocationLabel(batch))} &middot; ${escapeHtml(compactStatusLabel(batch.event_type || "batch reference"))}</span>
+            ${batch.carduploader_batch_id ? `<span>Batch ID: ${escapeHtml(batch.carduploader_batch_id)}</span>` : ""}
+            ${batchUrl ? `<a class="operator-inline-link" href="${escapeHtml(batchUrl)}" target="_blank" rel="noopener noreferrer">Open CardUploader batch</a>` : ""}
+          </div>
+          <div>
+            <span>${Number(batch.card_count || 0)} cards</span>
+            <strong>${escapeHtml(safeDateLabel(batch.batch_date || batch.updated_at))}</strong>
+          </div>
+        </article>`;
+    }).join("");
+  }
+
+  function renderOperatorBatchWorkflowView(registry, user) {
+    const linkedLocations = new Set(registry.batches.map(batchLocationLabel).filter((value) => value && value !== "Unassigned"));
+    const referencedCards = registry.batches.reduce((total, batch) => total + Number(batch.card_count || 0), 0);
+    const pendingSessions = registry.sessions.filter((session) => {
+      const status = String(session.status || "").toLowerCase();
+      return status.includes("staged") || status.includes("pending") || status.includes("processing");
+    });
+    main.innerHTML = `
+      <section class="operator-shell wrap batch-shell" aria-labelledby="batch-workflow-title">
+        <div class="operator-toolbar">
+          <div>
+            <p class="eyebrow">Supabase-backed workflow</p>
+            <h1 id="batch-workflow-title">Batch Workflow</h1>
+            <p>Signed in as ${escapeHtml(authStateLabel(user))}. Review CardUploader batch references and capture-session handoff state from the shared registry.</p>
+          </div>
+          <div class="operator-toolbar-actions">
+            <a class="button secondary" href="/operator">Operator Dashboard</a>
+            <a class="button secondary" href="/operator/registry">ETB Registry</a>
+            <a class="button primary" href="/#mobile-capture">Start Mobile Capture</a>
+          </div>
+        </div>
+        ${registryWarningHtml(registry)}
+        <div class="registry-summary">
+          <div><span>Batch References</span><strong>${registry.batches.length}</strong></div>
+          <div><span>Linked Locations</span><strong>${linkedLocations.size}</strong></div>
+          <div><span>Referenced Cards</span><strong>${referencedCards}</strong></div>
+          <div><span>Pending Captures</span><strong>${pendingSessions.length}</strong></div>
+        </div>
+        <div class="registry-layout">
+          <div class="registry-list">
+            <section class="operator-side-panel operator-main-panel" aria-labelledby="batch-reference-title">
+              <h2 id="batch-reference-title">CardUploader Batch References</h2>
+              ${renderBatchReferenceRows(registry.batches)}
+            </section>
+          </div>
+          <aside class="operator-side-panel" aria-labelledby="batch-capture-title">
+            <h2 id="batch-capture-title">Capture Handoff</h2>
+            ${renderRecentSessions(registry.sessions)}
+          </aside>
+        </div>
+      </section>`;
+    document.title = "Batch Workflow | CardVector";
   }
 
   function renderOperatorRegistryView(registry, user) {
@@ -1211,6 +1302,50 @@
         try {
           const registry = await loadOperatorRegistry(client, user);
           renderOperatorRegistryView(registry, user);
+        } catch (error) {
+          if (status) {
+            status.innerHTML = `<span class="entry-message error">${escapeHtml(error.message || error)}</span>`;
+          }
+        }
+      }
+    });
+  }
+
+  async function renderOperatorBatchWorkflow() {
+    main.innerHTML = `
+      <section class="operator-shell wrap" aria-labelledby="batch-workflow-title">
+        <div class="operator-toolbar">
+          <div>
+            <p class="eyebrow">CardVector operator</p>
+            <h1 id="batch-workflow-title">Batch Workflow</h1>
+            <p>Sign in to load synchronized CardUploader batch references, ETB locations, and capture handoff state.</p>
+          </div>
+          <a class="button secondary" href="/operator">Operator Dashboard</a>
+        </div>
+        <div class="capture-operator" id="operator-batches-user" aria-live="polite">Operator: not signed in</div>
+        <div class="capture-auth operator-auth" id="operator-batches-auth"></div>
+        <div id="operator-batches-status" class="operator-loading">Waiting for sign-in.</div>
+      </section>`;
+    document.title = "Batch Workflow | CardVector";
+    const client = configuredSupabase();
+    const status = document.getElementById("operator-batches-status");
+    if (!client) {
+      if (status) {
+        status.textContent = "Supabase is not configured for this deployment.";
+      }
+      return;
+    }
+    await ensureAuth(client, {
+      authId: "operator-batches-auth",
+      operatorId: "operator-batches-user",
+      idPrefix: "operator-batches",
+      onAuthenticated: async (user) => {
+        if (status) {
+          status.textContent = "Loading batch workflow...";
+        }
+        try {
+          const registry = await loadOperatorRegistry(client, user);
+          renderOperatorBatchWorkflowView(registry, user);
         } catch (error) {
           if (status) {
             status.innerHTML = `<span class="entry-message error">${escapeHtml(error.message || error)}</span>`;
@@ -2437,12 +2572,21 @@
       renderOperatorRegistry();
       return;
     }
+    if (parts[1] && ["batches", "batch-workflow"].includes(parts[1].toLowerCase())) {
+      renderOperatorBatchWorkflow();
+      return;
+    }
     renderOperatorDashboard();
     return;
   }
 
   if (route === "registry" || route === "location-registry") {
     renderOperatorRegistry();
+    return;
+  }
+
+  if (route === "batches" || route === "batch-workflow") {
+    renderOperatorBatchWorkflow();
     return;
   }
 

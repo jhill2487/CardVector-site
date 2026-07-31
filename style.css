@@ -1303,12 +1303,20 @@ h3 {
   top: 96px;
 }
 
+.operator-main-panel {
+  position: static;
+}
+
 .operator-list-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   padding: 12px 0;
   border-top: 1px solid var(--line);
+}
+
+.batch-reference-row {
+  align-items: start;
 }
 
 .operator-list-row strong,
@@ -1325,6 +1333,14 @@ h3 {
   color: var(--muted);
   font-size: .82rem;
   font-weight: 750;
+}
+
+.operator-inline-link {
+  display: inline-block;
+  margin-top: 6px;
+  color: var(--blue-700);
+  font-size: .86rem;
+  font-weight: 850;
 }
 
 .entry-ready {
