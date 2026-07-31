@@ -122,7 +122,19 @@
     });
   }
 
-  const mobileHashRoutes = new Set(["mobile", "mobile-capture", "operator", "operator-dashboard", "registry", "location-registry", "batches", "batch-workflow"]);
+  const mobileHashRoutes = new Set([
+    "mobile",
+    "mobile-capture",
+    "operator",
+    "operator-dashboard",
+    "registry",
+    "location-registry",
+    "batches",
+    "batch-workflow",
+    "listings",
+    "listing-reconciliation",
+    "existing-listing-review"
+  ]);
   function currentHashRoute() {
     return window.location.hash.replace(/^#\/?/, "").toLowerCase();
   }
@@ -1022,11 +1034,11 @@
             <strong>Price Review</strong>
             <p>Marketplace Intelligence recommendations and review queues will live in this workspace.</p>
           </article>
-          <article class="operator-card is-disabled" aria-label="Existing listing review coming next">
-            <span>Next</span>
+          <a class="operator-card" href="/operator/listings" aria-label="Open existing listing review">
+            <span>Listings</span>
             <strong>Existing Listing Review</strong>
-            <p>eBay listing checks will be staged here before any automated marketplace updates exist.</p>
-          </article>
+            <p>Import eBay active-listing CSV snapshots, flag duplicate or missing SKUs, and stage reconciliation review.</p>
+          </a>
         </div>
       </section>`;
     document.title = "Operator Dashboard | CardVector";
@@ -1123,11 +1135,36 @@
   }
 
   function batchReferenceLabel(batch) {
-    return batch && (
-      batch.batch_label ||
-      batch.carduploader_batch_name ||
-      batch.carduploader_batch_id
-    ) || "CardUploader batch";
+    const location = batchLocationLabel(batch);
+    const eventType = compactStatusLabel(batch && batch.event_type || "batch reference");
+    const date = shortDateLabel(batch && (batch.batch_date || batch.updated_at));
+    if (location && location !== "Unassigned") {
+      return `${location} ${eventType}${date ? ` - ${date}` : ""}`;
+    }
+    return `CardUploader ${eventType}${date ? ` - ${date}` : ""}`;
+  }
+
+  function shortDateLabel(value) {
+    if (!value) {
+      return "";
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return String(value);
+    }
+    return date.toLocaleDateString([], {
+      month: "short",
+      day: "numeric",
+      year: "numeric"
+    });
+  }
+
+  function shortBatchId(value) {
+    const id = String(value || "").trim();
+    if (!id) {
+      return "";
+    }
+    return id.length > 12 ? `${id.slice(0, 8)}...${id.slice(-4)}` : id;
   }
 
   function safeCardUploaderUrl(value) {
@@ -1148,13 +1185,14 @@
         <article class="operator-list-row batch-reference-row">
           <div>
             <strong>${escapeHtml(batchReferenceLabel(batch))}</strong>
-            <span>${escapeHtml(batchLocationLabel(batch))} &middot; ${escapeHtml(compactStatusLabel(batch.event_type || "batch reference"))}</span>
-            ${batch.carduploader_batch_id ? `<span>Batch ID: ${escapeHtml(batch.carduploader_batch_id)}</span>` : ""}
+            <span>${Number(batch.card_count || 0)} cards &middot; ${escapeHtml(batch.game || "CardUploader")}${batch.language ? ` &middot; ${escapeHtml(batch.language)}` : ""}</span>
+            ${batch.batch_label ? `<span>${escapeHtml(batch.batch_label)}</span>` : ""}
+            ${batch.carduploader_batch_id ? `<span class="batch-technical-id" title="${escapeHtml(batch.carduploader_batch_id)}">CardUploader ID: ${escapeHtml(shortBatchId(batch.carduploader_batch_id))}</span>` : ""}
             ${batchUrl ? `<a class="operator-inline-link" href="${escapeHtml(batchUrl)}" target="_blank" rel="noopener noreferrer">Open CardUploader batch</a>` : ""}
           </div>
           <div>
-            <span>${Number(batch.card_count || 0)} cards</span>
-            <strong>${escapeHtml(safeDateLabel(batch.batch_date || batch.updated_at))}</strong>
+            <span>${escapeHtml(batchLocationLabel(batch))}</span>
+            <strong>${escapeHtml(compactStatusLabel(batch.event_type || "batch reference"))}</strong>
           </div>
         </article>`;
     }).join("");
@@ -1202,6 +1240,523 @@
         </div>
       </section>`;
     document.title = "Batch Workflow | CardVector";
+  }
+
+  const ebayListingColumns = Object.freeze({
+    marketplace_listing_id: ["Item number", "Item Number", "Item ID", "ItemID", "ItemId"],
+    sku: ["Custom label (SKU)", "Custom Label (SKU)", "Custom Label", "CustomLabel", "SKU"],
+    listing_title: ["Title", "*Title", "Listing title", "Item title", "ItemTitle"],
+    current_price: ["Current price", "Start price", "StartPrice", "Price", "Buy It Now price", "BuyItNowPrice", "Listing price", "List price"],
+    quantity_available: ["Available quantity", "Available Quantity", "Quantity Available", "Quantity", "Qty"],
+    quantity_sold: ["Sold quantity", "Sold Quantity", "Quantity sold", "Sold"],
+    listing_status: ["Listing status", "Status", "Format"],
+    condition: ["Condition", "Item condition", "ConditionName", "CD:Card Condition - (ID: 40001)"],
+    category: ["eBay category 1 name", "Category", "Category name"],
+    listing_url: ["View Item URL", "Item URL", "Listing URL", "URL"]
+  });
+
+  function normalizeCsvColumn(value) {
+    return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+  }
+
+  function csvCell(row, mapping, key) {
+    const column = mapping[key];
+    return column ? String(row[column] ?? "").trim() : "";
+  }
+
+  function parseCsvRows(text) {
+    const rows = [];
+    let row = [];
+    let field = "";
+    let quoted = false;
+    const input = String(text || "");
+    for (let index = 0; index < input.length; index += 1) {
+      const char = input[index];
+      const next = input[index + 1];
+      if (quoted) {
+        if (char === '"' && next === '"') {
+          field += '"';
+          index += 1;
+        } else if (char === '"') {
+          quoted = false;
+        } else {
+          field += char;
+        }
+      } else if (char === '"') {
+        quoted = true;
+      } else if (char === ",") {
+        row.push(field);
+        field = "";
+      } else if (char === "\n") {
+        row.push(field);
+        rows.push(row);
+        row = [];
+        field = "";
+      } else if (char !== "\r") {
+        field += char;
+      }
+    }
+    if (field || row.length) {
+      row.push(field);
+      rows.push(row);
+    }
+    if (!rows.length) {
+      return { fieldnames: [], rows: [] };
+    }
+    const fieldnames = rows[0].map((value) => String(value || "").trim());
+    const records = rows.slice(1).filter((values) => values.some((value) => String(value || "").trim())).map((values) => {
+      const record = {};
+      fieldnames.forEach((name, index) => {
+        record[name] = values[index] ?? "";
+      });
+      return record;
+    });
+    return { fieldnames, rows: records };
+  }
+
+  function columnMapping(fieldnames, definitions) {
+    const normalized = new Map(fieldnames.map((name) => [normalizeCsvColumn(name), name]));
+    return Object.fromEntries(Object.entries(definitions).map(([key, candidates]) => {
+      const found = candidates.map(normalizeCsvColumn).map((candidate) => normalized.get(candidate)).find(Boolean) || "";
+      return [key, found];
+    }));
+  }
+
+  function parseMoney(value) {
+    const normalized = String(value || "").replace(/[$,\s]/g, "");
+    if (!normalized) {
+      return null;
+    }
+    const number = Number(normalized);
+    return Number.isFinite(number) ? Math.round(number * 100) / 100 : null;
+  }
+
+  function parseWholeNumber(value) {
+    const normalized = String(value || "").replace(/[,\s]/g, "");
+    if (!normalized) {
+      return null;
+    }
+    const number = Number(normalized);
+    return Number.isFinite(number) ? Math.trunc(number) : null;
+  }
+
+  function normalizeSku(value) {
+    return String(value || "").trim().toUpperCase();
+  }
+
+  function listingLocationHint(value) {
+    const match = String(value || "").toUpperCase().match(/\bETB-[0-9]{3}-[A-J](?:\.[0-9]+)?\b/);
+    return match ? match[0] : "";
+  }
+
+  function baseLocationHint(value) {
+    return String(value || "").replace(/\.[0-9]+$/, "");
+  }
+
+  function reasonBucket(record, duplicateSkuCount, duplicateListingCount) {
+    if (!record.marketplace_listing_id) {
+      return { status: "needs_review", reasonCodes: ["MISSING_ITEM_ID"] };
+    }
+    if (duplicateListingCount > 1) {
+      return { status: "duplicate_listing_id", reasonCodes: ["DUPLICATE_LISTING_ID"] };
+    }
+    if (!record.sku) {
+      return { status: "missing_sku", reasonCodes: ["MISSING_SKU"] };
+    }
+    if (duplicateSkuCount > 1) {
+      return { status: "duplicate_sku", reasonCodes: ["DUPLICATE_SKU"] };
+    }
+    if (record.location_hint) {
+      return { status: "location_linked", reasonCodes: ["LOCATION_HINT_FOUND"] };
+    }
+    return { status: "needs_review", reasonCodes: ["NO_LOCATION_HINT"] };
+  }
+
+  function summarizeListingRows(records) {
+    const summary = {
+      totalRows: records.length,
+      uniqueListings: new Set(records.map((record) => record.marketplace_listing_id).filter(Boolean)).size,
+      missingSku: records.filter((record) => record.review_status === "missing_sku").length,
+      duplicateSku: records.filter((record) => record.review_status === "duplicate_sku").length,
+      duplicateListingId: records.filter((record) => record.review_status === "duplicate_listing_id").length,
+      linkedLocations: records.filter((record) => record.location_hint).length,
+      needsReview: records.filter((record) => record.review_status === "needs_review").length
+    };
+    summary.ready = records.filter((record) => ["location_linked", "needs_review", "missing_sku", "duplicate_sku", "duplicate_listing_id"].includes(record.review_status)).length;
+    return summary;
+  }
+
+  function parseEbayListingsCsv(text, fileMeta = {}) {
+    const parsed = parseCsvRows(text);
+    const mapping = columnMapping(parsed.fieldnames, ebayListingColumns);
+    const errors = [];
+    if (!mapping.marketplace_listing_id) {
+      errors.push("eBay CSV is missing Item number / Item ID.");
+    }
+    if (!mapping.listing_title) {
+      errors.push("eBay CSV is missing Title.");
+    }
+    const skuCounts = new Map();
+    const listingCounts = new Map();
+    const records = parsed.rows.map((row, index) => {
+      const sku = normalizeSku(csvCell(row, mapping, "sku"));
+      const listingId = csvCell(row, mapping, "marketplace_listing_id");
+      if (sku) {
+        skuCounts.set(sku, (skuCounts.get(sku) || 0) + 1);
+      }
+      if (listingId) {
+        listingCounts.set(listingId, (listingCounts.get(listingId) || 0) + 1);
+      }
+      return {
+        row_number: index + 1,
+        marketplace: "ebay",
+        marketplace_listing_id: listingId,
+        sku,
+        listing_title: csvCell(row, mapping, "listing_title"),
+        current_price: parseMoney(csvCell(row, mapping, "current_price")),
+        currency: "USD",
+        quantity_available: parseWholeNumber(csvCell(row, mapping, "quantity_available")),
+        quantity_sold: parseWholeNumber(csvCell(row, mapping, "quantity_sold")),
+        listing_status: csvCell(row, mapping, "listing_status") || "active",
+        condition: csvCell(row, mapping, "condition"),
+        category: csvCell(row, mapping, "category"),
+        listing_url: csvCell(row, mapping, "listing_url"),
+        location_hint: listingLocationHint(sku || csvCell(row, mapping, "listing_title")),
+        raw_row: row,
+        source_file_name: fileMeta.name || "",
+        source_file_sha256: fileMeta.sha256 || ""
+      };
+    }).map((record) => {
+      const bucket = reasonBucket(
+        record,
+        record.sku ? skuCounts.get(record.sku) || 0 : 0,
+        record.marketplace_listing_id ? listingCounts.get(record.marketplace_listing_id) || 0 : 0
+      );
+      return {
+        ...record,
+        review_status: bucket.status,
+        reason_codes: bucket.reasonCodes
+      };
+    });
+    return {
+      fieldnames: parsed.fieldnames,
+      mapping,
+      records,
+      errors,
+      summary: summarizeListingRows(records)
+    };
+  }
+
+  async function sha256Hex(buffer) {
+    if (!window.crypto || !window.crypto.subtle) {
+      return "";
+    }
+    const digest = await window.crypto.subtle.digest("SHA-256", buffer);
+    return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  }
+
+  function formatCurrency(value) {
+    if (value === null || value === undefined || value === "") {
+      return "n/a";
+    }
+    const number = Number(value);
+    return Number.isFinite(number) ? `$${number.toFixed(2)}` : String(value);
+  }
+
+  function listingSnapshotPayload(record, user, importBatchId) {
+    return {
+      owner_user_id: user.id,
+      marketplace: "ebay",
+      source: "ebay_active_listing_csv",
+      source_file_name: record.source_file_name,
+      source_file_sha256: record.source_file_sha256,
+      import_batch_id: importBatchId,
+      marketplace_listing_id: record.marketplace_listing_id,
+      sku: record.sku,
+      listing_title: record.listing_title,
+      listing_status: record.listing_status,
+      current_price: record.current_price,
+      currency: record.currency,
+      quantity_available: record.quantity_available,
+      quantity_sold: record.quantity_sold,
+      condition: record.condition,
+      category: record.category,
+      listing_url: record.listing_url,
+      location_hint: baseLocationHint(record.location_hint),
+      batch_sequence_label: record.location_hint,
+      review_status: record.review_status,
+      reason_codes: record.reason_codes,
+      raw_row: record.raw_row,
+      imported_at: new Date().toISOString()
+    };
+  }
+
+  function listingMatchPayload(snapshot, record, user) {
+    return {
+      owner_user_id: user.id,
+      marketplace_listing_snapshot_id: snapshot.id,
+      external_inventory_provider: "carduploader",
+      external_inventory_id: "",
+      location_display_code: baseLocationHint(record.location_hint),
+      batch_sequence_label: record.location_hint,
+      match_status: record.review_status,
+      match_confidence: record.location_hint && record.sku ? 0.65 : 0.25,
+      reason_codes: record.reason_codes,
+      review_notes: "",
+      reviewed_at: null
+    };
+  }
+
+  async function supabaseChunks(items, size, handler) {
+    const results = [];
+    for (let index = 0; index < items.length; index += size) {
+      const chunk = items.slice(index, index + size);
+      const result = await handler(chunk);
+      results.push(...(result || []));
+    }
+    return results;
+  }
+
+  async function importListingSnapshot(client, user, parsed) {
+    if (!parsed || !parsed.records.length) {
+      throw new Error("Choose an eBay active-listings CSV before importing.");
+    }
+    const importBatchId = window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+    const rows = parsed.records
+      .filter((record) => record.marketplace_listing_id && record.review_status !== "duplicate_listing_id")
+      .map((record) => listingSnapshotPayload(record, user, importBatchId));
+    if (!rows.length) {
+      throw new Error("No rows with eBay item IDs were available to import.");
+    }
+    const snapshots = await supabaseChunks(rows, 150, async (chunk) => {
+      const result = await client
+        .from("cardvector_marketplace_listing_snapshots")
+        .upsert(chunk, { onConflict: "owner_user_id,marketplace,marketplace_listing_id" })
+        .select("id,marketplace_listing_id");
+      if (result.error) {
+        throw result.error;
+      }
+      return result.data || [];
+    });
+    const snapshotByListingId = new Map(snapshots.map((snapshot) => [String(snapshot.marketplace_listing_id), snapshot]));
+    const matchRows = parsed.records
+      .filter((record) => record.marketplace_listing_id && snapshotByListingId.has(String(record.marketplace_listing_id)))
+      .map((record) => listingMatchPayload(snapshotByListingId.get(String(record.marketplace_listing_id)), record, user));
+    await supabaseChunks(matchRows, 150, async (chunk) => {
+      const result = await client
+        .from("cardvector_inventory_listing_matches")
+        .upsert(chunk, { onConflict: "owner_user_id,marketplace_listing_snapshot_id" });
+      if (result.error) {
+        throw result.error;
+      }
+      return [];
+    });
+    return {
+      importBatchId,
+      importedListings: rows.length,
+      importedMatches: matchRows.length,
+      skippedRows: parsed.records.length - rows.length
+    };
+  }
+
+  async function loadOperatorListingSnapshots(client, user) {
+    await requireLocationAuthorization(client, user);
+    return queryOptionalTable(
+      client,
+      "cardvector_ebay_listing_reconciliation_v",
+      "id,marketplace_listing_id,sku,listing_title,current_price,quantity_available,listing_status,location_hint,batch_sequence_label,review_status,reason_codes,imported_at,updated_at",
+      (query) => query.order("imported_at", { ascending: false }).limit(80)
+    );
+  }
+
+  function renderListingSummary(summary) {
+    const values = summary || {};
+    return `
+      <div class="registry-summary listing-summary">
+        <div><span>Rows</span><strong>${Number(values.totalRows || 0)}</strong></div>
+        <div><span>Linked Hints</span><strong>${Number(values.linkedLocations || 0)}</strong></div>
+        <div><span>Duplicate SKUs</span><strong>${Number(values.duplicateSku || 0)}</strong></div>
+        <div><span>Needs Review</span><strong>${Number(values.needsReview || 0) + Number(values.missingSku || 0) + Number(values.duplicateListingId || 0)}</strong></div>
+      </div>`;
+  }
+
+  function renderListingRows(records, limit = 40) {
+    if (!records || !records.length) {
+      return '<p class="operator-empty">Import an eBay active-listings CSV to stage reconciliation rows.</p>';
+    }
+    return records.slice(0, limit).map((record) => `
+      <article class="operator-list-row listing-reconciliation-row">
+        <div>
+          <strong>${escapeHtml(record.listing_title || "Untitled listing")}</strong>
+          <span>${escapeHtml(record.sku || "Missing SKU")} &middot; eBay ${escapeHtml(record.marketplace_listing_id || "missing item ID")}</span>
+          <span>${escapeHtml(record.reason_codes.join(", "))}</span>
+        </div>
+        <div>
+          <span>${escapeHtml(record.location_hint || "No location hint")}</span>
+          <strong>${escapeHtml(formatCurrency(record.current_price))}</strong>
+          <span>${escapeHtml(compactStatusLabel(record.review_status))}</span>
+        </div>
+      </article>`).join("");
+  }
+
+  function renderImportedListingRows(rows) {
+    if (!rows || !rows.length) {
+      return '<p class="operator-empty">No imported eBay listing snapshots are available yet.</p>';
+    }
+    return rows.slice(0, 20).map((row) => `
+      <article class="operator-list-row listing-reconciliation-row">
+        <div>
+          <strong>${escapeHtml(row.listing_title || "Untitled listing")}</strong>
+          <span>${escapeHtml(row.sku || "Missing SKU")} &middot; eBay ${escapeHtml(row.marketplace_listing_id || "")}</span>
+          <span>${Array.isArray(row.reason_codes) ? escapeHtml(row.reason_codes.join(", ")) : ""}</span>
+        </div>
+        <div>
+          <span>${escapeHtml(row.batch_sequence_label || row.location_hint || "No location hint")}</span>
+          <strong>${escapeHtml(formatCurrency(row.current_price))}</strong>
+          <span>${escapeHtml(compactStatusLabel(row.review_status))}</span>
+        </div>
+      </article>`).join("");
+  }
+
+  async function renderOperatorListingReconciliationView(client, user, importedResult) {
+    const state = {
+      parsed: null,
+      fileName: "",
+      error: "",
+      importResult: null,
+      importedRows: importedResult.data || [],
+      missingSnapshots: importedResult.missing
+    };
+
+    async function draw() {
+      main.innerHTML = `
+        <section class="operator-shell wrap listing-shell" aria-labelledby="listing-reconciliation-title">
+          <div class="operator-toolbar">
+            <div>
+              <p class="eyebrow">CSV snapshot workflow</p>
+              <h1 id="listing-reconciliation-title">Existing Listing Review</h1>
+              <p>Signed in as ${escapeHtml(authStateLabel(user))}. Import eBay active-listing CSV snapshots, identify duplicate or missing SKUs, and keep live eBay edits out of this v1 workflow.</p>
+            </div>
+            <div class="operator-toolbar-actions">
+              <a class="button secondary" href="/operator">Operator Dashboard</a>
+              <a class="button secondary" href="/operator/batches">Batch Workflow</a>
+            </div>
+          </div>
+          ${state.missingSnapshots ? '<div class="operator-warning" role="status">eBay listing reconciliation tables are pending migration or not available in Supabase yet.</div>' : ""}
+          <div class="operator-side-panel operator-main-panel listing-import-panel">
+            <h2>Import Active Listings CSV</h2>
+            <p class="operator-note">Snapshot only. This page does not revise, end, publish, or otherwise change live eBay listings.</p>
+            <label class="listing-file-drop">
+              <span>Choose eBay active-listings CSV</span>
+              <input id="listing-csv-file" type="file" accept=".csv,text/csv">
+            </label>
+            ${state.fileName ? `<p class="operator-note">Selected: ${escapeHtml(state.fileName)}</p>` : ""}
+            ${state.error ? `<p class="entry-message error">${escapeHtml(state.error)}</p>` : ""}
+            ${state.parsed ? renderListingSummary(state.parsed.summary) : ""}
+            ${state.parsed && state.parsed.errors.length ? `<div class="operator-warning">${state.parsed.errors.map(escapeHtml).join(" ")}</div>` : ""}
+            <div class="entry-actions">
+              <button class="button primary" id="listing-import-snapshot" type="button"${state.parsed && state.parsed.records.length && !state.parsed.errors.length ? "" : " disabled"}>Import Snapshot</button>
+            </div>
+            ${state.importResult ? `<p class="entry-ready">Imported ${state.importResult.importedListings} listings and ${state.importResult.importedMatches} reconciliation rows. Skipped ${state.importResult.skippedRows} rows without item IDs.</p>` : ""}
+          </div>
+          <div class="registry-layout listing-layout">
+            <section class="operator-side-panel operator-main-panel" aria-labelledby="listing-preview-title">
+              <h2 id="listing-preview-title">Current CSV Review</h2>
+              ${state.parsed ? renderListingRows(state.parsed.records) : '<p class="operator-empty">No CSV loaded yet.</p>'}
+            </section>
+            <aside class="operator-side-panel" aria-labelledby="listing-imported-title">
+              <h2 id="listing-imported-title">Recent Snapshots</h2>
+              ${renderImportedListingRows(state.importedRows)}
+            </aside>
+          </div>
+        </section>`;
+
+      const fileInput = document.getElementById("listing-csv-file");
+      if (fileInput) {
+        fileInput.addEventListener("change", async (event) => {
+          const file = event.target.files && event.target.files[0];
+          if (!file) {
+            return;
+          }
+          try {
+            const buffer = await file.arrayBuffer();
+            const text = new TextDecoder("utf-8").decode(buffer);
+            const sha256 = await sha256Hex(buffer);
+            state.fileName = file.name;
+            state.error = "";
+            state.importResult = null;
+            state.parsed = parseEbayListingsCsv(text, { name: file.name, sha256 });
+          } catch (error) {
+            state.error = error.message || String(error);
+          }
+          await draw();
+        });
+      }
+      const importButton = document.getElementById("listing-import-snapshot");
+      if (importButton) {
+        importButton.addEventListener("click", async () => {
+          try {
+            importButton.disabled = true;
+            importButton.textContent = "Importing...";
+            state.importResult = await importListingSnapshot(client, user, state.parsed);
+            const refreshed = await loadOperatorListingSnapshots(client, user);
+            state.importedRows = refreshed.data || [];
+            state.missingSnapshots = refreshed.missing;
+            state.error = "";
+          } catch (error) {
+            state.error = supabaseErrorDetails("Import eBay listing snapshot", error, user);
+          }
+          await draw();
+        });
+      }
+    }
+
+    await draw();
+    document.title = "Existing Listing Review | CardVector";
+  }
+
+  async function renderOperatorListingReconciliation() {
+    main.innerHTML = `
+      <section class="operator-shell wrap" aria-labelledby="listing-reconciliation-title">
+        <div class="operator-toolbar">
+          <div>
+            <p class="eyebrow">CardVector operator</p>
+            <h1 id="listing-reconciliation-title">Existing Listing Review</h1>
+            <p>Sign in to import eBay active-listing CSV snapshots for reconciliation review.</p>
+          </div>
+          <a class="button secondary" href="/operator">Operator Dashboard</a>
+        </div>
+        <div class="capture-operator" id="operator-listings-user" aria-live="polite">Operator: not signed in</div>
+        <div class="capture-auth operator-auth" id="operator-listings-auth"></div>
+        <div id="operator-listings-status" class="operator-loading">Waiting for sign-in.</div>
+      </section>`;
+    document.title = "Existing Listing Review | CardVector";
+    const client = configuredSupabase();
+    const status = document.getElementById("operator-listings-status");
+    if (!client) {
+      if (status) {
+        status.textContent = "Supabase is not configured for this deployment.";
+      }
+      return;
+    }
+    await ensureAuth(client, {
+      authId: "operator-listings-auth",
+      operatorId: "operator-listings-user",
+      idPrefix: "operator-listings",
+      onAuthenticated: async (user) => {
+        if (status) {
+          status.textContent = "Loading eBay listing reconciliation...";
+        }
+        try {
+          const imported = await loadOperatorListingSnapshots(client, user);
+          await renderOperatorListingReconciliationView(client, user, imported);
+        } catch (error) {
+          if (status) {
+            status.innerHTML = `<span class="entry-message error">${escapeHtml(error.message || error)}</span>`;
+          }
+        }
+      }
+    });
   }
 
   function renderOperatorRegistryView(registry, user) {
@@ -2576,6 +3131,10 @@
       renderOperatorBatchWorkflow();
       return;
     }
+    if (parts[1] && ["listings", "listing-reconciliation", "existing-listing-review"].includes(parts[1].toLowerCase())) {
+      renderOperatorListingReconciliation();
+      return;
+    }
     renderOperatorDashboard();
     return;
   }
@@ -2587,6 +3146,11 @@
 
   if (route === "batches" || route === "batch-workflow") {
     renderOperatorBatchWorkflow();
+    return;
+  }
+
+  if (route === "listings" || route === "listing-reconciliation" || route === "existing-listing-review") {
+    renderOperatorListingReconciliation();
     return;
   }
 

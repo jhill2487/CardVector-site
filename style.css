@@ -1335,12 +1335,65 @@ h3 {
   font-weight: 750;
 }
 
+.operator-list-row .batch-technical-id {
+  margin-top: 3px;
+  color: #7a879a;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: .74rem;
+  font-weight: 700;
+}
+
 .operator-inline-link {
   display: inline-block;
   margin-top: 6px;
   color: var(--blue-700);
   font-size: .86rem;
   font-weight: 850;
+}
+
+.operator-note {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: .9rem;
+  font-weight: 700;
+}
+
+.listing-import-panel {
+  margin-bottom: 18px;
+}
+
+.listing-file-drop {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 16px;
+  background: var(--surface-soft);
+  border: 1px dashed var(--blue-600);
+  border-radius: 12px;
+}
+
+.listing-file-drop span {
+  color: var(--blue-950);
+  font-weight: 850;
+}
+
+.listing-file-drop input {
+  width: 100%;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 750;
+}
+
+.listing-summary {
+  margin-top: 16px;
+}
+
+.listing-reconciliation-row {
+  align-items: start;
+}
+
+.listing-reconciliation-row > div:last-child {
+  text-align: right;
 }
 
 .entry-ready {
@@ -1851,6 +1904,10 @@ h3 {
   .registry-metrics,
   .registry-slot-grid {
     grid-template-columns: 1fr;
+  }
+
+  .listing-reconciliation-row > div:last-child {
+    text-align: left;
   }
 
   .operator-card,
