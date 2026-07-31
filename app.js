@@ -1565,8 +1565,145 @@
       client,
       "cardvector_ebay_listing_reconciliation_v",
       "id,marketplace_listing_id,sku,listing_title,current_price,quantity_available,listing_status,location_hint,batch_sequence_label,review_status,reason_codes,imported_at,updated_at",
-      (query) => query.order("imported_at", { ascending: false }).limit(80)
+      (query) => query.order("imported_at", { ascending: false }).limit(5000)
     );
+  }
+
+  async function loadListingBatchReferences(client) {
+    return queryOptionalTable(
+      client,
+      "cardvector_carduploader_batch_events",
+      "id,carduploader_batch_id,carduploader_batch_name,location_display_code,batch_label,card_count,batch_date,updated_at,archived_at",
+      (query) => query.is("archived_at", null).order("batch_date", { ascending: false }).limit(500)
+    );
+  }
+
+  function listingReferenceLocation(record) {
+    return baseLocationHint(
+      record && (
+        record.batch_sequence_label
+        || record.location_hint
+        || listingLocationHint(record.sku)
+        || listingLocationHint(record.listing_title)
+      )
+    );
+  }
+
+  function reconcileListingSnapshots(snapshots, batchReferences) {
+    const listings = Array.isArray(snapshots) ? snapshots : [];
+    const references = Array.isArray(batchReferences) ? batchReferences : [];
+    const referencesByLocation = new Map();
+    references.forEach((reference) => {
+      const location = baseLocationHint(reference.location_display_code);
+      if (!location) return;
+      if (!referencesByLocation.has(location)) referencesByLocation.set(location, []);
+      referencesByLocation.get(location).push(reference);
+    });
+    const skuCounts = new Map();
+    listings.forEach((listing) => {
+      const sku = normalizeSku(listing.sku);
+      if (sku) skuCounts.set(sku, (skuCounts.get(sku) || 0) + 1);
+    });
+    const buckets = {
+      matched: [],
+      missing_from_ebay: [],
+      ebay_only: [],
+      duplicate_sku: [],
+      missing_sku: [],
+      needs_manual_review: []
+    };
+    const referencedLocations = new Set();
+    listings.forEach((listing) => {
+      const sku = normalizeSku(listing.sku);
+      const location = listingReferenceLocation(listing);
+      const matches = referencesByLocation.get(location) || [];
+      if (matches.length) referencedLocations.add(location);
+      if (!sku) {
+        buckets.missing_sku.push({ ...listing, reconciliation_reason: "eBay snapshot has no SKU" });
+        return;
+      }
+      if ((skuCounts.get(sku) || 0) > 1) {
+        buckets.duplicate_sku.push({ ...listing, reconciliation_reason: "SKU appears on multiple eBay listings" });
+        return;
+      }
+      if (!location) {
+        buckets.ebay_only.push({ ...listing, reconciliation_reason: "No CardUploader batch/location reference is encoded in the snapshot" });
+        return;
+      }
+      if (!matches.length) {
+        buckets.needs_manual_review.push({ ...listing, reconciliation_reason: `Location ${location} has no CardUploader batch reference` });
+        return;
+      }
+      buckets.matched.push({
+        ...listing,
+        reconciliation_reason: `Matched CardUploader location ${location}`,
+        matched_batch_references: matches
+      });
+    });
+    references.forEach((reference) => {
+      const location = baseLocationHint(reference.location_display_code);
+      if (location && !referencedLocations.has(location)) {
+        buckets.missing_from_ebay.push({
+          ...reference,
+          reconciliation_reason: `CardUploader batch/location ${location} has no matched eBay snapshot`
+        });
+      }
+    });
+    return buckets;
+  }
+
+  const listingBucketLabels = {
+    matched: "Matched",
+    missing_from_ebay: "Missing from eBay",
+    ebay_only: "eBay-only",
+    duplicate_sku: "Duplicate SKU",
+    missing_sku: "Missing SKU",
+    needs_manual_review: "Needs manual review"
+  };
+
+  function renderReconciliationBuckets(buckets) {
+    const values = buckets || reconcileListingSnapshots([], []);
+    return `
+      <div class="listing-bucket-summary" aria-label="Reconciliation bucket counts">
+        ${Object.entries(listingBucketLabels).map(([key, label]) => `
+          <a href="#listing-bucket-${key}">
+            <span>${escapeHtml(label)}</span>
+            <strong>${values[key].length}</strong>
+          </a>`).join("")}
+      </div>
+      <div class="listing-buckets">
+        ${Object.entries(listingBucketLabels).map(([key, label]) => `
+          <section class="operator-side-panel listing-bucket" id="listing-bucket-${key}" aria-labelledby="listing-bucket-${key}-title">
+            <h2 id="listing-bucket-${key}-title">${escapeHtml(label)} <span>${values[key].length}</span></h2>
+            ${key === "missing_from_ebay" ? '<p class="operator-note">Reference-level gap only. Card-level absence cannot be inferred from batch metadata.</p>' : ""}
+            ${renderReconciliationBucketRows(values[key], key)}
+          </section>`).join("")}
+      </div>`;
+  }
+
+  function renderReconciliationBucketRows(rows, bucket) {
+    if (!rows.length) return '<p class="operator-empty">No records in this bucket.</p>';
+    return rows.slice(0, 20).map((row) => {
+      const isReference = bucket === "missing_from_ebay";
+      const title = isReference
+        ? row.carduploader_batch_name || row.batch_label || "CardUploader batch reference"
+        : row.listing_title || "Untitled listing";
+      const identity = isReference
+        ? `${row.location_display_code || "No location"} · ${row.carduploader_batch_id || "No batch ID"}`
+        : `${row.sku || "Missing SKU"} · eBay ${row.marketplace_listing_id || "missing item ID"}`;
+      const detail = isReference
+        ? `${Number(row.card_count || 0)} cards · ${row.batch_date || "No batch date"}`
+        : formatCurrency(row.current_price);
+      return `
+        <article class="operator-list-row listing-reconciliation-row">
+          <div>
+            <strong>${escapeHtml(title)}</strong>
+            <span>${escapeHtml(identity)}</span>
+            <span>${escapeHtml(row.reconciliation_reason || "")}</span>
+          </div>
+          <div><strong>${escapeHtml(detail)}</strong></div>
+        </article>`;
+    }).join("");
   }
 
   function renderListingSummary(summary) {
@@ -1619,13 +1756,16 @@
   }
 
   async function renderOperatorListingReconciliationView(client, user, importedResult) {
+    const batchResult = await loadListingBatchReferences(client);
     const state = {
       parsed: null,
       fileName: "",
       error: "",
       importResult: null,
       importedRows: importedResult.data || [],
-      missingSnapshots: importedResult.missing
+      batchReferences: batchResult.data || [],
+      missingSnapshots: importedResult.missing,
+      missingBatchReferences: batchResult.missing
     };
 
     async function draw() {
@@ -1643,6 +1783,12 @@
             </div>
           </div>
           ${state.missingSnapshots ? '<div class="operator-warning" role="status">eBay listing reconciliation tables are pending migration or not available in Supabase yet.</div>' : ""}
+          ${state.missingBatchReferences ? '<div class="operator-warning" role="status">CardUploader batch references are not available through the authenticated Supabase API. Reconciliation will show eBay-only review until they are available.</div>' : ""}
+          <div class="operator-side-panel operator-main-panel">
+            <h2>Reconciliation Review</h2>
+            <p class="operator-note">Computed read-only from the latest eBay snapshot evidence and CardUploader batch/location references. CardUploader remains inventory truth; eBay remains live listing truth.</p>
+            ${renderReconciliationBuckets(reconcileListingSnapshots(state.importedRows, state.batchReferences))}
+          </div>
           <div class="operator-side-panel operator-main-panel listing-import-panel">
             <h2>Import Active Listings CSV</h2>
             <p class="operator-note">Snapshot only. This page does not revise, end, publish, or otherwise change live eBay listings.</p>
@@ -1702,6 +1848,9 @@
             const refreshed = await loadOperatorListingSnapshots(client, user);
             state.importedRows = refreshed.data || [];
             state.missingSnapshots = refreshed.missing;
+            const refreshedBatches = await loadListingBatchReferences(client);
+            state.batchReferences = refreshedBatches.data || [];
+            state.missingBatchReferences = refreshedBatches.missing;
             state.error = "";
           } catch (error) {
             state.error = supabaseErrorDetails("Import eBay listing snapshot", error, user);
