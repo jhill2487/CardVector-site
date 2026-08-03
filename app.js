@@ -2224,13 +2224,17 @@
   const allocationStatusLabels = {
     oversell_risk: "Oversell risk",
     cross_channel_conflict: "Cross-channel conflict",
-    ebay_only_legacy_listing: "eBay-only legacy listing",
-    marketplace_only_legacy_listing: "Marketplace-only legacy listing",
+    ebay_only_legacy_listing: "Unlinked eBay legacy listing",
+    marketplace_only_legacy_listing: "Unlinked marketplace legacy listing",
     fully_allocated: "Fully allocated",
     safe_capacity: "Safe capacity",
     needs_inventory_snapshot: "Needs inventory snapshot",
     needs_review: "Needs review"
   };
+
+  function isCardUploaderLinked(row) {
+    return row?.allocation_key_type === "carduploader_catalog_sku" || Boolean(managedInventorySku(row?.sku));
+  }
 
   function buildMarketplaceAllocationLedger(listings, inventorySnapshots = []) {
     const rowsBySku = new Map();
@@ -2343,6 +2347,7 @@
     const values = Array.isArray(rows) ? rows : [];
     return {
       totalSkus: values.length,
+      cardUploaderLinked: values.filter(isCardUploaderLinked).length,
       oversellRisk: values.filter((row) => row.allocation_status === "oversell_risk").length,
       crossChannel: values.filter((row) => row.allocation_status === "cross_channel_conflict").length,
       legacyListings: values.filter((row) => ["ebay_only_legacy_listing", "marketplace_only_legacy_listing"].includes(row.allocation_status)).length,
@@ -2361,9 +2366,10 @@
     return `
       <div class="registry-summary listing-summary">
         <div><span>SKUs</span><strong>${summary.totalSkus}</strong></div>
+        <div><span>CardUploader Linked</span><strong>${summary.cardUploaderLinked}</strong></div>
         <div><span>Oversell Risk</span><strong>${summary.oversellRisk}</strong></div>
         <div><span>Cross-Channel</span><strong>${summary.crossChannel}</strong></div>
-        <div><span>Legacy Listings</span><strong>${summary.legacyListings}</strong></div>
+        <div><span>Unlinked Legacy</span><strong>${summary.legacyListings}</strong></div>
         <div><span>Need Inventory</span><strong>${summary.needsInventory}</strong></div>
       </div>
       <div class="allocation-ledger-list">
@@ -2372,7 +2378,7 @@
             <div>
               <strong>${escapeHtml(row.sku || "Missing SKU")}</strong>
               <span>${escapeHtml(row.inventory_title || "Marketplace snapshot evidence")}</span>
-              <span>${Array.isArray(row.reason_codes) ? escapeHtml(row.reason_codes.join(", ")) : ""}</span>
+              <span>${escapeHtml(isCardUploaderLinked(row) ? "CardUploader identifier trusted" : "No CardUploader identifier")}${Array.isArray(row.reason_codes) && row.reason_codes.length ? ` &middot; ${escapeHtml(row.reason_codes.join(", "))}` : ""}</span>
             </div>
             <div>
               <span>eBay ${Number(row.ebay_listed_quantity || 0)} &middot; TCGplayer ${Number(row.tcgplayer_listed_quantity || 0)}</span>
