@@ -1,0 +1,34 @@
+{
+  "posts": [
+    {
+      "slug": "monday-morning-brief",
+      "label": "Weekly Monday Brief",
+      "title": "Putnam Collectibles Pokemon Market Brief",
+      "date": "2026-08-03",
+      "author": "Putnam Collectibles",
+      "category": "Pokemon Market Brief",
+      "status": "published",
+      "summary": "A concise weekly Pokemon market update covering recent movement, collector demand, notable products, and marketplace signals.",
+      "tags": [
+        "Pokemon",
+        "Market Updates",
+        "Selling"
+      ],
+      "source_path": "content/market-briefs/2026-08-03-monday-market-brief.md",
+      "sections": [
+        {
+          "heading": "What moved",
+          "body": "A short summary of products, eras, or card categories showing meaningful activity."
+        },
+        {
+          "heading": "Why it matters",
+          "body": "Context for sellers and collectors, including demand signals, supply pressure, and pricing risk."
+        },
+        {
+          "heading": "What Putnam Collectibles is watching",
+          "body": "A practical watchlist for pricing review, inventory sourcing, and marketplace listing decisions."
+        }
+      ]
+    }
+  ]
+}

@@ -268,14 +268,15 @@
     document.title = "Sell Your Collection | Putnam Collectibles";
   }
 
-  const marketBriefPosts = Object.freeze([
+  const fallbackMarketBriefPosts = Object.freeze([
     {
       slug: "monday-morning-brief",
       label: "Weekly Monday Brief",
       title: "Putnam Collectibles Pokemon Market Brief",
+      date: "2026-08-03",
       dateLabel: "Monday mornings",
       summary: "A concise weekly Pokemon market update covering recent movement, collector demand, notable products, and marketplace signals.",
-      status: "Template ready",
+      status: "published",
       sections: [
         {
           heading: "What moved",
@@ -292,6 +293,53 @@
       ]
     }
   ]);
+  let marketBriefPostsCache = null;
+
+  function dateLabelForBrief(value) {
+    const raw = String(value || "").trim();
+    if (!raw) return "Monday mornings";
+    const parsed = new Date(`${raw}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) return raw;
+    return parsed.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  }
+
+  function normalizeMarketBriefSection(section) {
+    return {
+      heading: String(section && section.heading || "Brief").trim(),
+      body: String(section && section.body || "").trim()
+    };
+  }
+
+  function normalizeMarketBriefPost(post) {
+    const normalized = {
+      slug: String(post && post.slug || "").trim(),
+      label: String(post && post.label || "Market Brief").trim(),
+      title: String(post && post.title || "Pokemon Market Brief").trim(),
+      date: String(post && post.date || "").trim(),
+      dateLabel: String(post && post.dateLabel || "").trim(),
+      summary: String(post && post.summary || "").trim(),
+      status: String(post && post.status || "published").trim(),
+      sections: Array.isArray(post && post.sections) ? post.sections.map(normalizeMarketBriefSection).filter((section) => section.body) : []
+    };
+    normalized.dateLabel = normalized.dateLabel || dateLabelForBrief(normalized.date);
+    return normalized;
+  }
+
+  async function loadMarketBriefPosts() {
+    if (marketBriefPostsCache) return marketBriefPostsCache;
+    try {
+      const response = await fetch("/content/market-briefs/index.json", { cache: "no-cache" });
+      if (!response.ok) throw new Error(`Market brief index returned ${response.status}`);
+      const payload = await response.json();
+      const posts = Array.isArray(payload && payload.posts)
+        ? payload.posts.map(normalizeMarketBriefPost).filter((post) => post.slug && post.title)
+        : [];
+      marketBriefPostsCache = posts.length ? posts : fallbackMarketBriefPosts.map(normalizeMarketBriefPost);
+    } catch (_exc) {
+      marketBriefPostsCache = fallbackMarketBriefPosts.map(normalizeMarketBriefPost);
+    }
+    return marketBriefPostsCache;
+  }
 
   function renderMarketBriefCard(post) {
     return `
@@ -306,7 +354,8 @@
       </article>`;
   }
 
-  function renderMarketBriefsPage() {
+  async function renderMarketBriefsPage() {
+    const posts = await loadMarketBriefPosts();
     main.innerHTML = `
       <section class="blog-shell wrap" aria-labelledby="market-briefs-page-title">
         <div class="blog-hero">
@@ -315,7 +364,7 @@
           <p>Weekly Monday morning notes on recent Pokemon market movement, collector demand, and marketplace signals. Briefs are drafted with ChatGPT-assisted research and reviewed before publication.</p>
         </div>
         <div class="brief-grid">
-          ${marketBriefPosts.map(renderMarketBriefCard).join("")}
+          ${posts.map(renderMarketBriefCard).join("")}
         </div>
         <aside class="brief-disclosure">
           <strong>Editorial note</strong>
@@ -325,8 +374,16 @@
     document.title = "Pokemon Market Briefs | Putnam Collectibles";
   }
 
-  function renderMarketBriefPost(slug) {
-    const post = marketBriefPosts.find((item) => item.slug === slug) || marketBriefPosts[0];
+  function renderBriefBody(body) {
+    return String(body || "")
+      .split(/\n{2,}/)
+      .map((paragraph) => `<p>${escapeHtml(paragraph.trim())}</p>`)
+      .join("");
+  }
+
+  async function renderMarketBriefPost(slug) {
+    const posts = await loadMarketBriefPosts();
+    const post = posts.find((item) => item.slug === slug) || posts[0];
     main.innerHTML = `
       <article class="blog-shell blog-post wrap" aria-labelledby="market-brief-post-title">
         <a class="operator-inline-link" href="/market-briefs">Back to Market Briefs</a>
@@ -338,7 +395,7 @@
           ${post.sections.map((section) => `
             <section class="brief-post-section">
               <h2>${escapeHtml(section.heading)}</h2>
-              <p>${escapeHtml(section.body)}</p>
+              ${renderBriefBody(section.body)}
             </section>`).join("")}
         </div>
         <aside class="brief-disclosure">
