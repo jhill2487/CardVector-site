@@ -1566,6 +1566,7 @@
 
   const carduploaderInventoryColumns = Object.freeze({
     external_inventory_id: ["CardUploader ID", "Source ID", "Inventory ID", "ID"],
+    catalog_sku: ["Catalog SKU", "CardUploader Catalog SKU", "Managed Inventory SKU", "Listing SKU"],
     sku: ["User SKU", "SKU", "Custom SKU", "Custom label (SKU)", "Custom Label", "Location", "Location Code"],
     inventory_title: ["Title", "Listing Title", "Name", "Product Name", "Product"],
     inventory_status: ["Status", "Inventory Status"],
@@ -1677,6 +1678,11 @@
 
   function baseLocationHint(value) {
     return String(value || "").replace(/\.[0-9]+$/, "");
+  }
+
+  function managedInventorySku(value) {
+    const sku = normalizeSku(value);
+    return /^CS-[A-Z0-9]+$/.test(sku) ? sku : "";
   }
 
   function reasonBucket(record, duplicateSkuCount, duplicateListingCount) {
@@ -1828,15 +1834,17 @@
     const parsed = parseCsvRows(text);
     const mapping = columnMapping(parsed.fieldnames, carduploaderInventoryColumns);
     const errors = [];
-    if (!mapping.sku) {
-      errors.push("CardUploader inventory CSV is missing User SKU / SKU.");
+    if (!mapping.catalog_sku && !mapping.sku) {
+      errors.push("CardUploader inventory CSV is missing Catalog SKU or User SKU / SKU.");
     }
     if (!mapping.inventory_title) {
       errors.push("CardUploader inventory CSV is missing Title / Product Name.");
     }
     const records = parsed.rows.map((row, index) => {
-      const sku = normalizeSku(csvCell(row, mapping, "sku"));
-      const location = listingLocationHint(csvCell(row, mapping, "location_display_code") || sku);
+      const userSku = normalizeSku(csvCell(row, mapping, "sku"));
+      const catalogSku = managedInventorySku(csvCell(row, mapping, "catalog_sku"));
+      const sku = catalogSku || userSku;
+      const location = listingLocationHint(csvCell(row, mapping, "location_display_code") || userSku);
       const record = {
         row_number: index + 1,
         external_inventory_provider: "carduploader",
@@ -1859,7 +1867,9 @@
         ...record,
         external_inventory_id: record.external_inventory_id || syntheticInventorySnapshotId(record),
         review_status: record.sku ? "snapshot_ready" : "needs_review",
-        reason_codes: record.sku ? ["CARDUPLOADER_INVENTORY_EVIDENCE"] : ["MISSING_SKU"]
+        reason_codes: record.sku
+          ? ["CARDUPLOADER_INVENTORY_EVIDENCE", catalogSku ? "CARDUPLOADER_CATALOG_SKU" : "CARDUPLOADER_LOCATION_SKU_ONLY"]
+          : ["MISSING_SKU"]
       };
     });
     return {
@@ -2214,6 +2224,8 @@
   const allocationStatusLabels = {
     oversell_risk: "Oversell risk",
     cross_channel_conflict: "Cross-channel conflict",
+    ebay_only_legacy_listing: "eBay-only legacy listing",
+    marketplace_only_legacy_listing: "Marketplace-only legacy listing",
     fully_allocated: "Fully allocated",
     safe_capacity: "Safe capacity",
     needs_inventory_snapshot: "Needs inventory snapshot",
@@ -2222,11 +2234,12 @@
 
   function buildMarketplaceAllocationLedger(listings, inventorySnapshots = []) {
     const rowsBySku = new Map();
-    const ensure = (sku) => {
+    const ensure = (sku, defaults = {}) => {
       const key = normalizeSku(sku);
       if (!rowsBySku.has(key)) {
         rowsBySku.set(key, {
           sku: key,
+          allocation_key_type: defaults.allocation_key_type || "unknown",
           inventory_title: "",
           physical_quantity: null,
           available_quantity: null,
@@ -2241,23 +2254,46 @@
       return rowsBySku.get(key);
     };
     (Array.isArray(inventorySnapshots) ? inventorySnapshots : []).forEach((item) => {
-      const sku = normalizeSku(item.sku || item.user_sku || item.location || item.inventory_id);
+      const raw = item.raw_row || {};
+      const catalogSku = managedInventorySku(item.sku || item.catalog_sku || item.carduploader_catalog_sku || raw["Catalog SKU"]);
+      const sku = catalogSku || normalizeSku(item.sku || item.user_sku || raw["User SKU"] || item.location || item.inventory_id);
       if (!sku) return;
-      const row = ensure(sku);
+      const row = ensure(sku, { allocation_key_type: catalogSku ? "carduploader_catalog_sku" : "legacy_inventory_sku" });
+      row.allocation_key_type = catalogSku ? "carduploader_catalog_sku" : row.allocation_key_type;
       row.inventory_title = item.inventory_title || item.title || row.inventory_title;
-      row.physical_quantity = Number.isFinite(Number(item.physical_quantity ?? item.quantity_value ?? item.quantity))
+      const status = String(item.inventory_status || item.status || "").toLowerCase();
+      const quantity = Number.isFinite(Number(item.physical_quantity ?? item.quantity_value ?? item.quantity))
         ? Math.max(0, Math.trunc(Number(item.physical_quantity ?? item.quantity_value ?? item.quantity)))
-        : row.physical_quantity;
-      row.available_quantity = Number.isFinite(Number(item.available_quantity ?? item.quantity_value ?? item.quantity))
-        ? Math.max(0, Math.trunc(Number(item.available_quantity ?? item.quantity_value ?? item.quantity)))
-        : row.available_quantity;
+        : 0;
+      const availableQuantity = ["sold", "removed", "deleted", "archived"].includes(status)
+        ? 0
+        : Number.isFinite(Number(item.available_quantity ?? quantity))
+          ? Math.max(0, Math.trunc(Number(item.available_quantity ?? quantity)))
+          : 0;
+      row.physical_quantity = Number(row.physical_quantity || 0) + quantity;
+      row.available_quantity = Number(row.available_quantity || 0) + availableQuantity;
     });
     (Array.isArray(listings) ? listings : []).forEach((listing) => {
-      const sku = normalizeSku(listing.sku);
-      if (!sku) return;
-      const row = ensure(sku);
-      const quantity = Number.isFinite(Number(listing.quantity_available)) ? Math.max(0, Math.trunc(Number(listing.quantity_available))) : 0;
+      const normalizedSku = normalizeSku(listing.sku);
       const marketplace = String(listing.marketplace || "ebay").toLowerCase();
+      const sku = normalizedSku || `${marketplace}:${listing.marketplace_listing_id || listing.listing_title || "missing-sku"}`;
+      if (!sku) return;
+      const row = ensure(sku, {
+        allocation_key_type: managedInventorySku(normalizedSku)
+          ? "carduploader_catalog_sku"
+          : normalizedSku
+            ? "legacy_marketplace_sku"
+            : "marketplace_listing_id"
+      });
+      if (managedInventorySku(normalizedSku)) {
+        row.allocation_key_type = "carduploader_catalog_sku";
+      } else if (row.allocation_key_type === "unknown") {
+        row.allocation_key_type = normalizedSku ? "legacy_marketplace_sku" : "marketplace_listing_id";
+      }
+      if (!row.inventory_title) {
+        row.inventory_title = listing.listing_title || "";
+      }
+      const quantity = Number.isFinite(Number(listing.quantity_available)) ? Math.max(0, Math.trunc(Number(listing.quantity_available))) : 0;
       if (marketplace === "tcgplayer") {
         row.tcgplayer_listed_quantity += quantity;
       } else if (marketplace === "ebay") {
@@ -2271,6 +2307,14 @@
     return [...rowsBySku.values()].map((row) => {
       const available = row.available_quantity;
       if (available === null || available === undefined) {
+        if (row.allocation_key_type !== "carduploader_catalog_sku") {
+          const onlyEbay = row.ebay_listed_quantity > 0 && row.tcgplayer_listed_quantity === 0;
+          return {
+            ...row,
+            allocation_status: onlyEbay ? "ebay_only_legacy_listing" : "marketplace_only_legacy_listing",
+            reason_codes: [onlyEbay ? "EBAY_LISTING_NOT_LINKED_TO_CARDUPLOADER_CATALOG_SKU" : "MARKETPLACE_LISTING_NOT_LINKED_TO_CARDUPLOADER_CATALOG_SKU"]
+          };
+        }
         return row;
       }
       if (row.ebay_listed_quantity > 0 && row.tcgplayer_listed_quantity > 0 && row.total_listed_quantity > available) {
@@ -2290,7 +2334,7 @@
       }
       return { ...row, allocation_status: "needs_review", reason_codes: ["ALLOCATION_REVIEW_REQUIRED"] };
     }).sort((a, b) => {
-      const severity = { oversell_risk: 0, cross_channel_conflict: 1, needs_inventory_snapshot: 2, needs_review: 3, fully_allocated: 4, safe_capacity: 5 };
+      const severity = { oversell_risk: 0, cross_channel_conflict: 1, ebay_only_legacy_listing: 2, marketplace_only_legacy_listing: 3, needs_inventory_snapshot: 4, needs_review: 5, fully_allocated: 6, safe_capacity: 7 };
       return (severity[a.allocation_status] ?? 9) - (severity[b.allocation_status] ?? 9) || a.sku.localeCompare(b.sku);
     });
   }
@@ -2301,6 +2345,7 @@
       totalSkus: values.length,
       oversellRisk: values.filter((row) => row.allocation_status === "oversell_risk").length,
       crossChannel: values.filter((row) => row.allocation_status === "cross_channel_conflict").length,
+      legacyListings: values.filter((row) => ["ebay_only_legacy_listing", "marketplace_only_legacy_listing"].includes(row.allocation_status)).length,
       needsInventory: values.filter((row) => row.allocation_status === "needs_inventory_snapshot").length
     };
   }
@@ -2318,6 +2363,7 @@
         <div><span>SKUs</span><strong>${summary.totalSkus}</strong></div>
         <div><span>Oversell Risk</span><strong>${summary.oversellRisk}</strong></div>
         <div><span>Cross-Channel</span><strong>${summary.crossChannel}</strong></div>
+        <div><span>Legacy Listings</span><strong>${summary.legacyListings}</strong></div>
         <div><span>Need Inventory</span><strong>${summary.needsInventory}</strong></div>
       </div>
       <div class="allocation-ledger-list">
