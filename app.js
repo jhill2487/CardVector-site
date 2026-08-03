@@ -1991,7 +1991,21 @@
         "DUPLICATE_INVENTORY_SNAPSHOT_IDENTITY_SKIPPED"
       ]));
     });
-    return { rows: Array.from(byIdentity.values()), duplicateCount };
+    const dedupedRows = Array.from(byIdentity.values()).map((row) => {
+      const { duplicate_source_rows: duplicateSourceRows = [], ...payload } = row;
+      if (!duplicateSourceRows.length) {
+        return payload;
+      }
+      return {
+        ...payload,
+        raw_row: {
+          canonical_row: payload.raw_row,
+          duplicate_rows: duplicateSourceRows,
+          duplicate_count: duplicateSourceRows.length
+        }
+      };
+    });
+    return { rows: dedupedRows, duplicateCount };
   }
 
   async function supabaseChunks(items, size, handler) {
