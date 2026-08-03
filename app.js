@@ -1565,7 +1565,7 @@
   });
 
   const carduploaderInventoryColumns = Object.freeze({
-    external_inventory_id: ["CardUploader ID", "Source ID", "Inventory ID", "ID", "Catalog SKU", "TCGplayer SKU"],
+    external_inventory_id: ["CardUploader ID", "Source ID", "Inventory ID", "ID"],
     sku: ["User SKU", "SKU", "Custom SKU", "Custom label (SKU)", "Custom Label", "Location", "Location Code"],
     inventory_title: ["Title", "Listing Title", "Name", "Product Name", "Product"],
     inventory_status: ["Status", "Inventory Status"],
@@ -1710,6 +1710,8 @@
 
   function syntheticInventorySnapshotId(record) {
     const parts = [
+      record.source_file_sha256 || record.source_file_name,
+      record.row_number,
       normalizeSku(record.sku),
       record.inventory_title,
       record.condition,
@@ -1948,9 +1950,48 @@
       available_quantity: record.available_quantity,
       reserved_quantity: record.reserved_quantity,
       sold_quantity: record.sold_quantity,
-      raw_row: record.raw_row,
+      raw_row: record.duplicate_source_rows && record.duplicate_source_rows.length
+        ? {
+            canonical_row: record.raw_row,
+            duplicate_rows: record.duplicate_source_rows,
+            duplicate_count: record.duplicate_source_rows.length
+          }
+        : record.raw_row,
       imported_at: new Date().toISOString()
     };
+  }
+
+  function inventorySnapshotConflictKey(record) {
+    return [
+      record.owner_user_id,
+      String(record.external_inventory_provider || "carduploader").toLowerCase(),
+      String(record.external_inventory_id || ""),
+      String(record.condition || "")
+    ].join("\u001f");
+  }
+
+  function dedupeInventorySnapshotRows(rows) {
+    const byIdentity = new Map();
+    let duplicateCount = 0;
+    rows.forEach((row) => {
+      const key = inventorySnapshotConflictKey(row);
+      const existing = byIdentity.get(key);
+      if (!existing) {
+        byIdentity.set(key, { ...row, duplicate_source_rows: [] });
+        return;
+      }
+      duplicateCount += 1;
+      existing.duplicate_source_rows = [
+        ...(existing.duplicate_source_rows || []),
+        row.raw_row || row
+      ];
+      existing.reason_codes = Array.from(new Set([
+        ...(existing.reason_codes || []),
+        ...(row.reason_codes || []),
+        "DUPLICATE_INVENTORY_SNAPSHOT_IDENTITY_SKIPPED"
+      ]));
+    });
+    return { rows: Array.from(byIdentity.values()), duplicateCount };
   }
 
   async function supabaseChunks(items, size, handler) {
@@ -2011,9 +2052,11 @@
       throw new Error("Choose a CardUploader inventory CSV before importing.");
     }
     const importBatchId = window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
-    const rows = parsed.records
+    const candidateRows = parsed.records
       .filter((record) => record.external_inventory_id && record.sku)
       .map((record) => inventoryQuantitySnapshotPayload(record, user, importBatchId));
+    const deduped = dedupeInventorySnapshotRows(candidateRows);
+    const rows = deduped.rows;
     if (!rows.length) {
       throw new Error("No CardUploader inventory rows with SKU evidence were available to import.");
     }
@@ -2029,7 +2072,8 @@
     return {
       importBatchId,
       importedInventoryRows: rows.length,
-      skippedRows: parsed.records.length - rows.length
+      deduplicatedRows: deduped.duplicateCount,
+      skippedRows: parsed.records.length - candidateRows.length
     };
   }
 
@@ -2476,7 +2520,7 @@
             <div class="entry-actions">
               <button class="button primary" id="listing-import-snapshot" type="button"${state.parsed && state.parsed.records.length && !state.parsed.errors.length ? "" : " disabled"}>Import Snapshot</button>
             </div>
-            ${state.importResult && state.importResult.importedInventoryRows ? `<p class="entry-ready">Imported ${state.importResult.importedInventoryRows} CardUploader inventory rows. Skipped ${state.importResult.skippedRows} rows without SKU evidence.</p>` : ""}
+            ${state.importResult && state.importResult.importedInventoryRows ? `<p class="entry-ready">Imported ${state.importResult.importedInventoryRows} CardUploader inventory rows. Skipped ${state.importResult.skippedRows} rows without SKU evidence.${state.importResult.deduplicatedRows ? ` Skipped ${state.importResult.deduplicatedRows} duplicate snapshot identities.` : ""}</p>` : ""}
             ${state.importResult && state.importResult.importedListings ? `<p class="entry-ready">Imported ${state.importResult.importedListings} listings and ${state.importResult.importedMatches} reconciliation rows. Skipped ${state.importResult.skippedRows} rows without marketplace identities.</p>` : ""}
           </div>
           <div class="registry-layout listing-layout">
@@ -2545,7 +2589,10 @@
             state.missingBatchReferences = refreshedBatches.missing;
             state.error = "";
           } catch (error) {
-            state.error = supabaseErrorDetails("Import marketplace listing snapshot", error, user);
+            const importLabel = state.marketplace === "carduploader_inventory"
+              ? "Import CardUploader inventory snapshot"
+              : "Import marketplace listing snapshot";
+            state.error = supabaseErrorDetails(importLabel, error, user);
           }
           await draw();
         });
