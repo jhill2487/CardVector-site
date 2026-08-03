@@ -1585,6 +1585,25 @@ h3 {
   margin-bottom: 18px;
 }
 
+.listing-marketplace-select {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  color: var(--blue-950);
+  font-weight: 850;
+}
+
+.listing-marketplace-select select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--blue-950);
+  font: inherit;
+  font-weight: 800;
+  padding: 12px;
+}
+
 .listing-file-drop {
   display: grid;
   gap: 8px;
@@ -1659,6 +1678,27 @@ h3 {
   align-items: baseline;
   display: flex;
   gap: 0.5rem;
+}
+
+.allocation-ledger-list {
+  display: grid;
+  gap: 0.8rem;
+  margin-top: 1rem;
+}
+
+.allocation-ledger-row.oversell_risk {
+  border-color: rgba(185, 28, 28, 0.35);
+  background: rgba(254, 242, 242, 0.86);
+}
+
+.allocation-ledger-row.cross_channel_conflict {
+  border-color: rgba(217, 119, 6, 0.35);
+  background: rgba(255, 251, 235, 0.86);
+}
+
+.allocation-ledger-row.safe_capacity,
+.allocation-ledger-row.fully_allocated {
+  border-color: rgba(37, 99, 235, 0.22);
 }
 
 .entry-ready {

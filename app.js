@@ -1523,6 +1523,60 @@
     listing_url: ["View Item URL", "Item URL", "Listing URL", "URL"]
   });
 
+  const tcgplayerListingColumns = Object.freeze({
+    marketplace_listing_id: [
+      "TCGplayer SKU",
+      "TCGPlayer SKU",
+      "TCGplayer SKU ID",
+      "SKU ID",
+      "Inventory ID",
+      "Product ID",
+      "TCGplayer Product ID",
+      "Listing ID"
+    ],
+    sku: ["SKU", "User SKU", "Custom SKU", "Custom label (SKU)", "Custom Label", "Location", "Location Code"],
+    listing_title: ["Product Name", "Product", "Title", "Name", "Listing title"],
+    current_price: ["Price", "My Price", "Marketplace Price", "TCGplayer Price", "List Price"],
+    quantity_available: ["Quantity", "Qty", "Available Quantity", "Live Quantity", "Inventory Quantity", "Total Quantity"],
+    quantity_sold: ["Sold quantity", "Sold Quantity", "Quantity sold", "Sold"],
+    listing_status: ["Status", "Listing status", "Live Status"],
+    condition: ["Condition", "Printing Condition", "Card Condition"],
+    category: ["Set", "Category", "Product Line", "TCG", "Game"],
+    listing_url: ["Listing URL", "Product URL", "URL"]
+  });
+
+  const marketplaceListingConfigs = Object.freeze({
+    ebay: {
+      label: "eBay",
+      source: "ebay_active_listing_csv",
+      columns: ebayListingColumns,
+      requiresExplicitListingId: true,
+      missingIdMessage: "eBay CSV is missing Item number / Item ID.",
+      missingTitleMessage: "eBay CSV is missing Title."
+    },
+    tcgplayer: {
+      label: "TCGplayer / TCGTracking",
+      source: "tcgplayer_inventory_snapshot_csv",
+      columns: tcgplayerListingColumns,
+      requiresExplicitListingId: false,
+      missingIdMessage: "TCGplayer snapshot is missing a SKU, product ID, or inventory ID column.",
+      missingTitleMessage: "TCGplayer snapshot is missing Product Name / Title."
+    }
+  });
+
+  const carduploaderInventoryColumns = Object.freeze({
+    external_inventory_id: ["CardUploader ID", "Source ID", "Inventory ID", "ID", "Catalog SKU", "TCGplayer SKU"],
+    sku: ["User SKU", "SKU", "Custom SKU", "Custom label (SKU)", "Custom Label", "Location", "Location Code"],
+    inventory_title: ["Title", "Listing Title", "Name", "Product Name", "Product"],
+    inventory_status: ["Status", "Inventory Status"],
+    condition: ["Condition", "Printing Condition", "Card Condition"],
+    location_display_code: ["User SKU", "Location", "Location Code", "Storage Location"],
+    physical_quantity: ["Qty", "Quantity", "Physical Quantity", "Inventory Quantity"],
+    available_quantity: ["Available Quantity", "Available", "Qty", "Quantity"],
+    reserved_quantity: ["Reserved Quantity", "Reserved"],
+    sold_quantity: ["Sold Quantity", "Sold"]
+  });
+
   function normalizeCsvColumn(value) {
     return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
   }
@@ -1612,6 +1666,10 @@
     return String(value || "").trim().toUpperCase();
   }
 
+  function normalizeSnapshotIdentityPart(value) {
+    return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  }
+
   function listingLocationHint(value) {
     const match = String(value || "").toUpperCase().match(/\bETB-[0-9]{3}-[A-J](?:\.[0-9]+)?\b/);
     return match ? match[0] : "";
@@ -1640,6 +1698,26 @@
     return { status: "needs_review", reasonCodes: ["NO_LOCATION_HINT"] };
   }
 
+  function syntheticMarketplaceListingId(marketplace, record) {
+    const parts = [
+      normalizeSku(record.sku),
+      record.listing_title,
+      record.condition,
+      record.category
+    ].map(normalizeSnapshotIdentityPart).filter(Boolean);
+    return parts.length >= 2 ? `${marketplace}:snapshot:${parts.join(":")}` : "";
+  }
+
+  function syntheticInventorySnapshotId(record) {
+    const parts = [
+      normalizeSku(record.sku),
+      record.inventory_title,
+      record.condition,
+      record.location_display_code
+    ].map(normalizeSnapshotIdentityPart).filter(Boolean);
+    return parts.length >= 2 ? `carduploader:snapshot:${parts.join(":")}` : "";
+  }
+
   function summarizeListingRows(records) {
     const summary = {
       totalRows: records.length,
@@ -1654,21 +1732,41 @@
     return summary;
   }
 
-  function parseEbayListingsCsv(text, fileMeta = {}) {
+  function summarizeInventoryRows(records) {
+    const values = Array.isArray(records) ? records : [];
+    return {
+      totalRows: values.length,
+      totalQuantity: values.reduce((total, record) => total + Number(record.available_quantity || record.physical_quantity || 0), 0),
+      uniqueSkus: new Set(values.map((record) => record.sku).filter(Boolean)).size,
+      missingSku: values.filter((record) => !record.sku).length,
+      needsReview: values.filter((record) => record.review_status === "needs_review").length
+    };
+  }
+
+  function parseMarketplaceListingsCsv(text, fileMeta = {}, marketplace = "ebay") {
+    const config = marketplaceListingConfigs[marketplace] || marketplaceListingConfigs.ebay;
     const parsed = parseCsvRows(text);
-    const mapping = columnMapping(parsed.fieldnames, ebayListingColumns);
+    const mapping = columnMapping(parsed.fieldnames, config.columns);
     const errors = [];
-    if (!mapping.marketplace_listing_id) {
-      errors.push("eBay CSV is missing Item number / Item ID.");
+    if (!mapping.marketplace_listing_id && config.requiresExplicitListingId) {
+      errors.push(config.missingIdMessage);
     }
     if (!mapping.listing_title) {
-      errors.push("eBay CSV is missing Title.");
+      errors.push(config.missingTitleMessage);
     }
     const skuCounts = new Map();
     const listingCounts = new Map();
     const records = parsed.rows.map((row, index) => {
       const sku = normalizeSku(csvCell(row, mapping, "sku"));
-      const listingId = csvCell(row, mapping, "marketplace_listing_id");
+      const explicitListingId = csvCell(row, mapping, "marketplace_listing_id");
+      const draftRecord = {
+        sku,
+        listing_title: csvCell(row, mapping, "listing_title"),
+        condition: csvCell(row, mapping, "condition"),
+        category: csvCell(row, mapping, "category")
+      };
+      const syntheticId = explicitListingId ? "" : syntheticMarketplaceListingId(marketplace, draftRecord);
+      const listingId = explicitListingId || syntheticId;
       if (sku) {
         skuCounts.set(sku, (skuCounts.get(sku) || 0) + 1);
       }
@@ -1677,19 +1775,22 @@
       }
       return {
         row_number: index + 1,
-        marketplace: "ebay",
+        marketplace,
+        marketplace_label: config.label,
+        source: config.source,
         marketplace_listing_id: listingId,
+        listing_id_is_synthetic: Boolean(syntheticId),
         sku,
-        listing_title: csvCell(row, mapping, "listing_title"),
+        listing_title: draftRecord.listing_title,
         current_price: parseMoney(csvCell(row, mapping, "current_price")),
         currency: "USD",
         quantity_available: parseWholeNumber(csvCell(row, mapping, "quantity_available")),
         quantity_sold: parseWholeNumber(csvCell(row, mapping, "quantity_sold")),
         listing_status: csvCell(row, mapping, "listing_status") || "active",
-        condition: csvCell(row, mapping, "condition"),
-        category: csvCell(row, mapping, "category"),
+        condition: draftRecord.condition,
+        category: draftRecord.category,
         listing_url: csvCell(row, mapping, "listing_url"),
-        location_hint: listingLocationHint(sku || csvCell(row, mapping, "listing_title")),
+        location_hint: listingLocationHint(sku || draftRecord.listing_title),
         raw_row: row,
         source_file_name: fileMeta.name || "",
         source_file_sha256: fileMeta.sha256 || ""
@@ -1703,15 +1804,69 @@
       return {
         ...record,
         review_status: bucket.status,
-        reason_codes: bucket.reasonCodes
+        reason_codes: record.listing_id_is_synthetic ? [...bucket.reasonCodes, "SYNTHETIC_MARKETPLACE_ID"] : bucket.reasonCodes
       };
     });
     return {
+      marketplace,
+      marketplaceLabel: config.label,
       fieldnames: parsed.fieldnames,
       mapping,
       records,
       errors,
       summary: summarizeListingRows(records)
+    };
+  }
+
+  function parseEbayListingsCsv(text, fileMeta = {}) {
+    return parseMarketplaceListingsCsv(text, fileMeta, "ebay");
+  }
+
+  function parseCardUploaderInventoryCsv(text, fileMeta = {}) {
+    const parsed = parseCsvRows(text);
+    const mapping = columnMapping(parsed.fieldnames, carduploaderInventoryColumns);
+    const errors = [];
+    if (!mapping.sku) {
+      errors.push("CardUploader inventory CSV is missing User SKU / SKU.");
+    }
+    if (!mapping.inventory_title) {
+      errors.push("CardUploader inventory CSV is missing Title / Product Name.");
+    }
+    const records = parsed.rows.map((row, index) => {
+      const sku = normalizeSku(csvCell(row, mapping, "sku"));
+      const location = listingLocationHint(csvCell(row, mapping, "location_display_code") || sku);
+      const record = {
+        row_number: index + 1,
+        external_inventory_provider: "carduploader",
+        source: "carduploader_inventory_csv",
+        external_inventory_id: csvCell(row, mapping, "external_inventory_id"),
+        sku,
+        inventory_title: csvCell(row, mapping, "inventory_title"),
+        inventory_status: csvCell(row, mapping, "inventory_status"),
+        condition: csvCell(row, mapping, "condition"),
+        location_display_code: location,
+        physical_quantity: parseWholeNumber(csvCell(row, mapping, "physical_quantity")),
+        available_quantity: parseWholeNumber(csvCell(row, mapping, "available_quantity")),
+        reserved_quantity: parseWholeNumber(csvCell(row, mapping, "reserved_quantity")),
+        sold_quantity: parseWholeNumber(csvCell(row, mapping, "sold_quantity")),
+        raw_row: row,
+        source_file_name: fileMeta.name || "",
+        source_file_sha256: fileMeta.sha256 || ""
+      };
+      return {
+        ...record,
+        external_inventory_id: record.external_inventory_id || syntheticInventorySnapshotId(record),
+        review_status: record.sku ? "snapshot_ready" : "needs_review",
+        reason_codes: record.sku ? ["CARDUPLOADER_INVENTORY_EVIDENCE"] : ["MISSING_SKU"]
+      };
+    });
+    return {
+      type: "inventory",
+      fieldnames: parsed.fieldnames,
+      mapping,
+      records,
+      errors,
+      summary: summarizeInventoryRows(records)
     };
   }
 
@@ -1734,8 +1889,8 @@
   function listingSnapshotPayload(record, user, importBatchId) {
     return {
       owner_user_id: user.id,
-      marketplace: "ebay",
-      source: "ebay_active_listing_csv",
+      marketplace: record.marketplace || "ebay",
+      source: record.source || "ebay_active_listing_csv",
       source_file_name: record.source_file_name,
       source_file_sha256: record.source_file_sha256,
       import_batch_id: importBatchId,
@@ -1775,6 +1930,29 @@
     };
   }
 
+  function inventoryQuantitySnapshotPayload(record, user, importBatchId) {
+    return {
+      owner_user_id: user.id,
+      external_inventory_provider: record.external_inventory_provider || "carduploader",
+      source: record.source || "carduploader_inventory_csv",
+      source_file_name: record.source_file_name,
+      source_file_sha256: record.source_file_sha256,
+      import_batch_id: importBatchId,
+      external_inventory_id: record.external_inventory_id,
+      sku: record.sku,
+      inventory_title: record.inventory_title,
+      inventory_status: record.inventory_status,
+      condition: record.condition,
+      location_display_code: baseLocationHint(record.location_display_code),
+      physical_quantity: record.physical_quantity,
+      available_quantity: record.available_quantity,
+      reserved_quantity: record.reserved_quantity,
+      sold_quantity: record.sold_quantity,
+      raw_row: record.raw_row,
+      imported_at: new Date().toISOString()
+    };
+  }
+
   async function supabaseChunks(items, size, handler) {
     const results = [];
     for (let index = 0; index < items.length; index += size) {
@@ -1787,14 +1965,15 @@
 
   async function importListingSnapshot(client, user, parsed) {
     if (!parsed || !parsed.records.length) {
-      throw new Error("Choose an eBay active-listings CSV before importing.");
+      throw new Error("Choose a marketplace CSV before importing.");
     }
+    const marketplaceLabel = parsed.marketplaceLabel || "marketplace";
     const importBatchId = window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
     const rows = parsed.records
       .filter((record) => record.marketplace_listing_id && record.review_status !== "duplicate_listing_id")
       .map((record) => listingSnapshotPayload(record, user, importBatchId));
     if (!rows.length) {
-      throw new Error("No rows with eBay item IDs were available to import.");
+      throw new Error(`No rows with ${marketplaceLabel} listing identities were available to import.`);
     }
     const snapshots = await supabaseChunks(rows, 150, async (chunk) => {
       const result = await client
@@ -1827,13 +2006,58 @@
     };
   }
 
+  async function importInventoryQuantitySnapshot(client, user, parsed) {
+    if (!parsed || !parsed.records.length) {
+      throw new Error("Choose a CardUploader inventory CSV before importing.");
+    }
+    const importBatchId = window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+    const rows = parsed.records
+      .filter((record) => record.external_inventory_id && record.sku)
+      .map((record) => inventoryQuantitySnapshotPayload(record, user, importBatchId));
+    if (!rows.length) {
+      throw new Error("No CardUploader inventory rows with SKU evidence were available to import.");
+    }
+    await supabaseChunks(rows, 150, async (chunk) => {
+      const result = await client
+        .from("cardvector_inventory_quantity_snapshots")
+        .upsert(chunk, { onConflict: "owner_user_id,external_inventory_provider,external_inventory_id,condition" });
+      if (result.error) {
+        throw result.error;
+      }
+      return [];
+    });
+    return {
+      importBatchId,
+      importedInventoryRows: rows.length,
+      skippedRows: parsed.records.length - rows.length
+    };
+  }
+
   async function loadOperatorListingSnapshots(client, user) {
     await requireLocationAuthorization(client, user);
+    const consolidated = await queryOptionalTable(
+      client,
+      "cardvector_marketplace_listing_reconciliation_v",
+      "id,marketplace,marketplace_listing_id,sku,listing_title,current_price,currency,quantity_available,quantity_sold,listing_status,location_hint,batch_sequence_label,review_status,reason_codes,imported_at,updated_at",
+      (query) => query.order("imported_at", { ascending: false }).limit(5000)
+    );
+    if (!consolidated.missing) {
+      return consolidated;
+    }
     return queryOptionalTable(
       client,
       "cardvector_ebay_listing_reconciliation_v",
-      "id,marketplace_listing_id,sku,listing_title,current_price,quantity_available,listing_status,location_hint,batch_sequence_label,review_status,reason_codes,imported_at,updated_at",
+      "id,marketplace,marketplace_listing_id,sku,listing_title,current_price,currency,quantity_available,quantity_sold,listing_status,location_hint,batch_sequence_label,review_status,reason_codes,imported_at,updated_at",
       (query) => query.order("imported_at", { ascending: false }).limit(5000)
+    );
+  }
+
+  async function loadOperatorAllocationLedger(client) {
+    return queryOptionalTable(
+      client,
+      "cardvector_marketplace_allocation_ledger_v",
+      "sku,inventory_title,physical_quantity,available_quantity,ebay_listed_quantity,tcgplayer_listed_quantity,total_listed_quantity,listed_marketplaces,allocation_status,reason_codes,last_marketplace_import_at,last_inventory_import_at",
+      (query) => query.order("allocation_status", { ascending: true }).order("sku", { ascending: true }).limit(5000)
     );
   }
 
@@ -1929,6 +2153,132 @@
     needs_manual_review: "Needs manual review"
   };
 
+  const allocationStatusLabels = {
+    oversell_risk: "Oversell risk",
+    cross_channel_conflict: "Cross-channel conflict",
+    fully_allocated: "Fully allocated",
+    safe_capacity: "Safe capacity",
+    needs_inventory_snapshot: "Needs inventory snapshot",
+    needs_review: "Needs review"
+  };
+
+  function buildMarketplaceAllocationLedger(listings, inventorySnapshots = []) {
+    const rowsBySku = new Map();
+    const ensure = (sku) => {
+      const key = normalizeSku(sku);
+      if (!rowsBySku.has(key)) {
+        rowsBySku.set(key, {
+          sku: key,
+          inventory_title: "",
+          physical_quantity: null,
+          available_quantity: null,
+          ebay_listed_quantity: 0,
+          tcgplayer_listed_quantity: 0,
+          total_listed_quantity: 0,
+          listed_marketplaces: [],
+          allocation_status: "needs_inventory_snapshot",
+          reason_codes: ["NEEDS_CARDUPLOADER_INVENTORY_SNAPSHOT"]
+        });
+      }
+      return rowsBySku.get(key);
+    };
+    (Array.isArray(inventorySnapshots) ? inventorySnapshots : []).forEach((item) => {
+      const sku = normalizeSku(item.sku || item.user_sku || item.location || item.inventory_id);
+      if (!sku) return;
+      const row = ensure(sku);
+      row.inventory_title = item.inventory_title || item.title || row.inventory_title;
+      row.physical_quantity = Number.isFinite(Number(item.physical_quantity ?? item.quantity_value ?? item.quantity))
+        ? Math.max(0, Math.trunc(Number(item.physical_quantity ?? item.quantity_value ?? item.quantity)))
+        : row.physical_quantity;
+      row.available_quantity = Number.isFinite(Number(item.available_quantity ?? item.quantity_value ?? item.quantity))
+        ? Math.max(0, Math.trunc(Number(item.available_quantity ?? item.quantity_value ?? item.quantity)))
+        : row.available_quantity;
+    });
+    (Array.isArray(listings) ? listings : []).forEach((listing) => {
+      const sku = normalizeSku(listing.sku);
+      if (!sku) return;
+      const row = ensure(sku);
+      const quantity = Number.isFinite(Number(listing.quantity_available)) ? Math.max(0, Math.trunc(Number(listing.quantity_available))) : 0;
+      const marketplace = String(listing.marketplace || "ebay").toLowerCase();
+      if (marketplace === "tcgplayer") {
+        row.tcgplayer_listed_quantity += quantity;
+      } else if (marketplace === "ebay") {
+        row.ebay_listed_quantity += quantity;
+      }
+      if (!row.listed_marketplaces.includes(marketplace)) {
+        row.listed_marketplaces.push(marketplace);
+      }
+      row.total_listed_quantity += quantity;
+    });
+    return [...rowsBySku.values()].map((row) => {
+      const available = row.available_quantity;
+      if (available === null || available === undefined) {
+        return row;
+      }
+      if (row.ebay_listed_quantity > 0 && row.tcgplayer_listed_quantity > 0 && row.total_listed_quantity > available) {
+        return { ...row, allocation_status: "oversell_risk", reason_codes: ["LISTED_QUANTITY_EXCEEDS_AVAILABLE", "MULTIPLE_MARKETPLACES_LISTED"] };
+      }
+      if (row.ebay_listed_quantity > 0 && row.tcgplayer_listed_quantity > 0 && available <= Math.max(row.ebay_listed_quantity, row.tcgplayer_listed_quantity)) {
+        return { ...row, allocation_status: "cross_channel_conflict", reason_codes: ["MULTIPLE_MARKETPLACES_SHARE_SINGLE_CAPACITY"] };
+      }
+      if (row.total_listed_quantity > available) {
+        return { ...row, allocation_status: "oversell_risk", reason_codes: ["LISTED_QUANTITY_EXCEEDS_AVAILABLE"] };
+      }
+      if (row.total_listed_quantity === available) {
+        return { ...row, allocation_status: "fully_allocated", reason_codes: ["LISTED_QUANTITY_EQUALS_AVAILABLE"] };
+      }
+      if (row.total_listed_quantity < available) {
+        return { ...row, allocation_status: "safe_capacity", reason_codes: ["AVAILABLE_QUANTITY_REMAINS"] };
+      }
+      return { ...row, allocation_status: "needs_review", reason_codes: ["ALLOCATION_REVIEW_REQUIRED"] };
+    }).sort((a, b) => {
+      const severity = { oversell_risk: 0, cross_channel_conflict: 1, needs_inventory_snapshot: 2, needs_review: 3, fully_allocated: 4, safe_capacity: 5 };
+      return (severity[a.allocation_status] ?? 9) - (severity[b.allocation_status] ?? 9) || a.sku.localeCompare(b.sku);
+    });
+  }
+
+  function allocationLedgerSummary(rows) {
+    const values = Array.isArray(rows) ? rows : [];
+    return {
+      totalSkus: values.length,
+      oversellRisk: values.filter((row) => row.allocation_status === "oversell_risk").length,
+      crossChannel: values.filter((row) => row.allocation_status === "cross_channel_conflict").length,
+      needsInventory: values.filter((row) => row.allocation_status === "needs_inventory_snapshot").length
+    };
+  }
+
+  function renderAllocationLedger(rows, missingLedger) {
+    if (missingLedger) {
+      return '<p class="operator-empty">Marketplace allocation ledger is pending migration in Supabase.</p>';
+    }
+    if (!rows || !rows.length) {
+      return '<p class="operator-empty">No marketplace allocation evidence is available yet. Import eBay and TCGplayer snapshots to begin comparing listed quantities.</p>';
+    }
+    const summary = allocationLedgerSummary(rows);
+    return `
+      <div class="registry-summary listing-summary">
+        <div><span>SKUs</span><strong>${summary.totalSkus}</strong></div>
+        <div><span>Oversell Risk</span><strong>${summary.oversellRisk}</strong></div>
+        <div><span>Cross-Channel</span><strong>${summary.crossChannel}</strong></div>
+        <div><span>Need Inventory</span><strong>${summary.needsInventory}</strong></div>
+      </div>
+      <div class="allocation-ledger-list">
+        ${rows.slice(0, 30).map((row) => `
+          <article class="operator-list-row listing-reconciliation-row allocation-ledger-row ${escapeHtml(row.allocation_status || "needs_review")}">
+            <div>
+              <strong>${escapeHtml(row.sku || "Missing SKU")}</strong>
+              <span>${escapeHtml(row.inventory_title || "Marketplace snapshot evidence")}</span>
+              <span>${Array.isArray(row.reason_codes) ? escapeHtml(row.reason_codes.join(", ")) : ""}</span>
+            </div>
+            <div>
+              <span>eBay ${Number(row.ebay_listed_quantity || 0)} &middot; TCGplayer ${Number(row.tcgplayer_listed_quantity || 0)}</span>
+              <strong>${Number(row.total_listed_quantity || 0)} listed / ${row.available_quantity === null || row.available_quantity === undefined ? "?" : Number(row.available_quantity)} available</strong>
+              <span>${escapeHtml(allocationStatusLabels[row.allocation_status] || compactStatusLabel(row.allocation_status || "needs_review"))}</span>
+            </div>
+          </article>`).join("")}
+      </div>`;
+  }
+
   function renderReconciliationBuckets(buckets) {
     const values = buckets || reconcileListingSnapshots([], []);
     return `
@@ -1976,6 +2326,15 @@
 
   function renderListingSummary(summary) {
     const values = summary || {};
+    if (Object.prototype.hasOwnProperty.call(values, "totalQuantity")) {
+      return `
+        <div class="registry-summary listing-summary">
+          <div><span>Rows</span><strong>${Number(values.totalRows || 0)}</strong></div>
+          <div><span>Quantity</span><strong>${Number(values.totalQuantity || 0)}</strong></div>
+          <div><span>Unique SKUs</span><strong>${Number(values.uniqueSkus || 0)}</strong></div>
+          <div><span>Needs Review</span><strong>${Number(values.needsReview || 0) + Number(values.missingSku || 0)}</strong></div>
+        </div>`;
+    }
     return `
       <div class="registry-summary listing-summary">
         <div><span>Rows</span><strong>${Number(values.totalRows || 0)}</strong></div>
@@ -1985,15 +2344,43 @@
       </div>`;
   }
 
+  function renderInventorySnapshotRows(records, limit = 40) {
+    if (!records || !records.length) {
+      return '<p class="operator-empty">Import a CardUploader inventory CSV to stage quantity evidence.</p>';
+    }
+    return records.slice(0, limit).map((record) => `
+      <article class="operator-list-row listing-reconciliation-row">
+        <div>
+          <strong>${escapeHtml(record.inventory_title || "Untitled inventory row")}</strong>
+          <span>${escapeHtml(record.sku || "Missing SKU")} &middot; ${escapeHtml(record.condition || "No condition")}</span>
+          <span>${escapeHtml(record.reason_codes.join(", "))}</span>
+        </div>
+        <div>
+          <span>${escapeHtml(record.location_display_code || "No location")}</span>
+          <strong>${Number(record.available_quantity ?? record.physical_quantity ?? 0)} available</strong>
+          <span>${escapeHtml(compactStatusLabel(record.inventory_status || record.review_status))}</span>
+        </div>
+      </article>`).join("");
+  }
+
+  function renderCurrentSnapshotRows(parsed) {
+    if (!parsed) {
+      return '<p class="operator-empty">No CSV loaded yet.</p>';
+    }
+    return parsed.type === "inventory"
+      ? renderInventorySnapshotRows(parsed.records)
+      : renderListingRows(parsed.records);
+  }
+
   function renderListingRows(records, limit = 40) {
     if (!records || !records.length) {
-      return '<p class="operator-empty">Import an eBay active-listings CSV to stage reconciliation rows.</p>';
+      return '<p class="operator-empty">Import a marketplace snapshot CSV to stage reconciliation rows.</p>';
     }
     return records.slice(0, limit).map((record) => `
       <article class="operator-list-row listing-reconciliation-row">
         <div>
           <strong>${escapeHtml(record.listing_title || "Untitled listing")}</strong>
-          <span>${escapeHtml(record.sku || "Missing SKU")} &middot; eBay ${escapeHtml(record.marketplace_listing_id || "missing item ID")}</span>
+          <span>${escapeHtml(record.sku || "Missing SKU")} &middot; ${escapeHtml(record.marketplace_label || record.marketplace || "Marketplace")} ${escapeHtml(record.marketplace_listing_id || "missing listing ID")}</span>
           <span>${escapeHtml(record.reason_codes.join(", "))}</span>
         </div>
         <div>
@@ -2006,13 +2393,13 @@
 
   function renderImportedListingRows(rows) {
     if (!rows || !rows.length) {
-      return '<p class="operator-empty">No imported eBay listing snapshots are available yet.</p>';
+      return '<p class="operator-empty">No imported marketplace listing snapshots are available yet.</p>';
     }
     return rows.slice(0, 20).map((row) => `
       <article class="operator-list-row listing-reconciliation-row">
         <div>
           <strong>${escapeHtml(row.listing_title || "Untitled listing")}</strong>
-          <span>${escapeHtml(row.sku || "Missing SKU")} &middot; eBay ${escapeHtml(row.marketplace_listing_id || "")}</span>
+          <span>${escapeHtml(row.sku || "Missing SKU")} &middot; ${escapeHtml(row.marketplace || "marketplace")} ${escapeHtml(row.marketplace_listing_id || "")}</span>
           <span>${Array.isArray(row.reason_codes) ? escapeHtml(row.reason_codes.join(", ")) : ""}</span>
         </div>
         <div>
@@ -2025,14 +2412,18 @@
 
   async function renderOperatorListingReconciliationView(client, user, importedResult) {
     const batchResult = await loadListingBatchReferences(client);
+    const ledgerResult = await loadOperatorAllocationLedger(client);
     const state = {
       parsed: null,
       fileName: "",
+      marketplace: "ebay",
       error: "",
       importResult: null,
       importedRows: importedResult.data || [],
+      allocationRows: ledgerResult.data || [],
       batchReferences: batchResult.data || [],
       missingSnapshots: importedResult.missing,
+      missingAllocationLedger: ledgerResult.missing,
       missingBatchReferences: batchResult.missing
     };
 
@@ -2043,25 +2434,39 @@
             <div>
               <p class="eyebrow">CSV snapshot workflow</p>
               <h1 id="listing-reconciliation-title">Existing Listing Review</h1>
-              <p>Signed in as ${escapeHtml(authStateLabel(user))}. Import eBay active-listing CSV snapshots, identify duplicate or missing SKUs, and keep live eBay edits out of this v1 workflow.</p>
+              <p>Signed in as ${escapeHtml(authStateLabel(user))}. Import marketplace CSV snapshots, compare listed quantities by SKU, and keep live marketplace edits out of this v1 workflow.</p>
             </div>
             <div class="operator-toolbar-actions">
               <a class="button secondary" href="/operator">Operator Dashboard</a>
               <a class="button secondary" href="/operator/batches">Batch Workflow</a>
             </div>
           </div>
-          ${state.missingSnapshots ? '<div class="operator-warning" role="status">eBay listing reconciliation tables are pending migration or not available in Supabase yet.</div>' : ""}
+          ${state.missingSnapshots ? '<div class="operator-warning" role="status">Marketplace listing reconciliation tables are pending migration or not available in Supabase yet.</div>' : ""}
+          ${state.missingAllocationLedger ? '<div class="operator-warning" role="status">Marketplace allocation ledger is pending migration or not available in Supabase yet.</div>' : ""}
           ${state.missingBatchReferences ? '<div class="operator-warning" role="status">CardUploader batch references are not available through the authenticated Supabase API. Reconciliation will show eBay-only review until they are available.</div>' : ""}
           <div class="operator-side-panel operator-main-panel">
-            <h2>Reconciliation Review</h2>
-            <p class="operator-note">Computed read-only from the latest eBay snapshot evidence and CardUploader batch/location references. CardUploader remains inventory truth; eBay remains live listing truth.</p>
+            <h2>Marketplace Allocation Ledger</h2>
+            <p class="operator-note">Read-only oversell-prevention view. eBay and TCGplayer listed quantities are compared against CardUploader inventory snapshot evidence when available.</p>
+            ${renderAllocationLedger(state.allocationRows, state.missingAllocationLedger)}
+          </div>
+          <div class="operator-side-panel operator-main-panel">
+            <h2>Location Reconciliation Review</h2>
+            <p class="operator-note">Computed read-only from imported marketplace snapshot evidence and CardUploader batch/location references. CardUploader remains inventory truth; marketplaces remain live listing truth.</p>
             ${renderReconciliationBuckets(reconcileListingSnapshots(state.importedRows, state.batchReferences))}
           </div>
           <div class="operator-side-panel operator-main-panel listing-import-panel">
-            <h2>Import Active Listings CSV</h2>
-            <p class="operator-note">Snapshot only. This page does not revise, end, publish, or otherwise change live eBay listings.</p>
+            <h2>Import Marketplace Snapshot CSV</h2>
+            <p class="operator-note">Snapshot only. This page does not update CardUploader inventory or revise, end, publish, sync, or otherwise change live marketplace listings.</p>
+            <label class="listing-marketplace-select">
+              <span>Snapshot Type</span>
+              <select id="listing-marketplace">
+                <option value="ebay"${state.marketplace === "ebay" ? " selected" : ""}>eBay active listings</option>
+                <option value="tcgplayer"${state.marketplace === "tcgplayer" ? " selected" : ""}>TCGplayer / TCGTracking inventory</option>
+                <option value="carduploader_inventory"${state.marketplace === "carduploader_inventory" ? " selected" : ""}>CardUploader inventory snapshot</option>
+              </select>
+            </label>
             <label class="listing-file-drop">
-              <span>Choose eBay active-listings CSV</span>
+              <span>Choose ${escapeHtml(state.marketplace === "carduploader_inventory" ? "CardUploader inventory" : marketplaceListingConfigs[state.marketplace].label)} CSV</span>
               <input id="listing-csv-file" type="file" accept=".csv,text/csv">
             </label>
             ${state.fileName ? `<p class="operator-note">Selected: ${escapeHtml(state.fileName)}</p>` : ""}
@@ -2071,12 +2476,13 @@
             <div class="entry-actions">
               <button class="button primary" id="listing-import-snapshot" type="button"${state.parsed && state.parsed.records.length && !state.parsed.errors.length ? "" : " disabled"}>Import Snapshot</button>
             </div>
-            ${state.importResult ? `<p class="entry-ready">Imported ${state.importResult.importedListings} listings and ${state.importResult.importedMatches} reconciliation rows. Skipped ${state.importResult.skippedRows} rows without item IDs.</p>` : ""}
+            ${state.importResult && state.importResult.importedInventoryRows ? `<p class="entry-ready">Imported ${state.importResult.importedInventoryRows} CardUploader inventory rows. Skipped ${state.importResult.skippedRows} rows without SKU evidence.</p>` : ""}
+            ${state.importResult && state.importResult.importedListings ? `<p class="entry-ready">Imported ${state.importResult.importedListings} listings and ${state.importResult.importedMatches} reconciliation rows. Skipped ${state.importResult.skippedRows} rows without marketplace identities.</p>` : ""}
           </div>
           <div class="registry-layout listing-layout">
             <section class="operator-side-panel operator-main-panel" aria-labelledby="listing-preview-title">
               <h2 id="listing-preview-title">Current CSV Review</h2>
-              ${state.parsed ? renderListingRows(state.parsed.records) : '<p class="operator-empty">No CSV loaded yet.</p>'}
+              ${renderCurrentSnapshotRows(state.parsed)}
             </section>
             <aside class="operator-side-panel" aria-labelledby="listing-imported-title">
               <h2 id="listing-imported-title">Recent Snapshots</h2>
@@ -2086,6 +2492,17 @@
         </section>`;
 
       const fileInput = document.getElementById("listing-csv-file");
+      const marketplaceSelect = document.getElementById("listing-marketplace");
+      if (marketplaceSelect) {
+        marketplaceSelect.addEventListener("change", async (event) => {
+          state.marketplace = event.target.value || "ebay";
+          state.parsed = null;
+          state.fileName = "";
+          state.importResult = null;
+          state.error = "";
+          await draw();
+        });
+      }
       if (fileInput) {
         fileInput.addEventListener("change", async (event) => {
           const file = event.target.files && event.target.files[0];
@@ -2099,7 +2516,9 @@
             state.fileName = file.name;
             state.error = "";
             state.importResult = null;
-            state.parsed = parseEbayListingsCsv(text, { name: file.name, sha256 });
+            state.parsed = state.marketplace === "carduploader_inventory"
+              ? parseCardUploaderInventoryCsv(text, { name: file.name, sha256 })
+              : parseMarketplaceListingsCsv(text, { name: file.name, sha256 }, state.marketplace);
           } catch (error) {
             state.error = error.message || String(error);
           }
@@ -2112,16 +2531,21 @@
           try {
             importButton.disabled = true;
             importButton.textContent = "Importing...";
-            state.importResult = await importListingSnapshot(client, user, state.parsed);
+            state.importResult = state.marketplace === "carduploader_inventory"
+              ? await importInventoryQuantitySnapshot(client, user, state.parsed)
+              : await importListingSnapshot(client, user, state.parsed);
             const refreshed = await loadOperatorListingSnapshots(client, user);
             state.importedRows = refreshed.data || [];
             state.missingSnapshots = refreshed.missing;
+            const refreshedLedger = await loadOperatorAllocationLedger(client);
+            state.allocationRows = refreshedLedger.data || [];
+            state.missingAllocationLedger = refreshedLedger.missing;
             const refreshedBatches = await loadListingBatchReferences(client);
             state.batchReferences = refreshedBatches.data || [];
             state.missingBatchReferences = refreshedBatches.missing;
             state.error = "";
           } catch (error) {
-            state.error = supabaseErrorDetails("Import eBay listing snapshot", error, user);
+            state.error = supabaseErrorDetails("Import marketplace listing snapshot", error, user);
           }
           await draw();
         });
@@ -2139,7 +2563,7 @@
           <div>
             <p class="eyebrow">CardVector operator</p>
             <h1 id="listing-reconciliation-title">Existing Listing Review</h1>
-            <p>Sign in to import eBay active-listing CSV snapshots for reconciliation review.</p>
+            <p>Sign in to import marketplace CSV snapshots for reconciliation review.</p>
           </div>
           <a class="button secondary" href="/operator">Operator Dashboard</a>
         </div>
@@ -2162,7 +2586,7 @@
       idPrefix: "operator-listings",
       onAuthenticated: async (user) => {
         if (status) {
-          status.textContent = "Loading eBay listing reconciliation...";
+          status.textContent = "Loading marketplace listing reconciliation...";
         }
         try {
           const imported = await loadOperatorListingSnapshots(client, user);
