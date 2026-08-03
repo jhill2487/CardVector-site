@@ -1314,11 +1314,131 @@
     return "";
   }
 
+  function batchHasSlotLocation(batch) {
+    const location = batchLocationLabel(batch);
+    return /^ETB-\d{3}-[A-Z]$/i.test(location);
+  }
+
+  function batchSortTimestamp(batch) {
+    const value = batch && (batch.batch_date || batch.created_at || batch.updated_at || batch.source_updated_at);
+    const timestamp = Date.parse(value || "");
+    return Number.isNaN(timestamp) ? 0 : timestamp;
+  }
+
+  function sortedBatchReferences(batches) {
+    return [...batches].sort((left, right) => {
+      const leftLocation = batchLocationLabel(left);
+      const rightLocation = batchLocationLabel(right);
+      if (leftLocation !== rightLocation) {
+        return leftLocation.localeCompare(rightLocation);
+      }
+      const dateDifference = batchSortTimestamp(left) - batchSortTimestamp(right);
+      if (dateDifference) {
+        return dateDifference;
+      }
+      return String(left.carduploader_batch_id || left.batch_label || "").localeCompare(String(right.carduploader_batch_id || right.batch_label || ""));
+    });
+  }
+
+  function groupBatchReferencesByLocation(batches) {
+    const groups = new Map();
+    sortedBatchReferences(batches).forEach((batch) => {
+      if (!batchHasSlotLocation(batch)) {
+        return;
+      }
+      const location = batchLocationLabel(batch);
+      if (!groups.has(location)) {
+        groups.set(location, {
+          location,
+          batches: [],
+          totalCards: 0,
+          latestTimestamp: 0
+        });
+      }
+      const group = groups.get(location);
+      const sequence = group.batches.length + 1;
+      group.batches.push({
+        ...batch,
+        sequence_label: `${location}.${sequence}`
+      });
+      group.totalCards += Number(batch.card_count || 0);
+      group.latestTimestamp = Math.max(group.latestTimestamp, batchSortTimestamp(batch));
+    });
+    return [...groups.values()];
+  }
+
+  function batchReviewReason(batch) {
+    const location = batchLocationLabel(batch);
+    if (location === "Unassigned") {
+      return "No ETB slot is linked yet.";
+    }
+    if (/^ETB-\d{3}$/i.test(location)) {
+      return "Linked to an ETB, but not a specific A-J slot.";
+    }
+    return "Needs location review before it can be grouped.";
+  }
+
+  function renderBatchPill(batch) {
+    const batchUrl = safeCardUploaderUrl(batch.carduploader_batch_url);
+    const date = shortDateLabel(batch.batch_date || batch.created_at || batch.updated_at);
+    return `
+      <li class="batch-pill">
+        <strong>${escapeHtml(batch.sequence_label || batch.batch_label || batchReferenceLabel(batch))}</strong>
+        <span>${Number(batch.card_count || 0)} cards${date ? ` - ${escapeHtml(date)}` : ""}</span>
+        ${batch.carduploader_batch_id ? `<span class="batch-technical-id" title="${escapeHtml(batch.carduploader_batch_id)}">${escapeHtml(shortBatchId(batch.carduploader_batch_id))}</span>` : ""}
+        ${batchUrl ? `<a class="operator-inline-link" href="${escapeHtml(batchUrl)}" target="_blank" rel="noopener noreferrer">Open batch</a>` : ""}
+      </li>`;
+  }
+
+  function renderBatchLocationWorkboard(batches) {
+    const groups = groupBatchReferencesByLocation(batches);
+    if (!groups.length) {
+      return '<p class="operator-empty">No CardUploader batches are linked to specific ETB slots yet.</p>';
+    }
+    return `
+      <div class="batch-location-grid">
+        ${groups.map((group) => `
+          <article class="batch-location-card">
+            <header>
+              <div>
+                <span>Location</span>
+                <h3>${escapeHtml(group.location)}</h3>
+              </div>
+              <strong>${group.batches.length} ${group.batches.length === 1 ? "batch" : "batches"}</strong>
+            </header>
+            <dl>
+              <div><dt>Cards</dt><dd>${group.totalCards}</dd></div>
+              <div><dt>Latest</dt><dd>${escapeHtml(shortDateLabel(group.latestTimestamp))}</dd></div>
+            </dl>
+            <ul class="batch-pill-list">${group.batches.map(renderBatchPill).join("")}</ul>
+          </article>`).join("")}
+      </div>`;
+  }
+
+  function renderBatchReviewRows(batches) {
+    const reviewBatches = sortedBatchReferences(batches).filter((batch) => !batchHasSlotLocation(batch));
+    if (!reviewBatches.length) {
+      return '<p class="operator-empty">No unassigned or broad ETB batch references need review.</p>';
+    }
+    return reviewBatches.slice(0, 20).map((batch) => `
+      <article class="operator-list-row batch-reference-row">
+        <div>
+          <strong>${escapeHtml(batchReferenceLabel(batch))}</strong>
+          <span>${escapeHtml(batchReviewReason(batch))}</span>
+          ${batch.batch_label ? `<span>${escapeHtml(batch.batch_label)}</span>` : ""}
+        </div>
+        <div>
+          <span>${Number(batch.card_count || 0)} cards</span>
+          <strong>${escapeHtml(compactStatusLabel(batch.event_type || "batch reference"))}</strong>
+        </div>
+      </article>`).join("");
+  }
+
   function renderBatchReferenceRows(batches) {
     if (!batches.length) {
       return '<p class="operator-empty">No CardUploader batch references are available yet.</p>';
     }
-    return batches.slice(0, 80).map((batch) => {
+    return sortedBatchReferences(batches).slice(0, 80).map((batch) => {
       const batchUrl = safeCardUploaderUrl(batch.carduploader_batch_url);
       return `
         <article class="operator-list-row batch-reference-row">
@@ -1338,7 +1458,8 @@
   }
 
   function renderOperatorBatchWorkflowView(registry, user) {
-    const linkedLocations = new Set(registry.batches.map(batchLocationLabel).filter((value) => value && value !== "Unassigned"));
+    const linkedLocations = new Set(registry.batches.filter(batchHasSlotLocation).map(batchLocationLabel));
+    const reviewBatches = registry.batches.filter((batch) => !batchHasSlotLocation(batch));
     const referencedCards = registry.batches.reduce((total, batch) => total + Number(batch.card_count || 0), 0);
     const pendingSessions = registry.sessions.filter((session) => {
       const status = String(session.status || "").toLowerCase();
@@ -1359,22 +1480,30 @@
           </div>
         </div>
         ${registryWarningHtml(registry)}
-        <div class="registry-summary">
+        <div class="registry-summary batch-summary">
           <div><span>Batch References</span><strong>${registry.batches.length}</strong></div>
-          <div><span>Linked Locations</span><strong>${linkedLocations.size}</strong></div>
+          <div><span>Linked Slots</span><strong>${linkedLocations.size}</strong></div>
           <div><span>Referenced Cards</span><strong>${referencedCards}</strong></div>
+          <div><span>Review Needed</span><strong>${reviewBatches.length}</strong></div>
           <div><span>Pending Captures</span><strong>${pendingSessions.length}</strong></div>
         </div>
+        <section class="operator-side-panel operator-main-panel batch-workboard-title" aria-labelledby="batch-workboard-title">
+          <h2 id="batch-workboard-title">Location Batch Workboard</h2>
+          <p class="operator-note">Grouped by canonical ETB slot. Refill labels such as ETB-001-A.2 identify later CardUploader batches for the same physical slot without changing CardUploader inventory truth.</p>
+          ${renderBatchLocationWorkboard(registry.batches)}
+        </section>
         <div class="registry-layout">
           <div class="registry-list">
             <section class="operator-side-panel operator-main-panel" aria-labelledby="batch-reference-title">
-              <h2 id="batch-reference-title">CardUploader Batch References</h2>
+              <h2 id="batch-reference-title">All CardUploader Batch References</h2>
               ${renderBatchReferenceRows(registry.batches)}
             </section>
           </div>
           <aside class="operator-side-panel" aria-labelledby="batch-capture-title">
             <h2 id="batch-capture-title">Capture Handoff</h2>
             ${renderRecentSessions(registry.sessions)}
+            <h2 class="batch-review-heading">Needs Batch Review</h2>
+            ${renderBatchReviewRows(registry.batches)}
           </aside>
         </div>
       </section>`;
