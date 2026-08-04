@@ -151,12 +151,13 @@ a:hover {
 }
 
 .hero {
-  min-height: 560px;
+  min-height: 430px;
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) 420px;
+  grid-template-columns: minmax(0, 820px);
   align-items: center;
-  gap: 56px;
+  justify-content: center;
   padding: 52px 0 56px;
+  text-align: center;
 }
 
 .brand-banner {
@@ -181,7 +182,7 @@ a:hover {
   display: block;
   width: 148px;
   height: 148px;
-  margin: 0 0 22px;
+  margin: 0 auto 22px;
   border-radius: 50%;
   object-fit: cover;
   box-shadow: 0 18px 50px rgba(11, 31, 68, .20);
@@ -228,6 +229,8 @@ h3 {
 
 .hero-lede {
   max-width: 640px;
+  margin-right: auto;
+  margin-left: auto;
   color: var(--muted);
   font-size: 1.2rem;
 }
@@ -235,6 +238,7 @@ h3 {
 .hero-actions {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 14px;
   margin-top: 32px;
 }
@@ -276,55 +280,6 @@ h3 {
 .button.secondary:hover {
   border-color: var(--blue-600);
   background: var(--blue-50);
-}
-
-.hero-panel {
-  padding: 26px;
-  background: rgba(255, 255, 255, .9);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-}
-
-.panel-line {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 18px 0;
-  border-bottom: 1px solid var(--line);
-}
-
-.panel-line:last-child {
-  border-bottom: 0;
-}
-
-.panel-line span {
-  color: var(--muted);
-}
-
-.panel-line strong {
-  color: var(--blue-950);
-  text-align: right;
-}
-
-.panel-shop {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 10px 0 8px;
-  padding: 16px 18px;
-  color: white;
-  background: linear-gradient(135deg, var(--blue-700), var(--blue-950));
-  border-radius: 16px;
-  font-weight: 900;
-  text-align: center;
-  box-shadow: 0 14px 30px rgba(31, 95, 191, .22);
-}
-
-.panel-shop:hover {
-  color: white;
-  background: var(--blue-950);
 }
 
 .actions,
