@@ -883,6 +883,12 @@ h3 {
   list-style: none;
 }
 
+.footer .footer-admin {
+  gap: 12px;
+  font-size: .82rem;
+  opacity: .68;
+}
+
 .qr-view {
   min-height: calc(100vh - 168px);
   display: grid;
