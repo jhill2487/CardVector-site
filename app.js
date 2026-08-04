@@ -310,6 +310,33 @@
     };
   }
 
+  function defaultMarketBriefAffiliateLinks() {
+    return [
+      {
+        label: "Shop Putnam Collectibles on eBay",
+        url: siteLinks.EBAY_STORE_URL
+      }
+    ];
+  }
+
+  function normalizeMarketBriefAffiliateLink(link) {
+    if (!link) {
+      return null;
+    }
+    const label = String(link.label || "Shop related cards on eBay").trim();
+    const url = String(link.url || "").trim();
+    if (!label || !url.startsWith("https://")) {
+      return null;
+    }
+    return { label, url };
+  }
+
+  function normalizeMarketBriefAffiliateLinks(post) {
+    const rawLinks = Array.isArray(post && post.affiliateLinks) ? post.affiliateLinks : [];
+    const links = rawLinks.map(normalizeMarketBriefAffiliateLink).filter(Boolean);
+    return links.length ? links : defaultMarketBriefAffiliateLinks();
+  }
+
   function normalizeMarketBriefPost(post) {
     const normalized = {
       slug: String(post && post.slug || "").trim(),
@@ -319,7 +346,8 @@
       dateLabel: String(post && post.dateLabel || "").trim(),
       summary: String(post && post.summary || "").trim(),
       status: String(post && post.status || "published").trim(),
-      sections: Array.isArray(post && post.sections) ? post.sections.map(normalizeMarketBriefSection).filter((section) => section.body) : []
+      sections: Array.isArray(post && post.sections) ? post.sections.map(normalizeMarketBriefSection).filter((section) => section.body) : [],
+      affiliateLinks: normalizeMarketBriefAffiliateLinks(post)
     };
     normalized.dateLabel = normalized.dateLabel || dateLabelForBrief(normalized.date);
     return normalized;
@@ -381,6 +409,20 @@
       .join("");
   }
 
+  function renderAffiliateLinkPanel(post) {
+    const links = Array.isArray(post && post.affiliateLinks) ? post.affiliateLinks : defaultMarketBriefAffiliateLinks();
+    return `
+      <aside class="brief-affiliate-panel" aria-label="Related affiliate links">
+        <span class="brief-kicker">Shop related picks</span>
+        <h2>Explore current listings</h2>
+        <div class="brief-affiliate-links">
+          ${links.map((link) => `
+            <a class="button primary" href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(link.label)}</a>`).join("")}
+        </div>
+        <p class="marketplace-disclosure">Marketplace links may be affiliate links. Putnam Collectibles may earn a commission from qualifying purchases.</p>
+      </aside>`;
+  }
+
   async function renderMarketBriefPost(slug) {
     const posts = await loadMarketBriefPosts();
     const post = posts.find((item) => item.slug === slug) || posts[0];
@@ -398,6 +440,7 @@
               ${renderBriefBody(section.body)}
             </section>`).join("")}
         </div>
+        ${renderAffiliateLinkPanel(post)}
         <aside class="brief-disclosure">
           <strong>How this brief is prepared</strong>
           <p>Putnam Collectibles uses ChatGPT-assisted research to identify possible market updates, then reviews the brief before publication. Future weekly posts should include dated sources and current marketplace checks.</p>

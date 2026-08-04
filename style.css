@@ -640,6 +640,7 @@ h3 {
 .brief-feature,
 .brief-card,
 .brief-disclosure,
+.brief-affiliate-panel,
 .brief-post-section {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -665,6 +666,7 @@ h3 {
 .brief-feature p,
 .brief-card p,
 .brief-disclosure p,
+.brief-affiliate-panel p,
 .brief-post-section p {
   margin: 0;
   color: var(--muted);
@@ -756,6 +758,32 @@ h3 {
 
 .brief-post-section {
   padding: 20px;
+}
+
+.brief-affiliate-panel {
+  margin-top: 18px;
+  padding: 22px;
+  background:
+    radial-gradient(circle at top right, rgba(219, 234, 254, .5), transparent 18rem),
+    var(--surface);
+}
+
+.brief-affiliate-panel h2 {
+  margin-bottom: 14px;
+  color: var(--blue-950);
+  font-size: 1.55rem;
+  letter-spacing: -.02em;
+}
+
+.brief-affiliate-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 14px 0 12px;
+}
+
+.brief-affiliate-links .button {
+  min-height: 44px;
 }
 
 .building {
