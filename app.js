@@ -159,6 +159,18 @@
     WHATNOT_REFERRAL_URL: "https://whatnot.com/invite/putnam_collectibles",
     COLLECTION_INQUIRY_URL: "https://tally.so/r/ob1ABN"
   });
+  const egressSafeMode = true;
+  const egressSafeCacheMs = 5 * 60 * 1000;
+  const egressSafeLimits = Object.freeze({
+    registryLocations: 250,
+    registrySessions: 25,
+    registryBatches: 120,
+    listingSnapshots: 1200,
+    allocationLedger: 1200,
+    listingBatchReferences: 250,
+    captureMaxEdge: 1400,
+    captureJpegQuality: 0.82
+  });
   if (route === "contact") {
     window.location.replace(siteLinks.COLLECTION_INQUIRY_URL);
     return;
@@ -1140,6 +1152,40 @@
     return legacy || "";
   }
 
+  function egressCacheKey(name, user) {
+    return `cardvector.egressSafe.${name}.${user && user.id || "anonymous"}`;
+  }
+
+  function readEgressCache(name, user) {
+    if (!egressSafeMode) return null;
+    try {
+      const payload = JSON.parse(localStorage.getItem(egressCacheKey(name, user)) || "null");
+      if (!payload || !payload.cachedAt || Date.now() - payload.cachedAt > egressSafeCacheMs) {
+        return null;
+      }
+      return payload;
+    } catch (_exc) {
+      return null;
+    }
+  }
+
+  function writeEgressCache(name, user, data) {
+    if (!egressSafeMode) return;
+    try {
+      localStorage.setItem(egressCacheKey(name, user), JSON.stringify({
+        cachedAt: Date.now(),
+        data
+      }));
+    } catch (_exc) {
+      // Cache pressure should not block the operator workflow.
+    }
+  }
+
+  function cacheFreshnessLabel(value) {
+    if (!value) return "Live Supabase read";
+    return `Cached ${safeDateLabel(value)}`;
+  }
+
   async function queryOptionalTable(client, table, select, applyQuery) {
     let query = client.from(table).select(select);
     if (typeof applyQuery === "function") {
@@ -1155,27 +1201,31 @@
     return { data: result.data || [], missing: false };
   }
 
-  async function loadOperatorRegistry(client, user) {
+  async function loadOperatorRegistry(client, user, options = {}) {
     await requireLocationAuthorization(client, user);
+    const cached = !options.forceRefresh ? readEgressCache("operatorRegistry", user) : null;
+    if (cached) {
+      return { ...cached.data, cache: { cached: true, cachedAt: cached.cachedAt } };
+    }
     const locationsResult = await queryOptionalTable(
       client,
       "cardvector_storage_locations",
-      "id,name,display_code,parent_location_id,location_type,status,capacity,stored_count,sync_state,legacy_id,legacy_etb_id,legacy_location_code,metadata,updated_at,archived_at",
-      (query) => query.is("archived_at", null).order("display_code", { ascending: true })
+      "id,name,display_code,parent_location_id,location_type,status,capacity,stored_count,sync_state,legacy_id,legacy_etb_id,legacy_location_code,updated_at,archived_at",
+      (query) => query.is("archived_at", null).order("display_code", { ascending: true }).limit(egressSafeLimits.registryLocations)
     );
     const sessionsResult = await queryOptionalTable(
       client,
       "cardvector_capture_sessions",
-      "id,legacy_session_id,legacy_etb_location_id,location_id,status,source_application,photo_count,processed_count,recognized_count,failed_count,sync_state,migration_metadata,created_at,updated_at,completed_at,archived_at",
-      (query) => query.is("archived_at", null).order("updated_at", { ascending: false }).limit(40)
+      "id,legacy_session_id,legacy_etb_location_id,location_id,status,source_application,photo_count,processed_count,recognized_count,failed_count,sync_state,created_at,updated_at,completed_at,archived_at",
+      (query) => query.is("archived_at", null).order("updated_at", { ascending: false }).limit(egressSafeLimits.registrySessions)
     );
     const batchesResult = await queryOptionalTable(
       client,
       "cardvector_location_carduploader_batches_v",
       "id,location_id,canonical_location_display_code,location_display_code,etb_display_code,carduploader_batch_id,carduploader_batch_url,carduploader_batch_name,batch_label,event_type,card_count,batch_date,updated_at",
-      (query) => query.order("batch_date", { ascending: false }).limit(80)
+      (query) => query.order("batch_date", { ascending: false }).limit(egressSafeLimits.registryBatches)
     );
-    return {
+    const data = {
       locations: locationsResult.data,
       sessions: sessionsResult.data,
       batches: batchesResult.data,
@@ -1183,8 +1233,11 @@
         locations: locationsResult.missing,
         sessions: sessionsResult.missing,
         batches: batchesResult.missing
-      }
+      },
+      cache: { cached: false, cachedAt: Date.now() }
     };
+    writeEgressCache("operatorRegistry", user, data);
+    return data;
   }
 
   function renderOperatorDashboard() {
@@ -2144,41 +2197,60 @@
     };
   }
 
-  async function loadOperatorListingSnapshots(client, user) {
+  async function loadOperatorListingSnapshots(client, user, options = {}) {
     await requireLocationAuthorization(client, user);
+    const cached = !options.forceRefresh ? readEgressCache("listingSnapshots", user) : null;
+    if (cached) {
+      return { ...cached.data, cache: { cached: true, cachedAt: cached.cachedAt } };
+    }
     const consolidated = await queryOptionalTable(
       client,
       "cardvector_marketplace_listing_reconciliation_v",
       "id,marketplace,marketplace_listing_id,sku,listing_title,current_price,currency,quantity_available,quantity_sold,listing_status,location_hint,batch_sequence_label,review_status,reason_codes,imported_at,updated_at",
-      (query) => query.order("imported_at", { ascending: false }).limit(5000)
+      (query) => query.order("imported_at", { ascending: false }).limit(egressSafeLimits.listingSnapshots)
     );
     if (!consolidated.missing) {
+      writeEgressCache("listingSnapshots", user, consolidated);
       return consolidated;
     }
-    return queryOptionalTable(
+    const fallback = await queryOptionalTable(
       client,
       "cardvector_ebay_listing_reconciliation_v",
       "id,marketplace,marketplace_listing_id,sku,listing_title,current_price,currency,quantity_available,quantity_sold,listing_status,location_hint,batch_sequence_label,review_status,reason_codes,imported_at,updated_at",
-      (query) => query.order("imported_at", { ascending: false }).limit(5000)
+      (query) => query.order("imported_at", { ascending: false }).limit(egressSafeLimits.listingSnapshots)
     );
+    writeEgressCache("listingSnapshots", user, fallback);
+    return fallback;
   }
 
-  async function loadOperatorAllocationLedger(client) {
-    return queryOptionalTable(
+  async function loadOperatorAllocationLedger(client, user, options = {}) {
+    const cached = !options.forceRefresh ? readEgressCache("allocationLedger", user) : null;
+    if (cached) {
+      return { ...cached.data, cache: { cached: true, cachedAt: cached.cachedAt } };
+    }
+    const result = await queryOptionalTable(
       client,
       "cardvector_marketplace_allocation_ledger_v",
       "sku,inventory_title,physical_quantity,available_quantity,ebay_listed_quantity,tcgplayer_listed_quantity,total_listed_quantity,listed_marketplaces,allocation_status,reason_codes,last_marketplace_import_at,last_inventory_import_at",
-      (query) => query.order("allocation_status", { ascending: true }).order("sku", { ascending: true }).limit(5000)
+      (query) => query.order("allocation_status", { ascending: true }).order("sku", { ascending: true }).limit(egressSafeLimits.allocationLedger)
     );
+    writeEgressCache("allocationLedger", user, result);
+    return result;
   }
 
-  async function loadListingBatchReferences(client) {
-    return queryOptionalTable(
+  async function loadListingBatchReferences(client, user, options = {}) {
+    const cached = !options.forceRefresh ? readEgressCache("listingBatchReferences", user) : null;
+    if (cached) {
+      return { ...cached.data, cache: { cached: true, cachedAt: cached.cachedAt } };
+    }
+    const result = await queryOptionalTable(
       client,
       "cardvector_carduploader_batch_events",
       "id,carduploader_batch_id,carduploader_batch_name,location_display_code,batch_label,card_count,batch_date,updated_at,archived_at",
-      (query) => query.is("archived_at", null).order("batch_date", { ascending: false }).limit(500)
+      (query) => query.is("archived_at", null).order("batch_date", { ascending: false }).limit(egressSafeLimits.listingBatchReferences)
     );
+    writeEgressCache("listingBatchReferences", user, result);
+    return result;
   }
 
   function listingReferenceLocation(record) {
@@ -2564,8 +2636,8 @@
   }
 
   async function renderOperatorListingReconciliationView(client, user, importedResult) {
-    const batchResult = await loadListingBatchReferences(client);
-    const ledgerResult = await loadOperatorAllocationLedger(client);
+    const batchResult = await loadListingBatchReferences(client, user);
+    const ledgerResult = await loadOperatorAllocationLedger(client, user);
     const state = {
       parsed: null,
       fileName: "",
@@ -2588,8 +2660,10 @@
               <p class="eyebrow">CSV snapshot workflow</p>
               <h1 id="listing-reconciliation-title">Existing Listing Review</h1>
               <p>Signed in as ${escapeHtml(authStateLabel(user))}. Import marketplace CSV snapshots, compare listed quantities by SKU, and keep live marketplace edits out of this v1 workflow.</p>
+              <p class="operator-note">Egress saver: metadata-only reads are capped and cached for five minutes. Use Refresh from Supabase after imports or when current data matters.</p>
             </div>
             <div class="operator-toolbar-actions">
+              <button class="button secondary" id="listing-refresh-supabase" type="button">Refresh from Supabase</button>
               <a class="button secondary" href="/operator">Operator Dashboard</a>
               <a class="button secondary" href="/operator/batches">Batch Workflow</a>
             </div>
@@ -2687,13 +2761,13 @@
             state.importResult = state.marketplace === "carduploader_inventory"
               ? await importInventoryQuantitySnapshot(client, user, state.parsed)
               : await importListingSnapshot(client, user, state.parsed);
-            const refreshed = await loadOperatorListingSnapshots(client, user);
+            const refreshed = await loadOperatorListingSnapshots(client, user, { forceRefresh: true });
             state.importedRows = refreshed.data || [];
             state.missingSnapshots = refreshed.missing;
-            const refreshedLedger = await loadOperatorAllocationLedger(client);
+            const refreshedLedger = await loadOperatorAllocationLedger(client, user, { forceRefresh: true });
             state.allocationRows = refreshedLedger.data || [];
             state.missingAllocationLedger = refreshedLedger.missing;
-            const refreshedBatches = await loadListingBatchReferences(client);
+            const refreshedBatches = await loadListingBatchReferences(client, user, { forceRefresh: true });
             state.batchReferences = refreshedBatches.data || [];
             state.missingBatchReferences = refreshedBatches.missing;
             state.error = "";
@@ -2702,6 +2776,28 @@
               ? "Import CardUploader inventory snapshot"
               : "Import marketplace listing snapshot";
             state.error = supabaseErrorDetails(importLabel, error, user);
+          }
+          await draw();
+        });
+      }
+      const refreshButton = document.getElementById("listing-refresh-supabase");
+      if (refreshButton) {
+        refreshButton.addEventListener("click", async () => {
+          refreshButton.disabled = true;
+          refreshButton.textContent = "Refreshing...";
+          try {
+            const refreshed = await loadOperatorListingSnapshots(client, user, { forceRefresh: true });
+            state.importedRows = refreshed.data || [];
+            state.missingSnapshots = refreshed.missing;
+            const refreshedLedger = await loadOperatorAllocationLedger(client, user, { forceRefresh: true });
+            state.allocationRows = refreshedLedger.data || [];
+            state.missingAllocationLedger = refreshedLedger.missing;
+            const refreshedBatches = await loadListingBatchReferences(client, user, { forceRefresh: true });
+            state.batchReferences = refreshedBatches.data || [];
+            state.missingBatchReferences = refreshedBatches.missing;
+            state.error = "";
+          } catch (error) {
+            state.error = supabaseErrorDetails("Refresh listing reconciliation", error, user);
           }
           await draw();
         });
@@ -2756,7 +2852,7 @@
     });
   }
 
-  function renderOperatorRegistryView(registry, user) {
+  function renderOperatorRegistryView(registry, user, onRefresh) {
     const etbs = registry.locations.filter((location) => location.location_type === "etb");
     const slots = registry.locations.filter((location) => location.location_type === "slot");
     const slotsByParent = new Map();
@@ -2795,8 +2891,10 @@
             <p class="eyebrow">Supabase-backed registry</p>
             <h1 id="registry-title">ETB / Location Registry</h1>
             <p>Signed in as ${escapeHtml(authStateLabel(user))}. This view reads the shared canonical registry used by CardVector.app and CardVector OS.</p>
+            <p class="operator-note">Egress saver: registry data is metadata-only, capped, and cached for five minutes. Source: ${escapeHtml(cacheFreshnessLabel(registry.cache && registry.cache.cached ? registry.cache.cachedAt : ""))}.</p>
           </div>
           <div class="operator-toolbar-actions">
+            <button class="button secondary" id="registry-refresh-supabase" type="button">Refresh from Supabase</button>
             <a class="button secondary" href="/operator">Operator Dashboard</a>
             <a class="button primary" href="/#mobile-capture">Start Mobile Capture</a>
           </div>
@@ -2816,6 +2914,14 @@
           </aside>
         </div>
       </section>`;
+    const refreshButton = document.getElementById("registry-refresh-supabase");
+    if (refreshButton && typeof onRefresh === "function") {
+      refreshButton.addEventListener("click", async () => {
+        refreshButton.disabled = true;
+        refreshButton.textContent = "Refreshing...";
+        await onRefresh();
+      });
+    }
     document.title = "ETB Location Registry | CardVector";
   }
 
@@ -2852,8 +2958,12 @@
           status.textContent = "Loading synchronized registry...";
         }
         try {
+          const refreshRegistryFromSupabase = async () => {
+            const refreshed = await loadOperatorRegistry(client, user, { forceRefresh: true });
+            renderOperatorRegistryView(refreshed, user, refreshRegistryFromSupabase);
+          };
           const registry = await loadOperatorRegistry(client, user);
-          renderOperatorRegistryView(registry, user);
+          renderOperatorRegistryView(registry, user, refreshRegistryFromSupabase);
         } catch (error) {
           if (status) {
             status.innerHTML = `<span class="entry-message error">${escapeHtml(error.message || error)}</span>`;
@@ -3954,7 +4064,7 @@
       preview.width,
       preview.height
     );
-    const output = window.CardVectorCaptureMath.calculateCaptureOutputSize(crop, 1800);
+    const output = window.CardVectorCaptureMath.calculateCaptureOutputSize(crop, egressSafeLimits.captureMaxEdge);
     canvas.width = output.width;
     canvas.height = output.height;
     const context = canvas.getContext("2d");
@@ -3978,7 +4088,7 @@
           return;
         }
         resolve(blob);
-      }, "image/jpeg", 0.9);
+      }, "image/jpeg", egressSafeLimits.captureJpegQuality);
     });
   }
 
