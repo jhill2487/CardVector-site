@@ -1258,8 +1258,8 @@
           </a>
           <a class="operator-card" href="/operator/batches">
             <span>Batch</span>
-            <strong>Batch Workflow</strong>
-            <p>Review CardUploader batch references, linked ETB locations, and capture-session handoff status.</p>
+            <strong>Batch References</strong>
+            <p>Review CardUploader batch-history names and linked ETB locations.</p>
           </a>
           <article class="operator-card is-disabled" aria-label="Price review coming next">
             <span>Next</span>
@@ -1407,6 +1407,18 @@
     return "";
   }
 
+  function safeCardUploaderBatchHistoryUrl(value) {
+    const href = safeCardUploaderUrl(value);
+    if (/^https:\/\/(www\.)?carduploader\.com\/dashboard\/history\//i.test(href)) {
+      return href;
+    }
+    return "";
+  }
+
+  function batchHasCardUploaderHistoryEvidence(batch) {
+    return Boolean(safeCardUploaderBatchHistoryUrl(batch && batch.carduploader_batch_url));
+  }
+
   function batchHasSlotLocation(batch) {
     const location = batchLocationLabel(batch);
     return /^ETB-\d{3}-[A-Z]$/i.test(location);
@@ -1472,7 +1484,7 @@
   }
 
   function renderBatchPill(batch) {
-    const batchUrl = safeCardUploaderUrl(batch.carduploader_batch_url);
+    const batchUrl = safeCardUploaderBatchHistoryUrl(batch.carduploader_batch_url);
     const date = shortDateLabel(batch.batch_date || batch.created_at || batch.updated_at);
     return `
       <li class="batch-pill">
@@ -1529,10 +1541,10 @@
 
   function renderBatchReferenceRows(batches) {
     if (!batches.length) {
-      return '<p class="operator-empty">No CardUploader batch references are available yet.</p>';
+      return '<p class="operator-empty">No CardUploader batch-history references are available yet.</p>';
     }
     return sortedBatchReferences(batches).slice(0, 80).map((batch) => {
-      const batchUrl = safeCardUploaderUrl(batch.carduploader_batch_url);
+      const batchUrl = safeCardUploaderBatchHistoryUrl(batch.carduploader_batch_url);
       return `
         <article class="operator-list-row batch-reference-row">
           <div>
@@ -1551,20 +1563,17 @@
   }
 
   function renderOperatorBatchWorkflowView(registry, user) {
-    const linkedLocations = new Set(registry.batches.filter(batchHasSlotLocation).map(batchLocationLabel));
-    const reviewBatches = registry.batches.filter((batch) => !batchHasSlotLocation(batch));
-    const referencedCards = registry.batches.reduce((total, batch) => total + Number(batch.card_count || 0), 0);
-    const pendingSessions = registry.sessions.filter((session) => {
-      const status = String(session.status || "").toLowerCase();
-      return status.includes("staged") || status.includes("pending") || status.includes("processing");
-    });
+    const historyBatches = registry.batches.filter(batchHasCardUploaderHistoryEvidence);
+    const linkedLocations = new Set(historyBatches.filter(batchHasSlotLocation).map(batchLocationLabel));
+    const referencedCards = historyBatches.reduce((total, batch) => total + Number(batch.card_count || 0), 0);
+    const latestTimestamp = historyBatches.reduce((latest, batch) => Math.max(latest, batchSortTimestamp(batch)), 0);
     main.innerHTML = `
       <section class="operator-shell wrap batch-shell" aria-labelledby="batch-workflow-title">
         <div class="operator-toolbar">
           <div>
-            <p class="eyebrow">Supabase-backed workflow</p>
-            <h1 id="batch-workflow-title">Batch Workflow</h1>
-            <p>Signed in as ${escapeHtml(authStateLabel(user))}. Review CardUploader batch references and capture-session handoff state from the shared registry.</p>
+            <p class="eyebrow">CardUploader history</p>
+            <h1 id="batch-workflow-title">Batch References</h1>
+            <p>Signed in as ${escapeHtml(authStateLabel(user))}. This page shows only batches with CardUploader batch-history links.</p>
           </div>
           <div class="operator-toolbar-actions">
             <a class="button secondary" href="/operator">Operator Dashboard</a>
@@ -1573,33 +1582,26 @@
         </div>
         ${registryWarningHtml(registry)}
         <div class="registry-summary batch-summary">
-          <div><span>Batch References</span><strong>${registry.batches.length}</strong></div>
+          <div><span>CardUploader Batches</span><strong>${historyBatches.length}</strong></div>
           <div><span>Linked Slots</span><strong>${linkedLocations.size}</strong></div>
           <div><span>Referenced Cards</span><strong>${referencedCards}</strong></div>
-          <div><span>Review Needed</span><strong>${reviewBatches.length}</strong></div>
-          <div><span>Pending Captures</span><strong>${pendingSessions.length}</strong></div>
+          <div><span>Latest Seen</span><strong>${escapeHtml(shortDateLabel(latestTimestamp) || "None")}</strong></div>
         </div>
         <section class="operator-side-panel operator-main-panel batch-workboard-title" aria-labelledby="batch-workboard-title">
-          <h2 id="batch-workboard-title">Location Batch Workboard</h2>
-          <p class="operator-note">Grouped by canonical ETB slot. Refill labels such as ETB-001-A.2 identify later CardUploader batches for the same physical slot without changing CardUploader inventory truth.</p>
-          ${renderBatchLocationWorkboard(registry.batches)}
+          <h2 id="batch-workboard-title">Batches by ETB Slot</h2>
+          <p class="operator-note">Grouped from CardUploader history records only. Refill labels such as ETB-001-A.2 identify later CardUploader batches for the same physical slot without changing CardUploader inventory truth.</p>
+          ${renderBatchLocationWorkboard(historyBatches)}
         </section>
         <div class="registry-layout">
           <div class="registry-list">
             <section class="operator-side-panel operator-main-panel" aria-labelledby="batch-reference-title">
-              <h2 id="batch-reference-title">All CardUploader Batch References</h2>
-              ${renderBatchReferenceRows(registry.batches)}
+              <h2 id="batch-reference-title">CardUploader Batch History</h2>
+              ${renderBatchReferenceRows(historyBatches)}
             </section>
           </div>
-          <aside class="operator-side-panel" aria-labelledby="batch-capture-title">
-            <h2 id="batch-capture-title">Capture Handoff</h2>
-            ${renderRecentSessions(registry.sessions)}
-            <h2 class="batch-review-heading">Needs Batch Review</h2>
-            ${renderBatchReviewRows(registry.batches)}
-          </aside>
         </div>
       </section>`;
-    document.title = "Batch Workflow | CardVector";
+    document.title = "Batch References | CardVector";
   }
 
   const ebayListingColumns = Object.freeze({
