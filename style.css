@@ -1810,6 +1810,46 @@ h3 {
   width: 100%;
 }
 
+.repricing-live-steps {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.repricing-live-steps article {
+  background: #f8fbff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 1rem;
+}
+
+.repricing-live-steps span {
+  align-items: center;
+  background: var(--blue-700);
+  border-radius: 999px;
+  color: white;
+  display: inline-flex;
+  font-size: .86rem;
+  font-weight: 900;
+  height: 1.8rem;
+  justify-content: center;
+  margin-bottom: 0.7rem;
+  width: 1.8rem;
+}
+
+.repricing-live-steps strong {
+  display: block;
+  margin-bottom: 0.4rem;
+}
+
+.repricing-safeguard-list {
+  color: var(--muted);
+  display: grid;
+  gap: 0.5rem;
+  margin: 1rem 0 0;
+  padding-left: 1.2rem;
+}
+
 .entry-ready {
   margin: 2px 0 0;
   color: var(--blue-700);
@@ -2329,6 +2369,7 @@ h3 {
   .registry-metrics,
   .registry-slot-grid,
   .batch-location-grid,
+  .repricing-live-steps,
   .repricing-summary {
     grid-template-columns: 1fr;
   }
