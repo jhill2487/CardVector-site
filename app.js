@@ -1261,15 +1261,10 @@
             <strong>Batch References</strong>
             <p>Review CardUploader batch-history names and linked ETB locations.</p>
           </a>
-          <article class="operator-card is-disabled" aria-label="Price review coming next">
-            <span>Next</span>
-            <strong>Price Review</strong>
-            <p>Marketplace Intelligence recommendations and review queues will live in this workspace.</p>
-          </article>
-          <a class="operator-card" href="/operator/repricing" aria-label="Open repricing approval review">
+          <a class="operator-card" href="/operator/repricing" aria-label="Open repricing review">
             <span>Pricing</span>
-            <strong>Repricing Approvals</strong>
-            <p>Review generated CardUploader price update plans, approve safe rows, and export the reviewed plan without live marketplace writes.</p>
+            <strong>Repricing Review</strong>
+            <p>Review CardUploader automatic-inventory price recommendations, approve safe rows, and export the reviewed plan without live marketplace writes.</p>
           </a>
         </div>
       </section>`;
@@ -3002,7 +2997,7 @@
           <div class="operator-toolbar">
             <div>
               <p class="eyebrow">CardVector operator</p>
-              <h1 id="repricing-review-title">Repricing Approvals</h1>
+              <h1 id="repricing-review-title">Repricing Review</h1>
               <p>Import a generated CardUploader price update plan, approve safe rows, and export the reviewed plan for the next controlled update step.</p>
               <p class="operator-note">Review only. This page does not sign in to CardUploader, revise eBay listings, update TCGplayer, or change live inventory.</p>
             </div>
@@ -3106,7 +3101,7 @@
     }
 
     await draw();
-    document.title = "Repricing Approvals | CardVector";
+    document.title = "Repricing Review | CardVector";
   }
 
   async function renderOperatorListingReconciliationView(client, user, importedResult) {
