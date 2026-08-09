@@ -1248,15 +1248,10 @@
         <div class="operator-hero">
           <p class="eyebrow">CardVector workspace</p>
           <h1 id="operator-title">Operator Dashboard</h1>
-          <p>Use CardVector.app as the primary operating surface for capture, ETB locations, batch work, price review, and existing listing review.</p>
+          <p>Use CardVector.app as the primary operating surface for capture, batch work, and controlled repricing review.</p>
         </div>
         <div class="operator-grid" aria-label="Operator workflows">
-          <a class="operator-card operator-card-primary" href="/operator/registry">
-            <span>Live Registry</span>
-            <strong>ETB / Location Registry</strong>
-            <p>Review synchronized Supabase ETBs, slots, mobile captures, and CardUploader batch references.</p>
-          </a>
-          <a class="operator-card" href="/#mobile-capture">
+          <a class="operator-card operator-card-primary" href="/#mobile-capture">
             <span>Capture</span>
             <strong>Mobile Capture</strong>
             <p>Start card capture from a workstation, tablet, or phone without scanning a QR code.</p>
@@ -1271,11 +1266,6 @@
             <strong>Price Review</strong>
             <p>Marketplace Intelligence recommendations and review queues will live in this workspace.</p>
           </article>
-          <a class="operator-card" href="/operator/listings" aria-label="Open existing listing review">
-            <span>Listings</span>
-            <strong>Existing Listing Review</strong>
-            <p>Import eBay active-listing CSV snapshots, flag duplicate or missing SKUs, and stage reconciliation review.</p>
-          </a>
           <a class="operator-card" href="/operator/repricing" aria-label="Open repricing approval review">
             <span>Pricing</span>
             <strong>Repricing Approvals</strong>
@@ -1578,7 +1568,6 @@
           </div>
           <div class="operator-toolbar-actions">
             <a class="button secondary" href="/operator">Operator Dashboard</a>
-            <a class="button secondary" href="/operator/registry">ETB Registry</a>
             <a class="button primary" href="/#mobile-capture">Start Mobile Capture</a>
           </div>
         </div>
@@ -3017,7 +3006,6 @@
             </div>
             <div class="operator-toolbar-actions">
               <a class="button secondary" href="/operator">Operator Dashboard</a>
-              <a class="button secondary" href="/operator/listings">Listing Ledger</a>
             </div>
           </div>
           <div class="operator-warning" role="status">Live apply is intentionally disabled. Use this page to approve and export a plan before browser-assisted CardUploader changes are built.</div>
