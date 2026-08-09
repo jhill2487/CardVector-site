@@ -1690,6 +1690,126 @@ h3 {
   border-color: rgba(37, 99, 235, 0.22);
 }
 
+.repricing-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.repricing-command-bar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 10px 0 18px;
+}
+
+.repricing-filters,
+.repricing-command-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.repricing-filter {
+  min-height: 42px;
+  padding: 0 14px;
+  color: var(--blue-950);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font: inherit;
+  font-size: .86rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.repricing-filter.active,
+.repricing-filter:hover,
+.repricing-filter:focus-visible {
+  color: white;
+  background: var(--blue-700);
+  border-color: var(--blue-700);
+}
+
+.repricing-list {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 1rem;
+}
+
+.repricing-row {
+  grid-template-columns: minmax(0, 1fr) minmax(130px, 0.22fr) minmax(150px, 0.2fr);
+  align-items: start;
+}
+
+.repricing-row.approved {
+  border-color: rgba(37, 99, 235, 0.28);
+  background: rgba(239, 246, 255, 0.9);
+}
+
+.repricing-row.blocked {
+  border-color: rgba(185, 28, 28, 0.35);
+  background: rgba(254, 242, 242, 0.86);
+}
+
+.repricing-row.skipped {
+  opacity: .68;
+}
+
+.repricing-main {
+  display: grid;
+  gap: 4px;
+}
+
+.repricing-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.repricing-chip {
+  padding: 4px 7px;
+  color: var(--blue-950);
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: .68rem;
+  font-weight: 900;
+  letter-spacing: .04em;
+}
+
+.repricing-chip.warning {
+  color: #7a4a00;
+  background: #fff7e6;
+  border-color: #f2d195;
+}
+
+.repricing-price-stack,
+.repricing-actions {
+  display: grid;
+  gap: 6px;
+}
+
+.repricing-price-stack {
+  text-align: right;
+}
+
+.repricing-price-stack .positive {
+  color: #146c43;
+}
+
+.repricing-price-stack .negative {
+  color: #b42318;
+}
+
+.repricing-actions {
+  justify-items: end;
+}
+
+.repricing-actions .button {
+  width: 100%;
+}
+
 .entry-ready {
   margin: 2px 0 0;
   color: var(--blue-700);
@@ -2208,12 +2328,23 @@ h3 {
   .registry-summary,
   .registry-metrics,
   .registry-slot-grid,
-  .batch-location-grid {
+  .batch-location-grid,
+  .repricing-summary {
     grid-template-columns: 1fr;
   }
 
-  .listing-reconciliation-row > div:last-child {
+  .listing-reconciliation-row > div:last-child,
+  .repricing-price-stack {
     text-align: left;
+  }
+
+  .repricing-command-bar {
+    display: grid;
+  }
+
+  .repricing-command-actions .button,
+  .repricing-filter {
+    width: 100%;
   }
 
   .operator-card,
@@ -2223,8 +2354,13 @@ h3 {
   }
 
   .registry-etb-card header,
-  .operator-list-row {
+  .operator-list-row,
+  .repricing-row {
     grid-template-columns: 1fr;
+  }
+
+  .repricing-actions {
+    justify-items: stretch;
   }
 
   .registry-etb-card header {

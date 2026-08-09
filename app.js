@@ -133,7 +133,9 @@
     "batch-workflow",
     "listings",
     "listing-reconciliation",
-    "existing-listing-review"
+    "existing-listing-review",
+    "repricing",
+    "price-review"
   ]);
   function currentHashRoute() {
     return window.location.hash.replace(/^#\/?/, "").toLowerCase();
@@ -1274,6 +1276,11 @@
             <strong>Existing Listing Review</strong>
             <p>Import eBay active-listing CSV snapshots, flag duplicate or missing SKUs, and stage reconciliation review.</p>
           </a>
+          <a class="operator-card" href="/operator/repricing" aria-label="Open repricing approval review">
+            <span>Pricing</span>
+            <strong>Repricing Approvals</strong>
+            <p>Review generated CardUploader price update plans, approve safe rows, and export the reviewed plan without live marketplace writes.</p>
+          </a>
         </div>
       </section>`;
     document.title = "Operator Dashboard | CardVector";
@@ -1994,6 +2001,355 @@
     return Number.isFinite(number) ? `$${number.toFixed(2)}` : String(value);
   }
 
+  const repricingReviewStorageKey = "cardvector.repricingPlan.v1";
+  const repricingPlanColumns = Object.freeze({
+    inventory_id: ["inventory_id", "Inventory ID", "CardUploader ID", "external_inventory_id"],
+    row_number: ["row_number", "Row", "Row Number"],
+    title: ["title", "Title", "listing_title", "inventory_title", "Product Name"],
+    user_sku: ["user_sku", "User SKU", "SKU", "Custom SKU"],
+    catalog_sku: ["catalog_sku", "Catalog SKU", "CardUploader Catalog SKU", "Managed Inventory SKU"],
+    marketplace: ["marketplace", "Marketplace"],
+    marketplace_listing_id: ["marketplace_listing_id", "Marketplace Listing ID", "Item number", "Item ID"],
+    current_price: ["current_price", "Current Price", "Current price", "current_listing_price"],
+    recommended_price: ["recommended_price", "Recommended Price", "Recommended listing price", "recommended_listing_price"],
+    price_delta: ["price_delta", "Price Delta", "Delta"],
+    percent_delta: ["percent_delta", "Percent Delta", "Percent"],
+    quantity: ["quantity", "Quantity", "Qty"],
+    confidence: ["confidence", "Confidence", "pricing_confidence"],
+    status: ["status", "Status"],
+    review_decision: ["review_decision", "Review Decision", "Recommendation"],
+    review_priority: ["review_priority", "Review Priority", "Priority"],
+    reason_codes: ["reason_codes", "Reason Codes", "Reasons"],
+    notes: ["notes", "Notes", "Warnings"],
+    search_query: ["search_query", "Search Query", "eBay Sold Search"],
+    listing_reference: ["listing_reference", "Listing Reference", "Listing URL"],
+    condition: ["condition", "Condition"],
+    set_name: ["set_name", "Set", "Set Name"],
+    card_number: ["card_number", "Card Number", "Number"],
+    variant: ["variant", "Variant"],
+    finish: ["finish", "Finish"],
+    apply_ready: ["apply_ready", "Apply Ready"]
+  });
+
+  function parseListValue(value) {
+    if (Array.isArray(value)) {
+      return value.map((item) => String(item || "").trim()).filter(Boolean);
+    }
+    const text = String(value || "").trim();
+    if (!text) {
+      return [];
+    }
+    try {
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed)) {
+        return parsed.map((item) => String(item || "").trim()).filter(Boolean);
+      }
+    } catch (_error) {
+      // Fall through to tolerant CSV/list parsing.
+    }
+    return text
+      .replace(/^\[|\]$/g, "")
+      .split(/[,;|]/)
+      .map((item) => item.replace(/^['"]|['"]$/g, "").trim())
+      .filter(Boolean);
+  }
+
+  function boolish(value) {
+    if (value === true || value === false) {
+      return value;
+    }
+    const text = String(value || "").trim().toLowerCase();
+    return ["1", "true", "yes", "y"].includes(text);
+  }
+
+  function repricingIdentity(record, index) {
+    return [
+      record.inventory_id,
+      record.marketplace,
+      record.marketplace_listing_id,
+      record.catalog_sku,
+      record.user_sku,
+      record.row_number || index + 1
+    ].map(normalizeSnapshotIdentityPart).filter(Boolean).join(":") || `repricing:${index + 1}`;
+  }
+
+  function normalizeRepricingStatus(value) {
+    const status = String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+    if (["approved", "blocked", "skipped", "apply_ready", "dry_run"].includes(status)) {
+      return status;
+    }
+    if (["manual_review", "needs_review", "review"].includes(status)) {
+      return "dry_run";
+    }
+    return "dry_run";
+  }
+
+  function normalizeRepricingRecord(record, index, fileMeta = {}) {
+    const raw = record || {};
+    const currentPrice = parseMoney(raw.current_price ?? raw.currentPrice ?? raw.current_listing_price);
+    const recommendedPrice = parseMoney(raw.recommended_price ?? raw.recommendedPrice ?? raw.recommended_listing_price);
+    const explicitDelta = parseMoney(raw.price_delta ?? raw.priceDelta);
+    const delta = explicitDelta !== null
+      ? explicitDelta
+      : currentPrice !== null && recommendedPrice !== null
+        ? Math.round((recommendedPrice - currentPrice) * 100) / 100
+        : null;
+    const notes = parseListValue(raw.notes);
+    const reasonCodes = parseListValue(raw.reason_codes ?? raw.reasonCodes);
+    const normalized = {
+      id: raw.id || "",
+      inventory_id: raw.inventory_id || raw.inventoryId || raw.external_inventory_id || "",
+      row_number: raw.row_number || raw.rowNumber || index + 1,
+      title: raw.title || raw.listing_title || raw.inventory_title || raw.product_name || "",
+      user_sku: normalizeSku(raw.user_sku || raw.userSku || raw.sku),
+      catalog_sku: normalizeSku(raw.catalog_sku || raw.catalogSku),
+      marketplace: String(raw.marketplace || "carduploader").toLowerCase(),
+      marketplace_listing_id: raw.marketplace_listing_id || raw.marketplaceListingId || "",
+      current_price: currentPrice,
+      recommended_price: recommendedPrice,
+      price_delta: delta,
+      percent_delta: raw.percent_delta || raw.percentDelta || "",
+      quantity: parseWholeNumber(raw.quantity) ?? 1,
+      confidence: raw.confidence ?? raw.pricing_confidence ?? "",
+      status: normalizeRepricingStatus(raw.status),
+      review_decision: raw.review_decision || raw.reviewDecision || "",
+      review_priority: raw.review_priority || raw.reviewPriority || "",
+      reason_codes: reasonCodes,
+      notes,
+      search_query: raw.search_query || raw.searchQuery || raw.title || raw.listing_title || "",
+      listing_reference: raw.listing_reference || raw.listingReference || raw.listing_url || "",
+      condition: raw.condition || "",
+      set_name: raw.set_name || raw.setName || "",
+      card_number: raw.card_number || raw.cardNumber || "",
+      variant: raw.variant || "",
+      finish: raw.finish || "",
+      apply_ready: boolish(raw.apply_ready || raw.applyReady),
+      source_file_name: raw.source_file_name || fileMeta.name || "",
+      raw_row: raw
+    };
+    return {
+      ...normalized,
+      id: normalized.id || repricingIdentity(normalized, index)
+    };
+  }
+
+  function parseRepricingPlanJson(text, fileMeta = {}) {
+    const payload = JSON.parse(text);
+    const records = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload.records)
+        ? payload.records
+        : Array.isArray(payload.updates)
+          ? payload.updates
+          : Array.isArray(payload.items)
+            ? payload.items
+            : [];
+    if (!records.length) {
+      throw new Error("Repricing JSON must contain an array or a records, updates, or items array.");
+    }
+    return records.map((record, index) => normalizeRepricingRecord(record, index, fileMeta));
+  }
+
+  function parseRepricingPlanCsv(text, fileMeta = {}) {
+    const parsed = parseCsvRows(text);
+    const mapping = columnMapping(parsed.fieldnames, repricingPlanColumns);
+    return parsed.rows.map((row, index) => {
+      const record = Object.fromEntries(Object.keys(repricingPlanColumns).map((key) => [key, csvCell(row, mapping, key)]));
+      return normalizeRepricingRecord({ ...record, raw_row: row }, index, fileMeta);
+    });
+  }
+
+  function parseRepricingPlanFile(text, fileMeta = {}) {
+    const trimmed = String(text || "").trim();
+    const rows = trimmed.startsWith("{") || trimmed.startsWith("[")
+      ? parseRepricingPlanJson(trimmed, fileMeta)
+      : parseRepricingPlanCsv(trimmed, fileMeta);
+    return rows.filter((row) => row.inventory_id || row.title || row.user_sku || row.catalog_sku);
+  }
+
+  function canApproveRepricingRow(row) {
+    return row
+      && row.status !== "blocked"
+      && row.status !== "skipped"
+      && row.current_price !== null
+      && row.recommended_price !== null
+      && Number(row.quantity || 0) > 0
+      && !row.notes.length;
+  }
+
+  function repricingDecisionLabel(row) {
+    if (!row) {
+      return "Needs review";
+    }
+    if (row.status === "approved") {
+      return "Approved";
+    }
+    if (row.status === "skipped") {
+      return "Skipped";
+    }
+    if (row.status === "blocked") {
+      return "Blocked";
+    }
+    if (row.price_delta > 0) {
+      return "Increase price";
+    }
+    if (row.price_delta < 0) {
+      return "Decrease price";
+    }
+    return "No change";
+  }
+
+  function summarizeRepricingRows(rows) {
+    const values = Array.isArray(rows) ? rows : [];
+    const totalDelta = values.reduce((total, row) => total + Number(row.price_delta || 0), 0);
+    return {
+      total: values.length,
+      approved: values.filter((row) => row.status === "approved").length,
+      safe: values.filter(canApproveRepricingRow).length,
+      blocked: values.filter((row) => row.status === "blocked").length,
+      needsReview: values.filter((row) => row.status === "dry_run" && !canApproveRepricingRow(row)).length,
+      increases: values.filter((row) => Number(row.price_delta || 0) > 0).length,
+      decreases: values.filter((row) => Number(row.price_delta || 0) < 0).length,
+      totalDelta: Math.round(totalDelta * 100) / 100
+    };
+  }
+
+  function filterRepricingRows(rows, filter) {
+    const values = Array.isArray(rows) ? rows : [];
+    if (filter === "approved") {
+      return values.filter((row) => row.status === "approved");
+    }
+    if (filter === "safe") {
+      return values.filter(canApproveRepricingRow);
+    }
+    if (filter === "needs_review") {
+      return values.filter((row) => row.status === "dry_run" && !canApproveRepricingRow(row));
+    }
+    if (filter === "blocked") {
+      return values.filter((row) => row.status === "blocked");
+    }
+    if (filter === "increase") {
+      return values.filter((row) => Number(row.price_delta || 0) > 0);
+    }
+    if (filter === "decrease") {
+      return values.filter((row) => Number(row.price_delta || 0) < 0);
+    }
+    return values;
+  }
+
+  function ebaySoldSearchUrl(row) {
+    const query = row && (row.search_query || [row.title, row.set_name, row.card_number, row.condition].filter(Boolean).join(" "));
+    return `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(query || "pokemon card")}&LH_Sold=1&LH_Complete=1`;
+  }
+
+  function reviewedRepricingExport(rows) {
+    return {
+      exported_at: new Date().toISOString(),
+      source: "cardvector_operator_repricing_review",
+      live_apply_permitted: false,
+      rows: rows.map((row) => ({
+        ...row,
+        approved_for_future_apply: row.status === "approved"
+      }))
+    };
+  }
+
+  function downloadTextFile(filename, text, contentType = "application/json") {
+    const blob = new Blob([text], { type: contentType });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function renderRepricingSummary(rows) {
+    const summary = summarizeRepricingRows(rows);
+    return `
+      <div class="registry-summary repricing-summary">
+        <div><span>Candidates</span><strong>${summary.total}</strong></div>
+        <div><span>Auto-safe</span><strong>${summary.safe}</strong></div>
+        <div><span>Approved</span><strong>${summary.approved}</strong></div>
+        <div><span>Blocked</span><strong>${summary.blocked}</strong></div>
+        <div><span>Needs Review</span><strong>${summary.needsReview}</strong></div>
+        <div><span>Increases</span><strong>${summary.increases}</strong></div>
+        <div><span>Decreases</span><strong>${summary.decreases}</strong></div>
+        <div><span>Net Delta</span><strong>${escapeHtml(formatCurrency(summary.totalDelta))}</strong></div>
+      </div>`;
+  }
+
+  function renderRepricingFilters(activeFilter) {
+    const filters = [
+      ["all", "All"],
+      ["safe", "Auto-safe"],
+      ["approved", "Approved"],
+      ["needs_review", "Needs review"],
+      ["blocked", "Blocked"],
+      ["increase", "Increases"],
+      ["decrease", "Decreases"]
+    ];
+    return `<div class="repricing-filters" aria-label="Repricing filters">${filters.map(([value, label]) => `
+      <button class="repricing-filter${activeFilter === value ? " active" : ""}" type="button" data-repricing-filter="${escapeHtml(value)}">${escapeHtml(label)}</button>
+    `).join("")}</div>`;
+  }
+
+  function renderReasonChips(row) {
+    const values = [...(row.reason_codes || []), ...(row.notes || [])];
+    if (!values.length) {
+      return '<span class="repricing-chip">NO_NOTES</span>';
+    }
+    return values.slice(0, 6).map((value) => `<span class="repricing-chip${(row.notes || []).includes(value) ? " warning" : ""}">${escapeHtml(value)}</span>`).join("");
+  }
+
+  function renderRepricingRows(rows, filter) {
+    const filtered = filterRepricingRows(rows, filter);
+    if (!filtered.length) {
+      return '<p class="operator-empty">No repricing rows match this filter.</p>';
+    }
+    return `<div class="repricing-list">${filtered.map((row) => `
+      <article class="operator-list-row repricing-row ${escapeHtml(row.status)}">
+        <div class="repricing-main">
+          <strong>${escapeHtml(row.title || row.inventory_id || "Untitled price candidate")}</strong>
+          <span>${escapeHtml(row.inventory_id || "No CardUploader ID")} &middot; ${escapeHtml(row.catalog_sku || row.user_sku || "No SKU")} &middot; ${escapeHtml(row.condition || "No condition")}</span>
+          <span>${escapeHtml([row.set_name, row.card_number, row.variant, row.finish].filter(Boolean).join(" · "))}</span>
+          <div class="repricing-chips">${renderReasonChips(row)}</div>
+        </div>
+        <div class="repricing-price-stack">
+          <span>Current</span>
+          <strong>${escapeHtml(formatCurrency(row.current_price))}</strong>
+          <span>Recommended</span>
+          <strong>${escapeHtml(formatCurrency(row.recommended_price))}</strong>
+          <span class="${Number(row.price_delta || 0) < 0 ? "negative" : "positive"}">${escapeHtml(formatCurrency(row.price_delta))}</span>
+        </div>
+        <div class="repricing-actions">
+          <span>${escapeHtml(repricingDecisionLabel(row))}</span>
+          <button class="button secondary" type="button" data-repricing-approve="${escapeHtml(row.id)}"${canApproveRepricingRow(row) || row.status === "approved" ? "" : " disabled"}>${row.status === "approved" ? "Approved" : "Approve"}</button>
+          <button class="button secondary" type="button" data-repricing-skip="${escapeHtml(row.id)}">Skip</button>
+          <a class="operator-inline-link" href="${escapeHtml(ebaySoldSearchUrl(row))}" target="_blank" rel="noopener noreferrer">Open sold search</a>
+        </div>
+      </article>
+    `).join("")}</div>`;
+  }
+
+  function readStoredRepricingPlan() {
+    try {
+      const payload = JSON.parse(localStorage.getItem(repricingReviewStorageKey) || "null");
+      return Array.isArray(payload && payload.rows) ? payload.rows : [];
+    } catch (_error) {
+      return [];
+    }
+  }
+
+  function writeStoredRepricingPlan(rows) {
+    localStorage.setItem(repricingReviewStorageKey, JSON.stringify({
+      saved_at: new Date().toISOString(),
+      rows
+    }));
+  }
+
   function listingSnapshotPayload(record, user, importBatchId) {
     return {
       owner_user_id: user.id,
@@ -2633,6 +2989,134 @@
           <span>${escapeHtml(compactStatusLabel(row.review_status))}</span>
         </div>
       </article>`).join("");
+  }
+
+  async function renderOperatorRepricingReview() {
+    const state = {
+      rows: readStoredRepricingPlan(),
+      fileName: "",
+      filter: "all",
+      error: "",
+      message: ""
+    };
+
+    function updateRow(id, patch) {
+      state.rows = state.rows.map((row) => row.id === id ? { ...row, ...patch } : row);
+      writeStoredRepricingPlan(state.rows);
+    }
+
+    async function draw() {
+      main.innerHTML = `
+        <section class="operator-shell wrap listing-shell repricing-shell" aria-labelledby="repricing-review-title">
+          <div class="operator-toolbar">
+            <div>
+              <p class="eyebrow">CardVector operator</p>
+              <h1 id="repricing-review-title">Repricing Approvals</h1>
+              <p>Import a generated CardUploader price update plan, approve safe rows, and export the reviewed plan for the next controlled update step.</p>
+              <p class="operator-note">Review only. This page does not sign in to CardUploader, revise eBay listings, update TCGplayer, or change live inventory.</p>
+            </div>
+            <div class="operator-toolbar-actions">
+              <a class="button secondary" href="/operator">Operator Dashboard</a>
+              <a class="button secondary" href="/operator/listings">Listing Ledger</a>
+            </div>
+          </div>
+          <div class="operator-warning" role="status">Live apply is intentionally disabled. Use this page to approve and export a plan before browser-assisted CardUploader changes are built.</div>
+          <div class="operator-side-panel operator-main-panel listing-import-panel">
+            <h2>Import Repricing Plan</h2>
+            <p class="operator-note">Accepts the JSON approval plan generated by CardVector or a CSV with current_price and recommended_price columns.</p>
+            <label class="listing-file-drop">
+              <span>Choose repricing plan JSON or CSV</span>
+              <input id="repricing-plan-file" type="file" accept=".json,.csv,application/json,text/csv">
+            </label>
+            ${state.fileName ? `<p class="operator-note">Selected: ${escapeHtml(state.fileName)}</p>` : ""}
+            ${state.error ? `<p class="entry-message error">${escapeHtml(state.error)}</p>` : ""}
+            ${state.message ? `<p class="entry-ready">${escapeHtml(state.message)}</p>` : ""}
+          </div>
+          ${renderRepricingSummary(state.rows)}
+          <div class="repricing-command-bar">
+            ${renderRepricingFilters(state.filter)}
+            <div class="repricing-command-actions">
+              <button class="button secondary" id="repricing-approve-safe" type="button"${state.rows.some(canApproveRepricingRow) ? "" : " disabled"}>Approve all safe</button>
+              <button class="button secondary" id="repricing-export-plan" type="button"${state.rows.length ? "" : " disabled"}>Export reviewed plan</button>
+              <button class="button primary" id="repricing-apply-live" type="button" disabled>Apply approved changes</button>
+            </div>
+          </div>
+          <section class="operator-side-panel operator-main-panel" aria-labelledby="repricing-candidates-title">
+            <h2 id="repricing-candidates-title">Approval Queue</h2>
+            ${state.rows.length ? renderRepricingRows(state.rows, state.filter) : '<p class="operator-empty">Import a repricing plan to stage approvals.</p>'}
+          </section>
+        </section>`;
+
+      const fileInput = document.getElementById("repricing-plan-file");
+      if (fileInput) {
+        fileInput.addEventListener("change", async (event) => {
+          const file = event.target.files && event.target.files[0];
+          if (!file) {
+            return;
+          }
+          try {
+            const text = await file.text();
+            state.rows = parseRepricingPlanFile(text, { name: file.name });
+            state.fileName = file.name;
+            state.error = "";
+            state.message = `Loaded ${state.rows.length} repricing candidates.`;
+            writeStoredRepricingPlan(state.rows);
+          } catch (error) {
+            state.error = error.message || String(error);
+            state.message = "";
+          }
+          await draw();
+        });
+      }
+
+      document.querySelectorAll("[data-repricing-filter]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          state.filter = button.getAttribute("data-repricing-filter") || "all";
+          await draw();
+        });
+      });
+
+      document.querySelectorAll("[data-repricing-approve]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const id = button.getAttribute("data-repricing-approve");
+          updateRow(id, { status: "approved", apply_ready: true });
+          state.message = "Approval saved locally.";
+          await draw();
+        });
+      });
+
+      document.querySelectorAll("[data-repricing-skip]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const id = button.getAttribute("data-repricing-skip");
+          updateRow(id, { status: "skipped", apply_ready: false });
+          state.message = "Row skipped locally.";
+          await draw();
+        });
+      });
+
+      const approveSafe = document.getElementById("repricing-approve-safe");
+      if (approveSafe) {
+        approveSafe.addEventListener("click", async () => {
+          state.rows = state.rows.map((row) => canApproveRepricingRow(row) ? { ...row, status: "approved", apply_ready: true } : row);
+          writeStoredRepricingPlan(state.rows);
+          state.message = "Approved all safe rows locally.";
+          await draw();
+        });
+      }
+
+      const exportButton = document.getElementById("repricing-export-plan");
+      if (exportButton) {
+        exportButton.addEventListener("click", () => {
+          downloadTextFile(
+            `cardvector-reviewed-repricing-plan-${new Date().toISOString().slice(0, 10)}.json`,
+            JSON.stringify(reviewedRepricingExport(state.rows), null, 2)
+          );
+        });
+      }
+    }
+
+    await draw();
+    document.title = "Repricing Approvals | CardVector";
   }
 
   async function renderOperatorListingReconciliationView(client, user, importedResult) {
@@ -4242,6 +4726,10 @@
       renderOperatorListingReconciliation();
       return;
     }
+    if (parts[1] && ["repricing", "price-review"].includes(parts[1].toLowerCase())) {
+      renderOperatorRepricingReview();
+      return;
+    }
     renderOperatorDashboard();
     return;
   }
@@ -4258,6 +4746,11 @@
 
   if (route === "listings" || route === "listing-reconciliation" || route === "existing-listing-review") {
     renderOperatorListingReconciliation();
+    return;
+  }
+
+  if (route === "repricing" || route === "price-review") {
+    renderOperatorRepricingReview();
     return;
   }
 
