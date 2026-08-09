@@ -2991,44 +2991,44 @@
           <div class="operator-toolbar">
             <div>
               <p class="eyebrow">CardVector operator</p>
-              <h1 id="repricing-review-title">Live CardUploader Repricing</h1>
-              <p>Use the live CardUploader automatic-inventory page as the operating surface for price review and guarded updates.</p>
-              <p class="operator-note">No CSV import workflow. CardUploader remains inventory truth and pushes approved price changes to eBay through its own managed-inventory sync.</p>
+              <h1 id="repricing-review-title">Batch Import Price Review</h1>
+              <p>Review starting prices before a CardUploader batch is added to automatic inventory and synced live to eBay.</p>
+              <p class="operator-note">CardUploader remains inventory truth. Automatic inventory is treated as post-approval live state, not the primary pricing-review surface.</p>
             </div>
             <div class="operator-toolbar-actions">
               <a class="button secondary" href="/operator">Operator Dashboard</a>
-              <a class="button primary" href="https://carduploader.com/dashboard/inventory/automatic" target="_blank" rel="noopener noreferrer">Open CardUploader Inventory</a>
+              <a class="button primary" href="https://carduploader.com/dashboard/history" target="_blank" rel="noopener noreferrer">Open CardUploader Batches</a>
             </div>
           </div>
-          <div class="operator-warning" role="status">Live apply remains gated. CardVector.app cannot read another website tab directly; the live updater must run through the approved browser helper against an open CardUploader automatic-inventory page.</div>
+          <div class="operator-warning" role="status">Live eBay sync happens after CardUploader automatic inventory is enabled. Price review must happen before that handoff unless a listing is being corrected after the fact.</div>
           <div class="registry-summary repricing-summary">
-            <div><span>Source</span><strong>CardUploader Live</strong></div>
+            <div><span>Source</span><strong>CardUploader Batch</strong></div>
             <div><span>Inventory Truth</span><strong>CardUploader</strong></div>
-            <div><span>eBay Sync</span><strong>CardUploader Managed</strong></div>
-            <div><span>Live Apply</span><strong>Guarded</strong></div>
+            <div><span>eBay Sync</span><strong>After Approval</strong></div>
+            <div><span>Live Apply</span><strong>Not Default</strong></div>
           </div>
           <div class="operator-side-panel operator-main-panel">
-            <h2>Live Workflow</h2>
+            <h2>Pre-Live Workflow</h2>
             <div class="repricing-live-steps">
               <article>
                 <span>1</span>
-                <strong>Open CardUploader automatic inventory</strong>
-                <p>Use the real CardUploader page that controls managed eBay inventory.</p>
+                <strong>Open the CardUploader batch</strong>
+                <p>Use the batch history or newly imported batch before it is moved into automatic inventory.</p>
               </article>
               <article>
                 <span>2</span>
-                <strong>Scan visible rows read-only</strong>
-                <p>The browser helper reads visible CardUploader rows without clicking, typing, saving, or syncing.</p>
+                <strong>Review recognized cards and market data</strong>
+                <p>Marketplace Intelligence evaluates the batch against current sold comps and business pricing rules.</p>
               </article>
               <article>
                 <span>3</span>
-                <strong>Generate recommendations</strong>
-                <p>Marketplace Intelligence compares visible prices with pricing policy and marks unsafe rows for review.</p>
+                <strong>Approve starting prices</strong>
+                <p>Only approved starting prices should be entered before CardUploader creates or syncs live eBay listings.</p>
               </article>
               <article>
                 <span>4</span>
-                <strong>Apply only approved visible matches</strong>
-                <p>Future live apply requires explicit confirmation, matching current prices, stable row selectors, and row-count limits.</p>
+                <strong>Verify automatic inventory after sync</strong>
+                <p>The automatic inventory page becomes an audit/check surface once CardUploader has pushed the approved batch live.</p>
               </article>
             </div>
           </div>
@@ -3036,24 +3036,24 @@
             <h2 id="repricing-candidates-title">Required Safeguards</h2>
             <div class="repricing-command-bar">
               <div class="repricing-command-actions">
-                <button class="button secondary" type="button" disabled>Scan CardUploader page</button>
-                <button class="button secondary" type="button" disabled>Review matched rows</button>
-                <button class="button primary" id="repricing-apply-live" type="button" disabled>Apply approved changes</button>
+                <button class="button secondary" type="button" disabled>Scan CardUploader batch</button>
+                <button class="button secondary" type="button" disabled>Review batch prices</button>
+                <button class="button primary" id="repricing-apply-live" type="button" disabled>Prepare approved prices</button>
               </div>
             </div>
             <ul class="repricing-safeguard-list">
-              <li>Browser must be on <code>carduploader.com/dashboard/inventory/automatic</code>.</li>
-              <li>Visible CardUploader current price must match the recommendation input.</li>
-              <li>Autosave behavior is blocked until characterized.</li>
-              <li>Only approved rows with stable visible price controls may be updated.</li>
-              <li>Bulk apply remains capped and requires explicit live-sync confirmation.</li>
+              <li>Primary workflow targets CardUploader batch/import pages before automatic inventory is enabled.</li>
+              <li>Automatic inventory is used for post-sync audit unless a correction is explicitly approved.</li>
+              <li>CardVector must never assume live eBay edits are safe just because a row is visible.</li>
+              <li>Approved prices require exact CardUploader card identity, current market evidence, and review status.</li>
+              <li>Bulk preparation remains capped and requires explicit confirmation before any CardUploader/eBay sync step.</li>
             </ul>
           </section>
         </section>`;
     }
 
     await draw();
-    document.title = "Live CardUploader Repricing | CardVector";
+    document.title = "Batch Import Price Review | CardVector";
   }
 
   async function renderOperatorListingReconciliationView(client, user, importedResult) {
