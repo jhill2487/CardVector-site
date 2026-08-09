@@ -2320,6 +2320,27 @@
     `).join("")}</div>`;
   }
 
+  function renderCardUploaderBatchScanRows(snapshot) {
+    const rows = snapshot && Array.isArray(snapshot.rows) ? snapshot.rows : [];
+    if (!rows.length) {
+      return '<p class="operator-empty">No CardUploader batch rows loaded yet.</p>';
+    }
+    return `<div class="listing-review-list">${rows.slice(0, 50).map((row) => `
+      <article class="operator-list-row listing-reconciliation-row">
+        <div>
+          <strong>${escapeHtml(row.title || "Untitled CardUploader row")}</strong>
+          <span>${escapeHtml([row.catalog_sku, row.location].filter(Boolean).join(" · ") || "No SKU/location detected")}</span>
+          <span>${escapeHtml((row.raw_text || "").slice(0, 100))}</span>
+        </div>
+        <div>
+          <span>Row ${escapeHtml(row.row_number || "")}</span>
+          <strong>${row.price === null || row.price === undefined ? "n/a" : escapeHtml(formatCurrency(row.price))}</strong>
+          <span>Read-only scan</span>
+        </div>
+      </article>
+    `).join("")}</div>${rows.length > 50 ? `<p class="operator-note">Showing first 50 of ${escapeHtml(rows.length)} scanned rows.</p>` : ""}`;
+  }
+
   function readStoredRepricingPlan() {
     try {
       const payload = JSON.parse(localStorage.getItem(repricingReviewStorageKey) || "null");
@@ -2334,6 +2355,120 @@
       saved_at: new Date().toISOString(),
       rows
     }));
+  }
+
+  function cardUploaderBatchScannerScript() {
+    return `(() => {
+  const clean = (value, max = 800) => String(value || '').replace(/\\s+/g, ' ').trim().slice(0, max);
+  const isVisible = (el) => {
+    const style = window.getComputedStyle(el);
+    const rect = el.getBoundingClientRect();
+    return style.visibility !== 'hidden' && style.display !== 'none' && rect.width > 0 && rect.height > 0;
+  };
+  const tables = Array.from(document.querySelectorAll('table')).map((table, table_index) => ({
+    table_index,
+    headers: Array.from(table.querySelectorAll('th')).map((cell) => clean(cell.innerText, 120)),
+    rows: Array.from(table.querySelectorAll('tbody tr, tr')).map((row, row_index) => ({
+      row_index,
+      text: clean(row.innerText, 1200),
+      cells: Array.from(row.querySelectorAll('td, th')).map((cell) => clean(cell.innerText, 400)),
+    })),
+  }));
+  const visibleTextBlocks = Array.from(document.querySelectorAll('main, [role="main"], section, article, div'))
+    .filter(isVisible)
+    .map((el) => clean(el.innerText, 600))
+    .filter((text) => text && /\\b(CS-|ETB-|NM|LP|MP|HP|DMG|Near Mint|Listed|Unlisted)\\b/i.test(text))
+    .slice(0, 200);
+  const payload = {
+    source: 'carduploader_batch_page_snapshot',
+    url: location.href,
+    title: document.title,
+    captured_at: new Date().toISOString(),
+    tables,
+    visibleTextBlocks,
+  };
+  const output = JSON.stringify(payload, null, 2);
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(output)
+      .then(() => alert('CardUploader batch snapshot copied. Paste it back into CardVector.app.'))
+      .catch(() => {
+        console.log(output);
+        alert('Snapshot could not be copied automatically. It was printed to the console.');
+      });
+  } else {
+    console.log(output);
+    alert('Snapshot was printed to the console. Copy it and paste it back into CardVector.app.');
+  }
+  return payload;
+})()`;
+  }
+
+  function looksLikeCardUploaderBatchUrl(url) {
+    return /^https:\/\/carduploader\.com\/dashboard\/(history|inventory)/i.test(String(url || ""));
+  }
+
+  function parseMoneyFromText(text) {
+    const match = String(text || "").match(/\$?\s*([0-9]+(?:\.[0-9]{1,2})?)/);
+    return match ? Number(match[1]) : null;
+  }
+
+  function parseCardUploaderBatchSnapshot(snapshotText) {
+    const text = String(snapshotText || "").trim();
+    if (!text) {
+      throw new Error("Paste a CardUploader batch snapshot first.");
+    }
+    let payload;
+    try {
+      payload = JSON.parse(text);
+    } catch (_error) {
+      throw new Error("Snapshot must be valid JSON copied from the CardUploader batch scanner.");
+    }
+    if (!payload || payload.source !== "carduploader_batch_page_snapshot") {
+      throw new Error("Snapshot source is not a CardUploader batch page scan.");
+    }
+    if (!looksLikeCardUploaderBatchUrl(payload.url)) {
+      throw new Error("Snapshot must come from a CardUploader dashboard history or inventory page.");
+    }
+    const rows = [];
+    for (const table of payload.tables || []) {
+      const headers = Array.isArray(table.headers) ? table.headers.map((header) => String(header || "").trim()) : [];
+      for (const row of table.rows || []) {
+        const cells = Array.isArray(row.cells) ? row.cells.map((cell) => String(cell || "").trim()) : [];
+        const rawText = String(row.text || cells.join(" ")).replace(/\s+/g, " ").trim();
+        if (!rawText || cells.length < 2) {
+          continue;
+        }
+        if (headers.length && cells.join("|").toLowerCase() === headers.join("|").toLowerCase()) {
+          continue;
+        }
+        const catalogSku = (rawText.match(/\bCS-[A-Z0-9-]+\b/i) || [""])[0].toUpperCase();
+        const location = (rawText.match(/\bETB-[0-9]{3}-[A-J](?:\.[0-9]+)?\b/i) || [""])[0].toUpperCase();
+        const priceCell = cells.find((cell) => /\$[0-9]/.test(cell)) || "";
+        rows.push({
+          row_number: rows.length + 1,
+          title: cells[0] || rawText.slice(0, 120),
+          catalog_sku: catalogSku,
+          location,
+          price: parseMoneyFromText(priceCell),
+          raw_text: rawText
+        });
+      }
+    }
+    return {
+      source: payload.source,
+      url: payload.url,
+      title: payload.title || "CardUploader batch",
+      captured_at: payload.captured_at || "",
+      rows
+    };
+  }
+
+  async function copyTextToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+    return false;
   }
 
   function listingSnapshotPayload(record, user, importBatchId) {
@@ -2980,6 +3115,9 @@
   async function renderOperatorRepricingReview() {
     const state = {
       rows: readStoredRepricingPlan(),
+      scannerScript: cardUploaderBatchScannerScript(),
+      snapshotText: "",
+      snapshot: null,
       filter: "all",
       error: "",
       message: ""
@@ -3033,13 +3171,22 @@
             </div>
           </div>
           <section class="operator-side-panel operator-main-panel" aria-labelledby="repricing-candidates-title">
-            <h2 id="repricing-candidates-title">Required Safeguards</h2>
+            <h2 id="repricing-candidates-title">CardUploader Batch Scanner</h2>
+            ${state.message ? `<div class="operator-success" role="status">${escapeHtml(state.message)}</div>` : ""}
+            ${state.error ? `<div class="operator-warning" role="alert">${escapeHtml(state.error)}</div>` : ""}
             <div class="repricing-command-bar">
               <div class="repricing-command-actions">
-                <button class="button secondary" type="button" disabled>Scan CardUploader batch</button>
-                <button class="button secondary" type="button" disabled>Review batch prices</button>
+                <button class="button secondary" id="repricing-copy-scanner" type="button">Scan CardUploader batch</button>
+                <button class="button secondary" id="repricing-load-snapshot" type="button">Review batch prices</button>
                 <button class="button primary" id="repricing-apply-live" type="button" disabled>Prepare approved prices</button>
               </div>
+            </div>
+            <div class="repricing-scan-panel">
+              <label class="entry-field" for="carduploader-batch-snapshot">
+                <span>CardUploader batch snapshot JSON</span>
+                <textarea id="carduploader-batch-snapshot" rows="8" spellcheck="false" placeholder="Paste the JSON copied by the CardUploader batch scanner.">${escapeHtml(state.snapshotText)}</textarea>
+              </label>
+              <p class="operator-note">The scanner is read-only. It reads visible page text/tables and does not click, type, save, fetch, update CardUploader, or sync eBay.</p>
             </div>
             <ul class="repricing-safeguard-list">
               <li>Primary workflow targets CardUploader batch/import pages before automatic inventory is enabled.</li>
@@ -3049,7 +3196,58 @@
               <li>Bulk preparation remains capped and requires explicit confirmation before any CardUploader/eBay sync step.</li>
             </ul>
           </section>
+          <section class="operator-side-panel operator-main-panel" aria-labelledby="repricing-scan-results-title">
+            <h2 id="repricing-scan-results-title">Scanned Batch Rows</h2>
+            ${state.snapshot ? `
+              <div class="registry-summary repricing-summary">
+                <div><span>Rows</span><strong>${escapeHtml(state.snapshot.rows.length)}</strong></div>
+                <div><span>Captured</span><strong>${escapeHtml(state.snapshot.captured_at || "n/a")}</strong></div>
+                <div><span>Source</span><strong>${escapeHtml(state.snapshot.title || "CardUploader")}</strong></div>
+                <div><span>Mode</span><strong>Read Only</strong></div>
+              </div>
+              <p class="operator-note">Source URL: ${escapeHtml(state.snapshot.url)}</p>
+            ` : ""}
+            ${renderCardUploaderBatchScanRows(state.snapshot)}
+          </section>
         </section>`;
+
+      const snapshotInput = document.getElementById("carduploader-batch-snapshot");
+      const copyScanner = document.getElementById("repricing-copy-scanner");
+      const loadSnapshot = document.getElementById("repricing-load-snapshot");
+      if (snapshotInput) {
+        snapshotInput.addEventListener("input", () => {
+          state.snapshotText = snapshotInput.value;
+        });
+      }
+      if (copyScanner) {
+        copyScanner.addEventListener("click", async () => {
+          state.error = "";
+          try {
+            const copied = await copyTextToClipboard(state.scannerScript);
+            state.message = copied
+              ? "Read-only scanner copied. Open the CardUploader batch page, paste it in the browser console, then paste the copied JSON here."
+              : "Clipboard copy is unavailable in this browser. Use Chrome on the workstation or ask Codex to run the helper.";
+          } catch (error) {
+            state.error = error && error.message ? error.message : String(error);
+          }
+          await draw();
+        });
+      }
+      if (loadSnapshot) {
+        loadSnapshot.addEventListener("click", async () => {
+          state.error = "";
+          state.message = "";
+          state.snapshotText = snapshotInput ? snapshotInput.value : state.snapshotText;
+          try {
+            state.snapshot = parseCardUploaderBatchSnapshot(state.snapshotText);
+            state.message = `Loaded ${state.snapshot.rows.length} CardUploader batch rows read-only.`;
+          } catch (error) {
+            state.snapshot = null;
+            state.error = error && error.message ? error.message : String(error);
+          }
+          await draw();
+        });
+      }
     }
 
     await draw();

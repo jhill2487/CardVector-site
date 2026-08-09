@@ -1129,6 +1129,26 @@ h3 {
   background: var(--surface-soft);
 }
 
+.entry-field textarea {
+  width: 100%;
+  min-height: 150px;
+  padding: 12px;
+  color: var(--blue-900);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font: inherit;
+  font-size: .9rem;
+  font-weight: 650;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.entry-field textarea:focus {
+  outline: 3px solid rgba(20, 108, 244, .18);
+  border-color: var(--blue-600);
+}
+
 .entry-field option {
   color: var(--blue-900);
   background: var(--surface);
@@ -1707,6 +1727,12 @@ h3 {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.repricing-scan-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
 }
 
 .repricing-filter {
