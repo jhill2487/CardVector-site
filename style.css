@@ -99,7 +99,7 @@ a:hover {
 .nav-links {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -115,10 +115,14 @@ a:hover {
 
 .nav-links a {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 10px 13px;
   color: var(--muted);
   font-weight: 650;
   border-radius: 999px;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .nav-links a:hover {
@@ -126,9 +130,16 @@ a:hover {
   color: var(--blue-900);
 }
 
+.nav-links a.nav-shop {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid transparent;
+}
+
 .nav-links a.nav-cta {
   background: var(--blue-700);
   color: white;
+  border-color: var(--blue-700);
   box-shadow: 0 10px 24px rgba(31, 95, 191, .20);
 }
 
