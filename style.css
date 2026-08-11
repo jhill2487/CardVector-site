@@ -284,6 +284,7 @@ h3 {
 
 .actions,
 .marketplaces,
+.contact-section,
 .sell-section,
 .building {
   padding: 46px 0;
@@ -576,6 +577,76 @@ h3 {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   box-shadow: 0 14px 42px rgba(16, 32, 51, .08);
+}
+
+.contact-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(260px, .75fr);
+  gap: 34px;
+  align-items: center;
+  margin-top: 26px;
+  padding-inline: 34px;
+  background: linear-gradient(180deg, #ffffff, var(--blue-50));
+  border: 1px solid #bdd4ff;
+  border-radius: var(--radius);
+  box-shadow: 0 14px 42px rgba(16, 32, 51, .08);
+}
+
+.contact-lede {
+  max-width: 700px;
+  color: var(--muted);
+  font-size: 1.12rem;
+}
+
+.contact-guidance {
+  max-width: 720px;
+  margin-top: 14px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.contact-action {
+  padding: 24px;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+
+.contact-action p {
+  color: var(--muted);
+}
+
+.contact-action .button {
+  width: 100%;
+  text-align: center;
+}
+
+.contact-route-card {
+  max-width: 880px;
+}
+
+.contact-route-notes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.contact-route-notes > div {
+  display: grid;
+  gap: 5px;
+  padding: 18px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.contact-route-notes strong {
+  color: var(--blue-950);
+}
+
+.contact-route-notes span {
+  color: var(--muted);
 }
 
 .route-alias {
@@ -2348,6 +2419,8 @@ h3 {
   .marketplace-grid,
   .whatnot-referral-grid,
   .sell-options,
+  .contact-section,
+  .contact-route-notes,
   .brief-grid {
     grid-template-columns: 1fr;
   }
@@ -2369,6 +2442,7 @@ h3 {
 
   .marketplace-card,
   .whatnot-callout,
+  .contact-section,
   .sell-section {
     padding: 24px;
   }

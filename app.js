@@ -173,11 +173,6 @@
     captureMaxEdge: 1400,
     captureJpegQuality: 0.82
   });
-  if (route === "contact") {
-    window.location.replace(siteLinks.COLLECTION_INQUIRY_URL);
-    return;
-  }
-
   const sellRoutes = new Set(["sell", "bulk", "buylist"]);
   const marketBriefRoutes = new Set(["market-briefs", "pokemon-market-briefs", "market"]);
   const knownPlaceholderRoutes = new Set(["events", "about"]);
@@ -280,6 +275,32 @@
         </article>
       </section>`;
     document.title = "Sell Your Collection | Putnam Collectibles";
+  }
+
+  function renderContactPage() {
+    main.innerHTML = `
+      <section class="qr-view wrap" aria-labelledby="contact-route-title">
+        <article class="qr-card contact-route-card">
+          <p class="eyebrow">Direct contact</p>
+          <h1 id="contact-route-title">Contact Putnam Collectibles</h1>
+          <p class="hero-lede">Use the direct form for collection offers, general questions, card availability, or local inquiries.</p>
+          <div class="contact-route-notes" aria-label="Contact guidance">
+            <div>
+              <strong>General inquiries</strong>
+              <span>Ask about cards, availability, collection sales, or bulk offers.</span>
+            </div>
+            <div>
+              <strong>Marketplace orders</strong>
+              <span>For an existing marketplace order or listing-specific transaction, keep order messages and payment inside that marketplace.</span>
+            </div>
+          </div>
+          <div class="entry-actions sell-route-actions">
+            <a class="button primary button-large" href="${siteLinks.COLLECTION_INQUIRY_URL}" target="_blank" rel="noopener noreferrer" aria-label="Send a direct message to Putnam Collectibles">Send Direct Message</a>
+            <a class="button secondary" href="/">Return Home</a>
+          </div>
+        </article>
+      </section>`;
+    document.title = "Contact Putnam Collectibles";
   }
 
   const fallbackMarketBriefPosts = Object.freeze([
@@ -4891,6 +4912,11 @@
 
   if (sellRoutes.has(route)) {
     renderSellCollectionPage();
+    return;
+  }
+
+  if (route === "contact") {
+    renderContactPage();
     return;
   }
 
