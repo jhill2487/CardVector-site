@@ -159,7 +159,8 @@
     EBAY_STORE_URL: "https://www.ebay.com/str/jhilltcg?mkcid=1&mkrid=711-53200-19255-0&siteid=0&campid=5339178316&customid=&toolid=10001&mkevt=1",
     TCGPLAYER_STORE_URL: "https://www.tcgplayer.com/sellers/Putnam-Collectibles/747c057d",
     WHATNOT_REFERRAL_URL: "https://whatnot.com/invite/putnam_collectibles",
-    COLLECTION_INQUIRY_URL: "https://tally.so/r/ob1ABN"
+    COLLECTION_INQUIRY_URL: "https://tally.so/r/ob1ABN",
+    CONTACT_EMAIL: "Putnam.collects@gmail.com"
   });
   const egressSafeMode = true;
   const egressSafeCacheMs = 5 * 60 * 1000;
@@ -283,7 +284,7 @@
         <article class="qr-card contact-route-card">
           <p class="eyebrow">Direct contact</p>
           <h1 id="contact-route-title">Contact Putnam Collectibles</h1>
-          <p class="hero-lede">Use the direct form for collection offers, general questions, card availability, or local inquiries.</p>
+          <p class="hero-lede">Use the direct form or email ${escapeHtml(siteLinks.CONTACT_EMAIL)} for collection offers, general questions, card availability, or local inquiries.</p>
           <div class="contact-route-notes" aria-label="Contact guidance">
             <div>
               <strong>General inquiries</strong>
@@ -296,6 +297,7 @@
           </div>
           <div class="entry-actions sell-route-actions">
             <a class="button primary button-large" href="${siteLinks.COLLECTION_INQUIRY_URL}" target="_blank" rel="noopener noreferrer" aria-label="Send a direct message to Putnam Collectibles">Send Direct Message</a>
+            <a class="button secondary button-large" href="mailto:${escapeHtml(siteLinks.CONTACT_EMAIL)}?subject=Putnam%20Collectibles%20Inquiry" aria-label="Email Putnam Collectibles directly">Email Putnam Collectibles</a>
             <a class="button secondary" href="/">Return Home</a>
           </div>
         </article>
