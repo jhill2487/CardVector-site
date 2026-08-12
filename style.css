@@ -576,6 +576,51 @@ h3 {
   background: var(--blue-950);
 }
 
+.carduploader-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr);
+  gap: 34px;
+  align-items: center;
+  margin-top: 26px;
+  padding: 34px;
+  background: linear-gradient(135deg, #ffffff 0%, #eef5ff 100%);
+  border: 1px solid #bdd4ff;
+  border-radius: var(--radius);
+  box-shadow: 0 14px 42px rgba(16, 32, 51, .08);
+}
+
+.carduploader-copy p {
+  max-width: 720px;
+  color: var(--muted);
+  font-size: 1.08rem;
+}
+
+.carduploader-action {
+  display: grid;
+  gap: 13px;
+  padding: 24px;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+
+.carduploader-action p {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.carduploader-action .button {
+  width: 100%;
+  text-align: center;
+}
+
+.carduploader-action .affiliate-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: .82rem;
+  font-weight: 650;
+}
+
 .sell-section {
   position: relative;
   display: grid;
@@ -2314,6 +2359,7 @@ h3 {
   }
 
   .whatnot-callout,
+  .carduploader-section,
   .sell-section {
     grid-template-columns: 1fr;
   }
@@ -2432,6 +2478,7 @@ h3 {
   .marketplace-grid,
   .whatnot-referral-grid,
   .sell-options,
+  .carduploader-section,
   .contact-section,
   .contact-route-notes,
   .brief-grid {
@@ -2455,6 +2502,7 @@ h3 {
 
   .marketplace-card,
   .whatnot-callout,
+  .carduploader-section,
   .contact-section,
   .sell-section {
     padding: 24px;
