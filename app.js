@@ -308,12 +308,12 @@
 
   const fallbackMarketBriefPosts = Object.freeze([
     {
-      slug: "monday-morning-brief",
-      label: "Weekly Monday Brief",
+      slug: "pokemon-market-brief",
+      label: "Market Brief",
       title: "Putnam Collectibles Pokemon Market Brief",
       date: "2026-08-03",
-      dateLabel: "Monday mornings",
-      summary: "A concise weekly Pokemon market update covering recent movement, collector demand, notable products, and marketplace signals.",
+      dateLabel: "Latest brief",
+      summary: "A concise Pokemon market update covering recent movement, collector demand, notable products, and marketplace signals.",
       status: "published",
       sections: [
         {
@@ -335,7 +335,7 @@
 
   function dateLabelForBrief(value) {
     const raw = String(value || "").trim();
-    if (!raw) return "Monday mornings";
+    if (!raw) return "Latest brief";
     const parsed = new Date(`${raw}T00:00:00`);
     if (Number.isNaN(parsed.getTime())) return raw;
     return parsed.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
@@ -431,7 +431,7 @@
         <div class="blog-hero">
           <p class="eyebrow">Pokemon market updates for sellers</p>
           <h1 id="market-briefs-page-title">Pokemon Market Briefs for Card Sellers</h1>
-          <p>Weekly Monday morning notes on Pokemon card prices, collector demand, eBay and TCGplayer marketplace signals, inventory age, and practical pricing strategy.</p>
+          <p>Seller-focused notes on Pokemon card prices, collector demand, eBay and TCGplayer marketplace signals, inventory age, and practical pricing strategy.</p>
         </div>
         <div class="brief-seo-summary" aria-label="What Pokemon market briefs cover">
           <article>
