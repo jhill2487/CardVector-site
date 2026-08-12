@@ -1,14 +1,16 @@
 {
   "source_repository": "jhill2487/CardVector",
   "source_path": "Docs/",
-  "source_commit": "d35ef27186684e1174e3f19f2c9fd7f1398ecdd2",
-  "generated_at": "2026-08-12T13:32:18+00:00",
+  "source_commit": "31b9f9cae16b21675824bc2e3fce85aa28714eb5",
+  "generated_at": "2026-08-12T13:44:45+00:00",
   "public_files": [
     "index.html",
     "404.html",
     "app.js",
     "style.css",
     "mobile-capture-config.js",
+    "robots.txt",
+    "tools/carduploader/index.html",
     "CNAME",
     "_config.yml"
   ],
@@ -18,7 +20,10 @@
     "assets/putnam-ebay-banner.png"
   ],
   "generated_content": [
-    "content/market-briefs/index.json"
+    "content/market-briefs/index.json",
+    "market-briefs/index.html",
+    "market-briefs/<slug>/index.html",
+    "sitemap.xml"
   ],
   "market_brief_count": 1
 }
