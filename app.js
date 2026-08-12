@@ -380,10 +380,14 @@
       slug: String(post && post.slug || "").trim(),
       label: String(post && post.label || "Market Brief").trim(),
       title: String(post && post.title || "Pokemon Market Brief").trim(),
+      seoTitle: String(post && post.seoTitle || post && post.title || "Pokemon Market Brief").trim(),
       date: String(post && post.date || "").trim(),
       dateLabel: String(post && post.dateLabel || "").trim(),
       summary: String(post && post.summary || "").trim(),
+      description: String(post && (post.description || post.summary) || "").trim(),
+      searchIntent: String(post && post.searchIntent || "").trim(),
       status: String(post && post.status || "published").trim(),
+      targetKeywords: Array.isArray(post && post.targetKeywords) ? post.targetKeywords.map((item) => String(item || "").trim()).filter(Boolean) : [],
       sections: Array.isArray(post && post.sections) ? post.sections.map(normalizeMarketBriefSection).filter((section) => section.body) : [],
       affiliateLinks: normalizeMarketBriefAffiliateLinks(post)
     };
@@ -425,19 +429,35 @@
     main.innerHTML = `
       <section class="blog-shell wrap" aria-labelledby="market-briefs-page-title">
         <div class="blog-hero">
-          <p class="eyebrow">Pokemon market updates</p>
-          <h1 id="market-briefs-page-title">Pokemon Market Briefs</h1>
-          <p>Weekly Monday morning notes on recent Pokemon market movement, collector demand, and marketplace signals. Briefs are drafted with ChatGPT-assisted research and reviewed before publication.</p>
+          <p class="eyebrow">Pokemon market updates for sellers</p>
+          <h1 id="market-briefs-page-title">Pokemon Market Briefs for Card Sellers</h1>
+          <p>Weekly Monday morning notes on Pokemon card prices, collector demand, eBay and TCGplayer marketplace signals, inventory age, and practical pricing strategy.</p>
+        </div>
+        <div class="brief-seo-summary" aria-label="What Pokemon market briefs cover">
+          <article>
+            <h2>What these briefs cover</h2>
+            <p>Each brief is written for small trading card sellers who need clear market context before pricing, repricing, or organizing inventory.</p>
+          </article>
+          <article>
+            <h2>How to use them</h2>
+            <p>Use the weekly notes as a starting point for checking recent sold listings, stale inventory, card condition, and listing quality before making price changes.</p>
+          </article>
         </div>
         <div class="brief-grid">
           ${posts.map(renderMarketBriefCard).join("")}
         </div>
+        <nav class="brief-internal-links" aria-label="Related Putnam Collectibles pages">
+          <a href="/tools/carduploader">CardUploader workflow</a>
+          <a href="/sell">Sell Pokemon cards</a>
+          <a href="${siteLinks.EBAY_STORE_URL}" target="_blank" rel="noopener noreferrer">Shop Pokemon cards on eBay</a>
+          <a href="${siteLinks.TCGPLAYER_STORE_URL}" target="_blank" rel="noopener noreferrer">Shop Pokemon cards on TCGplayer</a>
+        </nav>
         <aside class="brief-disclosure">
           <strong>Editorial note</strong>
           <p>Market briefs are informational commentary, not financial advice. Prices and demand can change quickly; verify current marketplace data before buying, selling, or repricing.</p>
         </aside>
       </section>`;
-    document.title = "Pokemon Market Briefs | Putnam Collectibles";
+    document.title = "Pokemon Market Briefs for Card Sellers | Putnam Collectibles";
   }
 
   function renderBriefBody(body) {
@@ -470,7 +490,11 @@
         <p class="eyebrow">${escapeHtml(post.label)}</p>
         <h1 id="market-brief-post-title">${escapeHtml(post.title)}</h1>
         <p class="blog-meta">${escapeHtml(post.dateLabel)} &middot; ${escapeHtml(post.status)}</p>
-        <p class="hero-lede">${escapeHtml(post.summary)}</p>
+        <p class="hero-lede">${escapeHtml(post.description || post.summary)}</p>
+        <aside class="brief-answer-box">
+          <strong>Quick answer</strong>
+          <p>${escapeHtml(post.searchIntent || "Use this brief to understand the market signals behind Pokemon card price changes before buying, selling, or repricing inventory.")}</p>
+        </aside>
         <div class="brief-post-layout">
           ${post.sections.map((section) => `
             <section class="brief-post-section">
@@ -479,12 +503,17 @@
             </section>`).join("")}
         </div>
         ${renderAffiliateLinkPanel(post)}
+        <nav class="brief-internal-links" aria-label="Related Putnam Collectibles pages">
+          <a href="/market-briefs">More Pokemon market briefs</a>
+          <a href="/tools/carduploader">CardUploader seller workflow</a>
+          <a href="/sell">Sell a Pokemon card collection</a>
+        </nav>
         <aside class="brief-disclosure">
           <strong>How this brief is prepared</strong>
           <p>Putnam Collectibles uses ChatGPT-assisted research to identify possible market updates, then reviews the brief before publication. Future weekly posts should include dated sources and current marketplace checks.</p>
         </aside>
       </article>`;
-    document.title = `${post.title} | Putnam Collectibles`;
+    document.title = `${post.seoTitle || post.title} | Putnam Collectibles`;
   }
 
   function captureConfig() {

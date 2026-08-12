@@ -843,6 +843,34 @@ h3 {
   gap: 16px;
 }
 
+.brief-seo-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 920px;
+  gap: 16px;
+  margin: 22px 0;
+}
+
+.brief-seo-summary article,
+.brief-answer-box {
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+}
+
+.brief-seo-summary h2 {
+  margin-bottom: 8px;
+  color: var(--blue-950);
+  font-size: 1.18rem;
+}
+
+.brief-seo-summary p,
+.brief-answer-box p {
+  color: var(--muted);
+  font-weight: 650;
+}
+
 .brief-card {
   display: grid;
   gap: 16px;
@@ -873,6 +901,34 @@ h3 {
   display: block;
   margin-bottom: 6px;
   color: var(--blue-950);
+}
+
+.brief-answer-box {
+  margin: 20px 0 8px;
+}
+
+.brief-answer-box strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--blue-950);
+}
+
+.brief-internal-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  max-width: 920px;
+  margin: 18px 0;
+}
+
+.brief-internal-links a {
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--blue-800);
+  font-size: .9rem;
+  font-weight: 850;
 }
 
 .brief-post {
@@ -2481,8 +2537,17 @@ h3 {
   .carduploader-section,
   .contact-section,
   .contact-route-notes,
+  .brief-seo-summary,
   .brief-grid {
     grid-template-columns: 1fr;
+  }
+
+  .brief-internal-links {
+    display: grid;
+  }
+
+  .brief-internal-links a {
+    text-align: center;
   }
 
   .brief-feature,
