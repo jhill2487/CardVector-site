@@ -1301,14 +1301,9 @@
         <div class="operator-hero">
           <p class="eyebrow">CardVector workspace</p>
           <h1 id="operator-title">Operator Dashboard</h1>
-          <p>Use CardVector.app as the primary operating surface for capture, batch work, and controlled repricing review.</p>
+          <p>Use CardVector.app as the primary operating surface for CardUploader batch references and controlled repricing review.</p>
         </div>
         <div class="operator-grid" aria-label="Operator workflows">
-          <a class="operator-card operator-card-primary" href="/#mobile-capture">
-            <span>Capture</span>
-            <strong>Mobile Capture</strong>
-            <p>Start card capture from a workstation, tablet, or phone without scanning a QR code.</p>
-          </a>
           <a class="operator-card" href="/operator/batches">
             <span>Batch</span>
             <strong>Batch References</strong>
@@ -1625,7 +1620,7 @@
           </div>
           <div class="operator-toolbar-actions">
             <a class="button secondary" href="/operator">Operator Dashboard</a>
-            <a class="button primary" href="/#mobile-capture">Start Mobile Capture</a>
+            <a class="button primary" href="https://carduploader.com/dashboard/history" target="_blank" rel="noopener noreferrer">Open CardUploader Batches</a>
           </div>
         </div>
         ${registryWarningHtml(registry)}
@@ -3568,7 +3563,7 @@
           <div class="operator-toolbar-actions">
             <button class="button secondary" id="registry-refresh-supabase" type="button">Refresh from Supabase</button>
             <a class="button secondary" href="/operator">Operator Dashboard</a>
-            <a class="button primary" href="/#mobile-capture">Start Mobile Capture</a>
+            <a class="button primary" href="https://carduploader.com/dashboard/history" target="_blank" rel="noopener noreferrer">Open CardUploader Batches</a>
           </div>
         </div>
         ${registryWarningHtml(registry)}
@@ -4961,88 +4956,49 @@
     return;
   }
 
+  function renderRetiredMobileCapturePage(contextTitle = "Mobile Capture") {
+    renderQrView(
+      `${contextTitle} Retired`,
+      "CardVector mobile capture has moved to CardUploader.",
+      detailRow("Status", "Retired") +
+        detailRow("Current Capture Workflow", '<a href="https://carduploader.com/dashboard/history" target="_blank" rel="noopener noreferrer">Use CardUploader batches</a>') +
+        detailRow("CardVector Role", "Market briefs, seller tools, batch references, and controlled pricing review") +
+        detailRow("Home", '<a href="/">Return to Putnam Collectibles</a>'),
+      `<section class="operator-side-panel" aria-labelledby="capture-retired-title">
+        <h2 id="capture-retired-title">Use CardUploader for photo capture</h2>
+        <p>Phone and camera-roll capture now belongs in CardUploader, which owns recognition, batch creation, managed inventory, and eBay synchronization.</p>
+        <p>CardVector no longer stages new mobile capture sessions, uploads mobile originals, or downloads mobile capture queues.</p>
+        <div class="operator-toolbar-actions">
+          <a class="button primary" href="https://carduploader.com/dashboard/history" target="_blank" rel="noopener noreferrer">Open CardUploader Batches</a>
+          <a class="button secondary" href="/operator">Operator Dashboard</a>
+        </div>
+      </section>`
+    );
+    document.title = `${contextTitle} Retired | CardVector`;
+  }
+
   if (route === "etb" && parts[1]) {
     const etbId = parts[1].toUpperCase();
-    renderQrView(
-      etbId,
-      "Putnam Collectibles inventory location check.",
-      detailRow("Type", "Storage Label") +
-        detailRow("ETB ID", escapeHtml(etbId)) +
-        detailRow("Inventory Details", "Private") +
-        detailRow("Owner", "Putnam Collectibles") +
-        detailRow("Powered By", "CardVector"),
-      captureEntryShellHtml(`Capture from ${etbId}`)
-    );
-    document.title = `${etbId} | Putnam Collectibles`;
-    initializeCaptureEntry({ fixedEtb: etbId, landing: true });
+    renderRetiredMobileCapturePage(etbId);
     return;
   }
 
   if (route === "location" && parts[1] && parts[2]) {
     const etbId = parts[1].toUpperCase();
     const location = parts[2].toUpperCase();
-    renderQrView(
-      `Location ${location}`,
-      "Putnam Collectibles inventory location check.",
-      detailRow("Type", "Location Label") +
-        detailRow("ETB ID", escapeHtml(etbId)) +
-      detailRow("Location", escapeHtml(location)) +
-        detailRow("Inventory Details", "Private") +
-        detailRow("Owner", "Putnam Collectibles") +
-        detailRow("Powered By", "CardVector"),
-      captureChoiceHtml(etbId, location)
-    );
-    document.title = `${etbId} Location ${location} | Putnam Collectibles`;
+    renderRetiredMobileCapturePage(`${etbId} Location ${location}`);
     return;
   }
 
   if ((route === "capture" && !parts[1]) || route === "mobile-capture" || route === "mobile") {
-    renderQrView(
-      "Mobile Capture",
-      "Start a CardVector capture session without scanning a location QR.",
-      detailRow("Workflow", "Authenticated operator") +
-        detailRow("Camera", "Starts only after destination review") +
-        detailRow("Powered By", "CardVector"),
-      captureEntryShellHtml("Start Mobile Capture")
-    );
-    document.title = "Mobile Capture | CardVector";
-    initializeCaptureEntry();
+    renderRetiredMobileCapturePage("Mobile Capture");
     return;
   }
 
   if (route === "capture" && parts[1] && parts[2]) {
     const etbId = parts[1].toUpperCase();
     const location = parts[2].toUpperCase();
-    const captureType = captureTypeFromSlug(parts[3] || "physical-inventory");
-    const captureLayout = captureLayoutFromSlug(parts[4] || "");
-    const type = captureTypeConfig[captureType];
-    if (!captureLayout) {
-      renderQrView(
-        type.title,
-        `${etbId} Location ${location}`,
-        detailRow("ETB ID", escapeHtml(etbId)) +
-          detailRow("Location", escapeHtml(location)) +
-          detailRow("Capture Type", escapeHtml(type.label)) +
-          detailRow("Camera", "Starts after photo mode selection"),
-        captureLayoutChoiceHtml(etbId, location, captureType)
-      );
-      document.getElementById("capture-layout-back").addEventListener("click", () => window.history.back());
-      document.title = `Choose Photo Mode | ${etbId} ${location}`;
-      return;
-    }
-    const layout = captureLayoutConfig[captureLayout];
-    renderQrView(
-      type.title,
-      `${etbId} Location ${location}`,
-      detailRow("ETB ID", escapeHtml(etbId)) +
-        detailRow("Location", escapeHtml(location)) +
-        detailRow("Capture Type", escapeHtml(type.label)) +
-        detailRow("Photo Mode", escapeHtml(layout.label)) +
-        detailRow("Upload Status", "Private CardVector workflow"),
-      captureScreenHtml(etbId, location, captureType, captureLayout)
-    );
-    document.title = `${type.title} | ${etbId} ${location}`;
-    initializeCapture(etbId, location, captureType, captureLayout);
+    renderRetiredMobileCapturePage(`${etbId} Location ${location}`);
     return;
   }
 

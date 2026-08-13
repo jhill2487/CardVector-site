@@ -1,14 +1,13 @@
 {
   "source_repository": "jhill2487/CardVector",
   "source_path": "Docs/",
-  "source_commit": "39c8e7ee49313d945209ee91bc78126ada49c403",
-  "generated_at": "2026-08-12T15:33:00+00:00",
+  "source_commit": "07978be4c9072ef420df65ca8e9fdf2a3110b944",
+  "generated_at": "2026-08-13T17:07:34+00:00",
   "public_files": [
     "index.html",
     "404.html",
     "app.js",
     "style.css",
-    "mobile-capture-config.js",
     "robots.txt",
     "tools/carduploader/index.html",
     "CNAME",
