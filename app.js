@@ -2036,6 +2036,7 @@
   }
 
   const repricingReviewStorageKey = "cardvector.repricingPlan.v1";
+  const cardUploaderHelperSnapshotStorageKey = "cardvector.carduploaderAutomaticInventorySnapshot.v1";
   const repricingPlanColumns = Object.freeze({
     inventory_id: ["inventory_id", "Inventory ID", "CardUploader ID", "external_inventory_id"],
     row_number: ["row_number", "Row", "Row Number"],
@@ -2407,6 +2408,29 @@
       saved_at: new Date().toISOString(),
       rows
     }));
+  }
+
+  function readStoredCardUploaderHelperSnapshot() {
+    try {
+      const payload = JSON.parse(localStorage.getItem(cardUploaderHelperSnapshotStorageKey) || "null");
+      if (!payload || payload.source !== "carduploader_automatic_inventory_page_snapshot") {
+        return null;
+      }
+      if (!looksLikeCardUploaderAutomaticInventoryUrl(payload.url)) {
+        return null;
+      }
+      return {
+        source: payload.source,
+        url: payload.url,
+        title: payload.title || "CardUploader automatic inventory",
+        captured_at: payload.captured_at || "",
+        controls: payload.controls || [],
+        editable_controls: payload.editable_controls || [],
+        rows: Array.isArray(payload.rows) ? payload.rows : []
+      };
+    } catch (_error) {
+      return null;
+    }
   }
 
   function cardUploaderAutomaticInventoryScannerScript() {
@@ -3275,6 +3299,7 @@
   async function renderOperatorRepricingReview() {
     const state = {
       rows: readStoredRepricingPlan(),
+      snapshot: readStoredCardUploaderHelperSnapshot(),
       filter: "all",
       error: "",
       message: ""
@@ -3287,15 +3312,15 @@
             <div>
               <p class="eyebrow">CardVector operator</p>
               <h1 id="repricing-review-title">Automatic Inventory Price Review</h1>
-              <p>Review CardUploader automatic inventory prices through the workstation helper before changing values that sync live to eBay.</p>
-              <p class="operator-note">CardUploader remains inventory truth. CardVector will request automatic-inventory evidence from the signed-in home PC helper instead of asking you to paste scripts or JSON.</p>
+              <p>Review CardUploader automatic inventory prices through the Chrome helper before changing values that sync live to eBay.</p>
+              <p class="operator-note">CardUploader remains inventory truth. CardVector reads the latest helper snapshot from this browser and never asks you to paste scripts or JSON.</p>
             </div>
             <div class="operator-toolbar-actions">
               <a class="button secondary" href="/operator">Operator Dashboard</a>
               <a class="button primary" href="https://carduploader.com/dashboard/inventory/automatic" target="_blank" rel="noopener noreferrer">Open CardUploader Automatic Inventory</a>
             </div>
           </div>
-          <div class="operator-warning" role="status">CardUploader automatic inventory is already connected to live eBay sync. Live apply remains disabled until the persistent PC helper and approval guardrails are built.</div>
+          <div class="operator-warning" role="status">CardUploader automatic inventory is already connected to live eBay sync. Live apply remains disabled until apply behavior and approval guardrails are built.</div>
           <div class="registry-summary repricing-summary">
             <div><span>Source</span><strong>Automatic Inventory</strong></div>
             <div><span>Inventory Truth</span><strong>CardUploader</strong></div>
@@ -3307,13 +3332,13 @@
             <div class="repricing-live-steps">
               <article>
                 <span>1</span>
-                <strong>Connect home PC helper</strong>
-                <p>The helper runs on the signed-in workstation and owns browser access to CardUploader.</p>
+                <strong>Install Chrome helper</strong>
+                <p>The private extension runs on CardUploader and owns browser access to the signed-in page.</p>
               </article>
               <article>
                 <span>2</span>
-                <strong>Request inventory snapshot</strong>
-                <p>CardVector.app asks the helper to read the automatic inventory page without manual console scripts.</p>
+                <strong>Scan automatic inventory</strong>
+                <p>Use the helper panel on CardUploader to capture visible rows without console scripts.</p>
               </article>
               <article>
                 <span>3</span>
@@ -3323,7 +3348,7 @@
               <article>
                 <span>4</span>
                 <strong>Apply later with guardrails</strong>
-                <p>Approved rows become a local plan. The helper can apply them only after save behavior is proven and explicitly enabled.</p>
+                <p>Approved rows become a local plan. Applying changes stays locked until save behavior is proven and explicitly enabled.</p>
               </article>
             </div>
           </div>
@@ -3334,31 +3359,41 @@
             <div class="repricing-command-bar">
               <div class="repricing-command-actions">
                 <button class="button secondary" id="repricing-helper-status" type="button">Check helper status</button>
-                <button class="button secondary" id="repricing-request-snapshot" type="button" disabled>Request inventory snapshot</button>
+                <button class="button secondary" id="repricing-request-snapshot" type="button"${state.snapshot && state.snapshot.rows.length ? "" : " disabled"}>Load helper snapshot</button>
                 <button class="button primary" id="repricing-apply-live" type="button"${summarizeRepricingRows(state.rows).approved ? "" : " disabled"}>Download approved prices</button>
               </div>
             </div>
             <ol class="repricing-instructions">
-              <li>Install the CardVector PC helper on the home workstation.</li>
-              <li>Keep Chrome signed into CardUploader on that PC.</li>
-              <li>Use this page from any device to request a read-only automatic-inventory snapshot.</li>
+              <li>Install the private CardVector Chrome helper.</li>
+              <li>Open CardUploader Automatic Inventory in the same Chrome profile.</li>
+              <li>Click Scan Visible Rows in the helper panel.</li>
+              <li>Return here and load the helper snapshot for review.</li>
               <li>Approve prices here only after reviewing evidence. Live apply stays locked until the apply helper is separately approved.</li>
             </ol>
             <div class="repricing-helper-card">
               <span>Helper Status</span>
-              <strong>Not connected yet</strong>
-              <p>The manual scanner has been retired from the primary workflow. The next build slice is the persistent workstation helper that reads CardUploader for you.</p>
+              <strong>${state.snapshot && state.snapshot.rows.length ? "Snapshot available" : "No snapshot yet"}</strong>
+              <p>${state.snapshot && state.snapshot.rows.length ? `Latest helper snapshot has ${escapeHtml(state.snapshot.rows.length)} visible rows captured at ${escapeHtml(state.snapshot.captured_at || "unknown time")}.` : "Install the private Chrome helper, scan CardUploader automatic inventory, then return here."}</p>
             </div>
             <ul class="repricing-safeguard-list">
               <li>Primary workflow targets CardUploader automatic inventory because it is the live eBay-managed surface.</li>
-              <li>CardVector.app does not need direct CardUploader credentials; the signed-in workstation helper performs page reads.</li>
+              <li>CardVector.app does not need CardUploader credentials; the signed-in Chrome page provides read-only evidence.</li>
               <li>Approved prices require exact CardUploader identity, current visible price, and operator review.</li>
               <li>Bulk preparation remains local and read-only until the apply workflow is separately characterized and approved.</li>
             </ul>
           </section>
           <section class="operator-side-panel operator-main-panel" aria-labelledby="repricing-scan-results-title">
             <h2 id="repricing-scan-results-title">Automatic Inventory Snapshot</h2>
-            <p class="operator-empty">No helper snapshot loaded yet. This page is waiting for the PC helper integration.</p>
+            ${state.snapshot && state.snapshot.rows.length ? `
+              <div class="registry-summary repricing-summary">
+                <div><span>Rows</span><strong>${escapeHtml(state.snapshot.rows.length)}</strong></div>
+                <div><span>Captured</span><strong>${escapeHtml(state.snapshot.captured_at || "n/a")}</strong></div>
+                <div><span>Source</span><strong>${escapeHtml(state.snapshot.title || "CardUploader")}</strong></div>
+                <div><span>Mode</span><strong>Read Only</strong></div>
+              </div>
+              <p class="operator-note">Source URL: ${escapeHtml(state.snapshot.url)}</p>
+              ${renderCardUploaderAutomaticInventoryRows(state.snapshot)}
+            ` : '<p class="operator-empty">No helper snapshot loaded yet.</p>'}
           </section>
           <section class="operator-side-panel operator-main-panel" aria-labelledby="repricing-plan-title">
             <h2 id="repricing-plan-title">Price Review Candidates</h2>
@@ -3372,7 +3407,26 @@
       if (helperStatus) {
         helperStatus.addEventListener("click", async () => {
           state.error = "";
-          state.message = "PC helper is not connected yet. Next step: build the persistent workstation helper.";
+          state.snapshot = readStoredCardUploaderHelperSnapshot();
+          state.message = state.snapshot && state.snapshot.rows.length
+            ? `Helper snapshot found with ${state.snapshot.rows.length} visible rows.`
+            : "No helper snapshot found yet. Open CardUploader automatic inventory and run Scan Visible Rows in the Chrome helper.";
+          await draw();
+        });
+      }
+      const requestSnapshot = document.getElementById("repricing-request-snapshot");
+      if (requestSnapshot) {
+        requestSnapshot.addEventListener("click", async () => {
+          state.error = "";
+          state.message = "";
+          state.snapshot = readStoredCardUploaderHelperSnapshot();
+          if (!state.snapshot || !state.snapshot.rows.length) {
+            state.error = "No helper snapshot is available yet.";
+          } else {
+            state.rows = repricingRowsFromAutomaticInventorySnapshot(state.snapshot);
+            writeStoredRepricingPlan(state.rows);
+            state.message = `Loaded ${state.snapshot.rows.length} helper rows into price review.`;
+          }
           await draw();
         });
       }
