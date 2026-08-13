@@ -2005,6 +2005,33 @@ h3 {
   text-align: right;
 }
 
+.repricing-price-input {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: .78rem;
+  font-weight: 850;
+}
+
+.repricing-price-input input {
+  width: 100%;
+  min-width: 0;
+  padding: 9px 10px;
+  color: var(--ink);
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font: inherit;
+  font-size: .92rem;
+  font-weight: 850;
+  text-align: right;
+}
+
+.repricing-price-input input:focus {
+  outline: 2px solid rgba(37, 99, 235, 0.2);
+  border-color: var(--blue-500);
+}
+
 .repricing-price-stack .positive {
   color: #146c43;
 }

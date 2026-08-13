@@ -1312,7 +1312,7 @@
           <a class="operator-card" href="/operator/repricing" aria-label="Open repricing review">
             <span>Pricing</span>
             <strong>Repricing Review</strong>
-            <p>Review CardUploader automatic-inventory price recommendations, approve safe rows, and export the reviewed plan without live marketplace writes.</p>
+            <p>Review CardUploader automatic-inventory price recommendations, approve safe rows, and download the reviewed plan without live marketplace writes.</p>
           </a>
         </div>
       </section>`;
@@ -2356,6 +2356,10 @@
           <strong>${escapeHtml(formatCurrency(row.current_price))}</strong>
           <span>Recommended</span>
           <strong>${escapeHtml(formatCurrency(row.recommended_price))}</strong>
+          <label class="repricing-price-input">
+            <span>Set recommended</span>
+            <input type="number" min="0" step="0.01" inputmode="decimal" data-repricing-recommend="${escapeHtml(row.id)}" value="${row.recommended_price === null || row.recommended_price === undefined ? "" : escapeHtml(String(row.recommended_price))}">
+          </label>
           <span class="${Number(row.price_delta || 0) < 0 ? "negative" : "positive"}">${escapeHtml(formatCurrency(row.price_delta))}</span>
         </div>
         <div class="repricing-actions">
@@ -2368,22 +2372,22 @@
     `).join("")}</div>`;
   }
 
-  function renderCardUploaderBatchScanRows(snapshot) {
+  function renderCardUploaderAutomaticInventoryRows(snapshot) {
     const rows = snapshot && Array.isArray(snapshot.rows) ? snapshot.rows : [];
     if (!rows.length) {
-      return '<p class="operator-empty">No CardUploader batch rows loaded yet.</p>';
+      return '<p class="operator-empty">No CardUploader automatic inventory rows loaded yet.</p>';
     }
     return `<div class="listing-review-list">${rows.slice(0, 50).map((row) => `
       <article class="operator-list-row listing-reconciliation-row">
         <div>
           <strong>${escapeHtml(row.title || "Untitled CardUploader row")}</strong>
-          <span>${escapeHtml([row.catalog_sku, row.location].filter(Boolean).join(" · ") || "No SKU/location detected")}</span>
+          <span>${escapeHtml([row.catalog_sku, row.user_sku, row.condition, row.variant].filter(Boolean).join(" - ") || "No SKU detected")}</span>
           <span>${escapeHtml((row.raw_text || "").slice(0, 100))}</span>
         </div>
         <div>
           <span>Row ${escapeHtml(row.row_number || "")}</span>
-          <strong>${row.price === null || row.price === undefined ? "n/a" : escapeHtml(formatCurrency(row.price))}</strong>
-          <span>Read-only scan</span>
+          <strong>${row.current_price === null || row.current_price === undefined ? "n/a" : escapeHtml(formatCurrency(row.current_price))}</strong>
+          <span>${escapeHtml(row.status || "Read-only scan")}</span>
         </div>
       </article>
     `).join("")}</div>${rows.length > 50 ? `<p class="operator-note">Showing first 50 of ${escapeHtml(rows.length)} scanned rows.</p>` : ""}`;
@@ -2405,14 +2409,37 @@
     }));
   }
 
-  function cardUploaderBatchScannerScript() {
+  function cardUploaderAutomaticInventoryScannerScript() {
     return `(() => {
   const clean = (value, max = 800) => String(value || '').replace(/\\s+/g, ' ').trim().slice(0, max);
+  const attr = (el, name) => el.getAttribute(name) || '';
   const isVisible = (el) => {
     const style = window.getComputedStyle(el);
     const rect = el.getBoundingClientRect();
     return style.visibility !== 'hidden' && style.display !== 'none' && rect.width > 0 && rect.height > 0;
   };
+  const selectorFor = (el) => {
+    if (!el) return '';
+    if (el.id) return '#' + CSS.escape(el.id);
+    const name = attr(el, 'name');
+    if (name) return el.tagName.toLowerCase() + '[name="' + CSS.escape(name) + '"]';
+    const dataAttr = Array.from(el.attributes || []).find((candidate) => candidate.name.startsWith('data-'));
+    if (dataAttr) return el.tagName.toLowerCase() + '[' + dataAttr.name + '="' + CSS.escape(dataAttr.value) + '"]';
+    return el.tagName.toLowerCase();
+  };
+  const controls = Array.from(document.querySelectorAll('button, input[type="button"], input[type="submit"], a'))
+    .filter(isVisible)
+    .map((el) => ({ text: clean(el.innerText || el.value, 100), aria_label: attr(el, 'aria-label'), selector: selectorFor(el) }));
+  const editable_controls = Array.from(document.querySelectorAll('input, textarea, [contenteditable="true"]'))
+    .filter(isVisible)
+    .map((el) => ({
+      value: clean(el.value || el.textContent, 100),
+      name: attr(el, 'name'),
+      id: el.id || '',
+      aria_label: attr(el, 'aria-label'),
+      placeholder: attr(el, 'placeholder'),
+      selector: selectorFor(el),
+    }));
   const tables = Array.from(document.querySelectorAll('table')).map((table, table_index) => ({
     table_index,
     headers: Array.from(table.querySelectorAll('th')).map((cell) => clean(cell.innerText, 120)),
@@ -2428,17 +2455,19 @@
     .filter((text) => text && /\\b(CS-|ETB-|NM|LP|MP|HP|DMG|Near Mint|Listed|Unlisted)\\b/i.test(text))
     .slice(0, 200);
   const payload = {
-    source: 'carduploader_batch_page_snapshot',
+    source: 'carduploader_automatic_inventory_page_snapshot',
     url: location.href,
     title: document.title,
     captured_at: new Date().toISOString(),
+    controls,
+    editable_controls,
     tables,
     visibleTextBlocks,
   };
   const output = JSON.stringify(payload, null, 2);
   if (navigator.clipboard && window.isSecureContext) {
     navigator.clipboard.writeText(output)
-      .then(() => alert('CardUploader batch snapshot copied. Paste it back into CardVector.app.'))
+      .then(() => alert('CardUploader automatic inventory snapshot copied. Paste it back into CardVector.app.'))
       .catch(() => {
         console.log(output);
         alert('Snapshot could not be copied automatically. It was printed to the console.');
@@ -2451,8 +2480,8 @@
 })()`;
   }
 
-  function looksLikeCardUploaderBatchUrl(url) {
-    return /^https:\/\/carduploader\.com\/dashboard\/(history|inventory)/i.test(String(url || ""));
+  function looksLikeCardUploaderAutomaticInventoryUrl(url) {
+    return /^https:\/\/carduploader\.com\/dashboard\/inventory\/automatic(?:[/?#]|$)/i.test(String(url || ""));
   }
 
   function parseMoneyFromText(text) {
@@ -2460,26 +2489,49 @@
     return match ? Number(match[1]) : null;
   }
 
-  function parseCardUploaderBatchSnapshot(snapshotText) {
+  function automaticInventoryHeaderKey(value) {
+    return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  }
+
+  function looksLikeAutomaticInventoryHeaders(headers) {
+    const expected = new Set(["card", "status", "platform", "user sku", "catalog sku", "condition", "variant", "price", "market", "qty", "added"]);
+    return headers.map(automaticInventoryHeaderKey).filter((header) => expected.has(header)).length >= 7;
+  }
+
+  function mappedAutomaticInventoryCells(headers, cells) {
+    const mapped = {};
+    headers.forEach((header, index) => {
+      const key = automaticInventoryHeaderKey(header);
+      if (key && index < cells.length) {
+        mapped[key] = String(cells[index] || "").trim();
+      }
+    });
+    return mapped;
+  }
+
+  function parseCardUploaderAutomaticInventorySnapshot(snapshotText) {
     const text = String(snapshotText || "").trim();
     if (!text) {
-      throw new Error("Paste a CardUploader batch snapshot first.");
+      throw new Error("Paste a CardUploader automatic inventory snapshot first.");
     }
     let payload;
     try {
       payload = JSON.parse(text);
     } catch (_error) {
-      throw new Error("Snapshot must be valid JSON copied from the CardUploader batch scanner.");
+      throw new Error("Snapshot must be valid JSON copied from the CardUploader automatic inventory scanner.");
     }
-    if (!payload || payload.source !== "carduploader_batch_page_snapshot") {
-      throw new Error("Snapshot source is not a CardUploader batch page scan.");
+    if (!payload || payload.source !== "carduploader_automatic_inventory_page_snapshot") {
+      throw new Error("Snapshot source is not a CardUploader automatic inventory page scan.");
     }
-    if (!looksLikeCardUploaderBatchUrl(payload.url)) {
-      throw new Error("Snapshot must come from a CardUploader dashboard history or inventory page.");
+    if (!looksLikeCardUploaderAutomaticInventoryUrl(payload.url)) {
+      throw new Error("Snapshot must come from the CardUploader automatic inventory page.");
     }
     const rows = [];
     for (const table of payload.tables || []) {
       const headers = Array.isArray(table.headers) ? table.headers.map((header) => String(header || "").trim()) : [];
+      if (!looksLikeAutomaticInventoryHeaders(headers)) {
+        continue;
+      }
       for (const row of table.rows || []) {
         const cells = Array.isArray(row.cells) ? row.cells.map((cell) => String(cell || "").trim()) : [];
         const rawText = String(row.text || cells.join(" ")).replace(/\s+/g, " ").trim();
@@ -2489,15 +2541,25 @@
         if (headers.length && cells.join("|").toLowerCase() === headers.join("|").toLowerCase()) {
           continue;
         }
+        const mapped = mappedAutomaticInventoryCells(headers, cells);
         const catalogSku = (rawText.match(/\bCS-[A-Z0-9-]+\b/i) || [""])[0].toUpperCase();
         const location = (rawText.match(/\bETB-[0-9]{3}-[A-J](?:\.[0-9]+)?\b/i) || [""])[0].toUpperCase();
-        const priceCell = cells.find((cell) => /\$[0-9]/.test(cell)) || "";
+        const priceCell = mapped.price || cells.find((cell) => /\$[0-9]/.test(cell)) || "";
         rows.push({
           row_number: rows.length + 1,
-          title: cells[0] || rawText.slice(0, 120),
-          catalog_sku: catalogSku,
+          row_key: mapped["catalog sku"] || catalogSku || mapped["user sku"] || location || `row-${rows.length + 1}`,
+          title: mapped.card || cells[0] || rawText.slice(0, 120),
+          status: mapped.status || "",
+          platform: mapped.platform || "",
+          catalog_sku: mapped["catalog sku"] || catalogSku,
+          user_sku: mapped["user sku"] || location,
           location,
-          price: parseMoneyFromText(priceCell),
+          condition: mapped.condition || "",
+          variant: mapped.variant || "",
+          current_price: parseMoneyFromText(priceCell),
+          market_price: parseMoneyFromText(mapped.market || ""),
+          quantity: parseWholeNumber(mapped.qty),
+          added: mapped.added || "",
           raw_text: rawText
         });
       }
@@ -2505,9 +2567,56 @@
     return {
       source: payload.source,
       url: payload.url,
-      title: payload.title || "CardUploader batch",
+      title: payload.title || "CardUploader automatic inventory",
       captured_at: payload.captured_at || "",
+      controls: payload.controls || [],
+      editable_controls: payload.editable_controls || [],
       rows
+    };
+  }
+
+  function repricingRowsFromAutomaticInventorySnapshot(snapshot) {
+    const rows = snapshot && Array.isArray(snapshot.rows) ? snapshot.rows : [];
+    return rows.map((row, index) => normalizeRepricingRecord({
+      id: `carduploader-auto:${normalizeSnapshotIdentityPart(row.row_key || row.catalog_sku || row.user_sku || index + 1)}`,
+      inventory_id: row.catalog_sku || row.user_sku || row.row_key || "",
+      row_number: row.row_number || index + 1,
+      title: row.title || "",
+      user_sku: row.user_sku || "",
+      catalog_sku: row.catalog_sku || "",
+      marketplace: "carduploader",
+      current_price: row.current_price,
+      recommended_price: "",
+      quantity: row.quantity ?? 1,
+      status: "dry_run",
+      review_decision: "manual_review",
+      review_priority: "normal",
+      reason_codes: ["CARDUPLOADER_AUTOMATIC_INVENTORY_VISIBLE"],
+      notes: [],
+      search_query: [row.title, row.condition, row.variant].filter(Boolean).join(" "),
+      condition: row.condition || "",
+      variant: row.variant || "",
+      raw_row: row
+    }, index));
+  }
+
+  function updateRepricingRecommendation(row, value) {
+    const recommended = parseMoney(value);
+    const current = row.current_price;
+    const delta = current !== null && recommended !== null
+      ? Math.round((recommended - current) * 100) / 100
+      : null;
+    const pct = current && recommended !== null
+      ? `${Math.round(((recommended - current) / current * 100) * 100) / 100}`
+      : "";
+    return {
+      ...row,
+      recommended_price: recommended,
+      price_delta: delta,
+      percent_delta: pct,
+      status: row.status === "skipped" ? "skipped" : "dry_run",
+      apply_ready: false,
+      notes: recommended === null ? ["recommended_price_required"] : []
     };
   }
 
@@ -3163,7 +3272,7 @@
   async function renderOperatorRepricingReview() {
     const state = {
       rows: readStoredRepricingPlan(),
-      scannerScript: cardUploaderBatchScannerScript(),
+      scannerScript: cardUploaderAutomaticInventoryScannerScript(),
       snapshotText: "",
       snapshot: null,
       filter: "all",
@@ -3177,75 +3286,74 @@
           <div class="operator-toolbar">
             <div>
               <p class="eyebrow">CardVector operator</p>
-              <h1 id="repricing-review-title">Batch Import Price Review</h1>
-              <p>Review starting prices before a CardUploader batch is added to automatic inventory and synced live to eBay.</p>
-              <p class="operator-note">CardUploader remains inventory truth. Automatic inventory is treated as post-approval live state, not the primary pricing-review surface.</p>
+              <h1 id="repricing-review-title">Automatic Inventory Price Review</h1>
+              <p>Review CardUploader automatic inventory prices before changing values that sync live to eBay.</p>
+              <p class="operator-note">CardUploader remains inventory truth. CardVector reads visible rows, stages recommendations, and never writes live marketplace data from this page.</p>
             </div>
             <div class="operator-toolbar-actions">
               <a class="button secondary" href="/operator">Operator Dashboard</a>
-              <a class="button primary" href="https://carduploader.com/dashboard/history" target="_blank" rel="noopener noreferrer">Open CardUploader Batches</a>
+              <a class="button primary" href="https://carduploader.com/dashboard/inventory/automatic" target="_blank" rel="noopener noreferrer">Open CardUploader Automatic Inventory</a>
             </div>
           </div>
-          <div class="operator-warning" role="status">Live eBay sync happens after CardUploader automatic inventory is enabled. Price review must happen before that handoff unless a listing is being corrected after the fact.</div>
+          <div class="operator-warning" role="status">CardUploader automatic inventory is already connected to live eBay sync. This helper is read-only until a separate apply workflow is explicitly approved.</div>
           <div class="registry-summary repricing-summary">
-            <div><span>Source</span><strong>CardUploader Batch</strong></div>
+            <div><span>Source</span><strong>Automatic Inventory</strong></div>
             <div><span>Inventory Truth</span><strong>CardUploader</strong></div>
-            <div><span>eBay Sync</span><strong>After Approval</strong></div>
-            <div><span>Live Apply</span><strong>Not Default</strong></div>
+            <div><span>eBay Sync</span><strong>CardUploader</strong></div>
+            <div><span>Live Apply</span><strong>Disabled</strong></div>
           </div>
           <div class="operator-side-panel operator-main-panel">
-            <h2>Pre-Live Workflow</h2>
+            <h2>Safe Review Workflow</h2>
             <div class="repricing-live-steps">
               <article>
                 <span>1</span>
-                <strong>Open the CardUploader batch</strong>
-                <p>Use the batch history or newly imported batch before it is moved into automatic inventory.</p>
+                <strong>Open automatic inventory</strong>
+                <p>Use the CardUploader automatic inventory page because it is the live eBay-managed surface.</p>
               </article>
               <article>
                 <span>2</span>
-                <strong>Review recognized cards and market data</strong>
-                <p>Marketplace Intelligence evaluates the batch against current sold comps and business pricing rules.</p>
+                <strong>Scan visible rows</strong>
+                <p>The scanner reads table text and controls only. It does not click, type, save, fetch, or sync.</p>
               </article>
               <article>
                 <span>3</span>
-                <strong>Approve starting prices</strong>
-                <p>Only approved starting prices should be entered before CardUploader creates or syncs live eBay listings.</p>
+                <strong>Set reviewed prices</strong>
+                <p>Open sold-search links, enter recommended prices, and approve only rows you are comfortable changing.</p>
               </article>
               <article>
                 <span>4</span>
-                <strong>Verify automatic inventory after sync</strong>
-                <p>The automatic inventory page becomes an audit/check surface once CardUploader has pushed the approved batch live.</p>
+                <strong>Apply later with guardrails</strong>
+                <p>Approved rows become a local plan. A future PC helper can type them only after save behavior is proven.</p>
               </article>
             </div>
           </div>
           <section class="operator-side-panel operator-main-panel" aria-labelledby="repricing-candidates-title">
-            <h2 id="repricing-candidates-title">CardUploader Batch Scanner</h2>
+            <h2 id="repricing-candidates-title">CardUploader Automatic Inventory Scanner</h2>
             ${state.message ? `<div class="operator-success" role="status">${escapeHtml(state.message)}</div>` : ""}
             ${state.error ? `<div class="operator-warning" role="alert">${escapeHtml(state.error)}</div>` : ""}
             <div class="repricing-command-bar">
               <div class="repricing-command-actions">
-                <button class="button secondary" id="repricing-copy-scanner" type="button">Scan CardUploader batch</button>
-                <button class="button secondary" id="repricing-load-snapshot" type="button">Review batch prices</button>
-                <button class="button primary" id="repricing-apply-live" type="button" disabled>Prepare approved prices</button>
+                <button class="button secondary" id="repricing-copy-scanner" type="button">Copy inventory scanner</button>
+                <button class="button secondary" id="repricing-load-snapshot" type="button">Load inventory snapshot</button>
+                <button class="button primary" id="repricing-apply-live" type="button"${summarizeRepricingRows(state.rows).approved ? "" : " disabled"}>Download approved prices</button>
               </div>
             </div>
             <div class="repricing-scan-panel">
               <label class="entry-field" for="carduploader-batch-snapshot">
-                <span>CardUploader batch snapshot JSON</span>
-                <textarea id="carduploader-batch-snapshot" rows="8" spellcheck="false" placeholder="Paste the JSON copied by the CardUploader batch scanner.">${escapeHtml(state.snapshotText)}</textarea>
+                <span>CardUploader automatic inventory snapshot JSON</span>
+                <textarea id="carduploader-batch-snapshot" rows="8" spellcheck="false" placeholder="Paste the JSON copied by the CardUploader automatic inventory scanner.">${escapeHtml(state.snapshotText)}</textarea>
               </label>
               <p class="operator-note">The scanner is read-only. It reads visible page text/tables and does not click, type, save, fetch, update CardUploader, or sync eBay.</p>
             </div>
             <ul class="repricing-safeguard-list">
-              <li>Primary workflow targets CardUploader batch/import pages before automatic inventory is enabled.</li>
-              <li>Automatic inventory is used for post-sync audit unless a correction is explicitly approved.</li>
+              <li>Primary workflow targets CardUploader automatic inventory because it is the live eBay-managed surface.</li>
               <li>CardVector must never assume live eBay edits are safe just because a row is visible.</li>
-              <li>Approved prices require exact CardUploader card identity, current market evidence, and review status.</li>
-              <li>Bulk preparation remains capped and requires explicit confirmation before any CardUploader/eBay sync step.</li>
+              <li>Approved prices require exact CardUploader identity, current visible price, and operator review.</li>
+              <li>Bulk preparation remains local and read-only until a separately approved PC helper applies changes.</li>
             </ul>
           </section>
           <section class="operator-side-panel operator-main-panel" aria-labelledby="repricing-scan-results-title">
-            <h2 id="repricing-scan-results-title">Scanned Batch Rows</h2>
+            <h2 id="repricing-scan-results-title">Scanned Automatic Inventory Rows</h2>
             ${state.snapshot ? `
               <div class="registry-summary repricing-summary">
                 <div><span>Rows</span><strong>${escapeHtml(state.snapshot.rows.length)}</strong></div>
@@ -3255,7 +3363,13 @@
               </div>
               <p class="operator-note">Source URL: ${escapeHtml(state.snapshot.url)}</p>
             ` : ""}
-            ${renderCardUploaderBatchScanRows(state.snapshot)}
+            ${renderCardUploaderAutomaticInventoryRows(state.snapshot)}
+          </section>
+          <section class="operator-side-panel operator-main-panel" aria-labelledby="repricing-plan-title">
+            <h2 id="repricing-plan-title">Price Review Candidates</h2>
+            ${renderRepricingSummary(state.rows)}
+            ${renderRepricingFilters(state.filter)}
+            ${renderRepricingRows(state.rows, state.filter)}
           </section>
         </section>`;
 
@@ -3273,7 +3387,7 @@
           try {
             const copied = await copyTextToClipboard(state.scannerScript);
             state.message = copied
-              ? "Read-only scanner copied. Open the CardUploader batch page, paste it in the browser console, then paste the copied JSON here."
+              ? "Read-only scanner copied. Open CardUploader automatic inventory, paste it in the browser console, then paste the copied JSON here."
               : "Clipboard copy is unavailable in this browser. Use Chrome on the workstation or ask Codex to run the helper.";
           } catch (error) {
             state.error = error && error.message ? error.message : String(error);
@@ -3287,19 +3401,63 @@
           state.message = "";
           state.snapshotText = snapshotInput ? snapshotInput.value : state.snapshotText;
           try {
-            state.snapshot = parseCardUploaderBatchSnapshot(state.snapshotText);
-            state.message = `Loaded ${state.snapshot.rows.length} CardUploader batch rows read-only.`;
+            state.snapshot = parseCardUploaderAutomaticInventorySnapshot(state.snapshotText);
+            state.rows = repricingRowsFromAutomaticInventorySnapshot(state.snapshot);
+            writeStoredRepricingPlan(state.rows);
+            state.message = `Loaded ${state.snapshot.rows.length} CardUploader automatic inventory rows read-only.`;
           } catch (error) {
             state.snapshot = null;
+            state.rows = [];
             state.error = error && error.message ? error.message : String(error);
           }
           await draw();
         });
       }
+      document.querySelectorAll("[data-repricing-filter]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          state.filter = button.getAttribute("data-repricing-filter") || "all";
+          await draw();
+        });
+      });
+      document.querySelectorAll("[data-repricing-recommend]").forEach((input) => {
+        input.addEventListener("change", async () => {
+          const id = input.getAttribute("data-repricing-recommend");
+          state.rows = state.rows.map((row) => row.id === id ? updateRepricingRecommendation(row, input.value) : row);
+          writeStoredRepricingPlan(state.rows);
+          await draw();
+        });
+      });
+      document.querySelectorAll("[data-repricing-approve]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const id = button.getAttribute("data-repricing-approve");
+          state.rows = state.rows.map((row) => row.id === id && canApproveRepricingRow(row)
+            ? { ...row, status: "approved", apply_ready: true }
+            : row);
+          writeStoredRepricingPlan(state.rows);
+          await draw();
+        });
+      });
+      document.querySelectorAll("[data-repricing-skip]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const id = button.getAttribute("data-repricing-skip");
+          state.rows = state.rows.map((row) => row.id === id ? { ...row, status: "skipped", apply_ready: false } : row);
+          writeStoredRepricingPlan(state.rows);
+          await draw();
+        });
+      });
+      const applyLive = document.getElementById("repricing-apply-live");
+      if (applyLive) {
+        applyLive.addEventListener("click", () => {
+          const approved = state.rows.filter((row) => row.status === "approved");
+          const payload = reviewedRepricingExport(approved);
+          const stamp = new Date().toISOString().slice(0, 10);
+          downloadTextFile(`carduploader-approved-price-plan-${stamp}.json`, JSON.stringify(payload, null, 2));
+        });
+      }
     }
 
     await draw();
-    document.title = "Batch Import Price Review | CardVector";
+    document.title = "Automatic Inventory Price Review | CardVector";
   }
 
   async function renderOperatorListingReconciliationView(client, user, importedResult) {
