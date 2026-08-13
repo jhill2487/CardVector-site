@@ -2088,6 +2088,16 @@ h3 {
   padding-left: 1.2rem;
 }
 
+.repricing-instructions {
+  color: var(--muted);
+  display: grid;
+  gap: 0.42rem;
+  margin: 1rem 0;
+  padding-left: 1.35rem;
+  font-size: .93rem;
+  font-weight: 750;
+}
+
 .entry-ready {
   margin: 2px 0 0;
   color: var(--blue-700);

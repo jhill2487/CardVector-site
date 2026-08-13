@@ -2514,11 +2514,14 @@
     if (!text) {
       throw new Error("Paste a CardUploader automatic inventory snapshot first.");
     }
+    if (text.includes("carduploader_automatic_inventory_page_snapshot") && text.includes("document.querySelectorAll")) {
+      throw new Error("That is the scanner script, not the inventory JSON. Open CardUploader Automatic Inventory, paste the script into the browser console, press Enter, then paste the JSON it copies back here.");
+    }
     let payload;
     try {
       payload = JSON.parse(text);
     } catch (_error) {
-      throw new Error("Snapshot must be valid JSON copied from the CardUploader automatic inventory scanner.");
+      throw new Error("Snapshot must be valid JSON copied after running the CardUploader automatic inventory scanner on the CardUploader page.");
     }
     if (!payload || payload.source !== "carduploader_automatic_inventory_page_snapshot") {
       throw new Error("Snapshot source is not a CardUploader automatic inventory page scan.");
@@ -3333,15 +3336,21 @@
             ${state.error ? `<div class="operator-warning" role="alert">${escapeHtml(state.error)}</div>` : ""}
             <div class="repricing-command-bar">
               <div class="repricing-command-actions">
-                <button class="button secondary" id="repricing-copy-scanner" type="button">Copy inventory scanner</button>
-                <button class="button secondary" id="repricing-load-snapshot" type="button">Load inventory snapshot</button>
+                <button class="button secondary" id="repricing-copy-scanner" type="button">Copy scanner script</button>
+                <button class="button secondary" id="repricing-load-snapshot" type="button">Load captured JSON</button>
                 <button class="button primary" id="repricing-apply-live" type="button"${summarizeRepricingRows(state.rows).approved ? "" : " disabled"}>Download approved prices</button>
               </div>
             </div>
+            <ol class="repricing-instructions">
+              <li>Copy the scanner script from this page.</li>
+              <li>Open CardUploader Automatic Inventory in Chrome on the signed-in workstation.</li>
+              <li>Paste the script into the CardUploader page console and press Enter.</li>
+              <li>Paste the JSON snapshot copied by that script into the box below.</li>
+            </ol>
             <div class="repricing-scan-panel">
               <label class="entry-field" for="carduploader-batch-snapshot">
                 <span>CardUploader automatic inventory snapshot JSON</span>
-                <textarea id="carduploader-batch-snapshot" rows="8" spellcheck="false" placeholder="Paste the JSON copied by the CardUploader automatic inventory scanner.">${escapeHtml(state.snapshotText)}</textarea>
+                <textarea id="carduploader-batch-snapshot" rows="8" spellcheck="false" placeholder="Paste the JSON output copied after running the scanner script on CardUploader. Do not paste the scanner script itself here.">${escapeHtml(state.snapshotText)}</textarea>
               </label>
               <p class="operator-note">The scanner is read-only. It reads visible page text/tables and does not click, type, save, fetch, update CardUploader, or sync eBay.</p>
             </div>
@@ -3387,7 +3396,7 @@
           try {
             const copied = await copyTextToClipboard(state.scannerScript);
             state.message = copied
-              ? "Read-only scanner copied. Open CardUploader automatic inventory, paste it in the browser console, then paste the copied JSON here."
+              ? "Scanner script copied. Do not paste it here. Open CardUploader automatic inventory, paste it in the browser console, press Enter, then paste the copied JSON here."
               : "Clipboard copy is unavailable in this browser. Use Chrome on the workstation or ask Codex to run the helper.";
           } catch (error) {
             state.error = error && error.message ? error.message : String(error);
