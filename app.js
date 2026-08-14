@@ -2260,6 +2260,16 @@
       raw.variant,
       raw.finish,
       raw.platform,
+      raw.evidence_text,
+      ...(raw.action_labels || []),
+      ...((raw.links || []).map((link) => [link.text, link.href].filter(Boolean).join(" "))),
+      ...((raw.cell_details || []).flatMap((cell) => [
+        cell.text,
+        cell.title,
+        cell.aria_label,
+        ...(cell.image_alt_text || []),
+        ...((cell.links || []).map((link) => [link.text, link.href].filter(Boolean).join(" ")))
+      ])),
       raw.raw_text
     ].filter(Boolean).join(" ").toLowerCase();
   }
