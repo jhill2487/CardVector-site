@@ -2038,11 +2038,38 @@
   const repricingReviewStorageKey = "cardvector.repricingPlan.v1";
   const cardUploaderHelperSnapshotStorageKey = "cardvector.carduploaderAutomaticInventorySnapshot.v1";
   const repricingFloorRuleConfigStorageKey = "cardvector.repricingFloorRules.v1";
+  const repricingFilterConfigStorageKey = "cardvector.repricingFilters.v1";
+  const repricingBusinessProfileStorageKey = "cardvector.repricingBusinessProfile.v1";
   const defaultRepricingFloorRuleConfig = Object.freeze({
     defaultFloor: 1.48,
     pokemonHoloFloor: 1.98,
     pokemonUltraRareFloor: 2.98,
     mtgFoilFloor: 1.98
+  });
+  const defaultRepricingBusinessProfile = Object.freeze({
+    acquisitionCost: 0.05,
+    sleeveCost: 0.01,
+    topLoaderCost: 0.08,
+    teamBagCost: 0.03,
+    envelopeCost: 0.06,
+    labelAndTapeCost: 0.02,
+    otherSupplyCost: 0,
+    ebayStandardEnvelopeOneOz: 0.78,
+    ebayStandardEnvelopeTwoOz: 1.07,
+    ebayStandardEnvelopeThreeOz: 1.36,
+    defaultEnvelopeOunces: 1,
+    ebayFinalValueFeeRate: 0.1325,
+    ebayPerOrderFeeUnderTen: 0.30,
+    ebayPerOrderFeeOverTen: 0.40,
+    minimumProfit: 0.25,
+    roundingMode: "nearest_0_01"
+  });
+  const defaultRepricingFilterConfig = Object.freeze({
+    status: "all",
+    game: "all",
+    platform: "all",
+    priceBucket: "all",
+    search: ""
   });
   const repricingFloorRuleLabels = Object.freeze({
     defaultFloor: "Default floor",
@@ -2237,6 +2264,100 @@
     return normalized;
   }
 
+  function normalizeRepricingBusinessProfile(config = {}) {
+    const money = (key) => {
+      const value = parseMoney(config[key]);
+      const fallback = defaultRepricingBusinessProfile[key];
+      return value !== null && value >= 0 ? Math.round(value * 100) / 100 : fallback;
+    };
+    const feeRate = Number(config.ebayFinalValueFeeRate);
+    const ounces = Number(config.defaultEnvelopeOunces);
+    const roundingMode = ["nearest_0_01", "nearest_0_05", "nearest_0_25", "ending_0_49", "ending_0_99"].includes(config.roundingMode)
+      ? config.roundingMode
+      : defaultRepricingBusinessProfile.roundingMode;
+    return {
+      acquisitionCost: money("acquisitionCost"),
+      sleeveCost: money("sleeveCost"),
+      topLoaderCost: money("topLoaderCost"),
+      teamBagCost: money("teamBagCost"),
+      envelopeCost: money("envelopeCost"),
+      labelAndTapeCost: money("labelAndTapeCost"),
+      otherSupplyCost: money("otherSupplyCost"),
+      ebayStandardEnvelopeOneOz: money("ebayStandardEnvelopeOneOz"),
+      ebayStandardEnvelopeTwoOz: money("ebayStandardEnvelopeTwoOz"),
+      ebayStandardEnvelopeThreeOz: money("ebayStandardEnvelopeThreeOz"),
+      defaultEnvelopeOunces: [1, 2, 3].includes(ounces) ? ounces : defaultRepricingBusinessProfile.defaultEnvelopeOunces,
+      ebayFinalValueFeeRate: Number.isFinite(feeRate) && feeRate >= 0 ? Math.round(feeRate * 10000) / 10000 : defaultRepricingBusinessProfile.ebayFinalValueFeeRate,
+      ebayPerOrderFeeUnderTen: money("ebayPerOrderFeeUnderTen"),
+      ebayPerOrderFeeOverTen: money("ebayPerOrderFeeOverTen"),
+      minimumProfit: money("minimumProfit"),
+      roundingMode
+    };
+  }
+
+  function readStoredRepricingBusinessProfile() {
+    try {
+      const payload = JSON.parse(localStorage.getItem(repricingBusinessProfileStorageKey) || "null");
+      return normalizeRepricingBusinessProfile(payload || {});
+    } catch (_error) {
+      return normalizeRepricingBusinessProfile();
+    }
+  }
+
+  function writeStoredRepricingBusinessProfile(config) {
+    const normalized = normalizeRepricingBusinessProfile(config);
+    localStorage.setItem(repricingBusinessProfileStorageKey, JSON.stringify(normalized));
+    return normalized;
+  }
+
+  function readRepricingBusinessProfileInputs() {
+    const values = {};
+    document.querySelectorAll("[data-repricing-business]").forEach((input) => {
+      values[input.getAttribute("data-repricing-business")] = input.value;
+    });
+    return normalizeRepricingBusinessProfile(values);
+  }
+
+  function normalizeRepricingFilterConfig(config = {}) {
+    if (typeof config === "string") {
+      return { ...defaultRepricingFilterConfig, status: config || "all" };
+    }
+    const status = ["all", "safe", "approved", "needs_review", "blocked", "increase", "decrease"].includes(config.status)
+      ? config.status
+      : defaultRepricingFilterConfig.status;
+    const game = ["all", "pokemon", "mtg", "unknown"].includes(config.game)
+      ? config.game
+      : defaultRepricingFilterConfig.game;
+    const platform = ["all", "ebay", "crosslisted", "manapool", "unknown"].includes(config.platform)
+      ? config.platform
+      : defaultRepricingFilterConfig.platform;
+    const priceBucket = ["all", "under_2", "two_to_five", "five_to_ten", "ten_plus"].includes(config.priceBucket)
+      ? config.priceBucket
+      : defaultRepricingFilterConfig.priceBucket;
+    return {
+      status,
+      game,
+      platform,
+      priceBucket,
+      search: String(config.search || "").trim().slice(0, 120)
+    };
+  }
+
+  function readStoredRepricingFilterConfig() {
+    try {
+      const payload = JSON.parse(localStorage.getItem(repricingFilterConfigStorageKey) || "null");
+      return normalizeRepricingFilterConfig(payload || {});
+    } catch (_error) {
+      return normalizeRepricingFilterConfig();
+    }
+  }
+
+  function writeStoredRepricingFilterConfig(config) {
+    const normalized = normalizeRepricingFilterConfig(config);
+    localStorage.setItem(repricingFilterConfigStorageKey, JSON.stringify(normalized));
+    return normalized;
+  }
+
   function readRepricingFloorRuleInputs() {
     const values = {};
     document.querySelectorAll("[data-repricing-floor]").forEach((input) => {
@@ -2285,6 +2406,30 @@
     return "unknown";
   }
 
+  function detectRepricingPlatform(row) {
+    const raw = row && row.raw_row ? row.raw_row : {};
+    const text = [
+      row && row.marketplace,
+      raw.platform,
+      raw.status,
+      raw.raw_text,
+      ...(raw.action_labels || []),
+      ...((raw.cell_details || []).map((cell) => cell.text || ""))
+    ].filter(Boolean).join(" ").toLowerCase();
+    const hasEbay = /\bebay\b/.test(text);
+    const hasManapool = /\b(mana ?pool|manapool)\b/.test(text);
+    if (hasEbay && hasManapool) {
+      return "crosslisted";
+    }
+    if (hasEbay) {
+      return "ebay";
+    }
+    if (hasManapool) {
+      return "manapool";
+    }
+    return "unknown";
+  }
+
   function matchedRepricingFloorRule(row, config = defaultRepricingFloorRuleConfig) {
     const floorConfig = normalizeRepricingFloorRuleConfig(config);
     const text = repricingRuleText(row);
@@ -2322,7 +2467,150 @@
     return candidates.sort((a, b) => b.floor - a.floor)[0];
   }
 
-  function applyRepricingFloorRules(rows, config = defaultRepricingFloorRuleConfig) {
+  function roundCurrency(value) {
+    return Math.round(Number(value || 0) * 100) / 100;
+  }
+
+  function applyRepricingRounding(value, mode = defaultRepricingBusinessProfile.roundingMode) {
+    const amount = Number(value);
+    if (!Number.isFinite(amount)) {
+      return null;
+    }
+    if (mode === "nearest_0_05") {
+      return roundCurrency(Math.ceil(amount / 0.05) * 0.05);
+    }
+    if (mode === "nearest_0_25") {
+      return roundCurrency(Math.ceil(amount / 0.25) * 0.25);
+    }
+    if (mode === "ending_0_49") {
+      const dollars = Math.floor(amount);
+      const candidate = dollars + 0.49;
+      return roundCurrency(candidate >= amount ? candidate : dollars + 1.49);
+    }
+    if (mode === "ending_0_99") {
+      const dollars = Math.floor(amount);
+      const candidate = dollars + 0.99;
+      return roundCurrency(candidate >= amount ? candidate : dollars + 1.99);
+    }
+    return roundCurrency(amount);
+  }
+
+  function repricingPackagingCost(profile = defaultRepricingBusinessProfile) {
+    const business = normalizeRepricingBusinessProfile(profile);
+    return roundCurrency(
+      business.sleeveCost
+      + business.topLoaderCost
+      + business.teamBagCost
+      + business.envelopeCost
+      + business.labelAndTapeCost
+      + business.otherSupplyCost
+    );
+  }
+
+  function repricingShippingCost(profile = defaultRepricingBusinessProfile) {
+    const business = normalizeRepricingBusinessProfile(profile);
+    if (business.defaultEnvelopeOunces === 3) {
+      return business.ebayStandardEnvelopeThreeOz;
+    }
+    if (business.defaultEnvelopeOunces === 2) {
+      return business.ebayStandardEnvelopeTwoOz;
+    }
+    return business.ebayStandardEnvelopeOneOz;
+  }
+
+  function estimateEbayFee(price, profile = defaultRepricingBusinessProfile) {
+    const business = normalizeRepricingBusinessProfile(profile);
+    const salePrice = Number(price || 0);
+    const perOrder = salePrice <= 10 ? business.ebayPerOrderFeeUnderTen : business.ebayPerOrderFeeOverTen;
+    return roundCurrency((salePrice * business.ebayFinalValueFeeRate) + perOrder);
+  }
+
+  function calculateMinimumViablePrice(profile = defaultRepricingBusinessProfile) {
+    const business = normalizeRepricingBusinessProfile(profile);
+    const fixedCosts = roundCurrency(
+      business.acquisitionCost
+      + repricingPackagingCost(business)
+      + repricingShippingCost(business)
+      + business.minimumProfit
+    );
+    const denominator = 1 - business.ebayFinalValueFeeRate;
+    const candidate = denominator > 0
+      ? (fixedCosts + business.ebayPerOrderFeeUnderTen) / denominator
+      : fixedCosts + business.ebayPerOrderFeeUnderTen;
+    return applyRepricingRounding(candidate, business.roundingMode);
+  }
+
+  function buildRepricingBusinessAnalysis(price, profile = defaultRepricingBusinessProfile) {
+    const business = normalizeRepricingBusinessProfile(profile);
+    const listingPrice = Number(price);
+    if (!Number.isFinite(listingPrice)) {
+      return {
+        acquisition_cost: business.acquisitionCost,
+        packaging_cost: repricingPackagingCost(business),
+        shipping_cost: repricingShippingCost(business),
+        estimated_fees: null,
+        estimated_net_profit: null,
+        profit_margin: null,
+        minimum_viable_price: calculateMinimumViablePrice(business),
+        business_rule_adjustments: []
+      };
+    }
+    const estimatedFees = estimateEbayFee(listingPrice, business);
+    const packagingCost = repricingPackagingCost(business);
+    const shippingCost = repricingShippingCost(business);
+    const netProfit = roundCurrency(listingPrice - estimatedFees - shippingCost - packagingCost - business.acquisitionCost);
+    return {
+      acquisition_cost: business.acquisitionCost,
+      packaging_cost: packagingCost,
+      shipping_cost: shippingCost,
+      estimated_fees: estimatedFees,
+      estimated_net_profit: netProfit,
+      profit_margin: listingPrice > 0 ? roundCurrency((netProfit / listingPrice) * 100) : null,
+      minimum_viable_price: calculateMinimumViablePrice(business),
+      business_rule_adjustments: []
+    };
+  }
+
+  function applyRepricingBusinessRules(row, rule, profile = defaultRepricingBusinessProfile) {
+    const business = normalizeRepricingBusinessProfile(profile);
+    const current = row.current_price;
+    if (current === null || current === undefined) {
+      return row;
+    }
+    const reasonCodes = new Set(row.reason_codes || []);
+    const marketCandidate = row.recommended_price !== null && row.recommended_price !== undefined
+      ? Number(row.recommended_price)
+      : Number(current);
+    const minimumViable = calculateMinimumViablePrice(business);
+    const recommendedBase = Math.max(Number.isFinite(marketCandidate) ? marketCandidate : 0, minimumViable);
+    const recommended = applyRepricingRounding(recommendedBase, business.roundingMode);
+    const delta = roundCurrency(recommended - Number(current));
+    reasonCodes.add("BUSINESS_RULES_EVALUATED");
+    reasonCodes.add("FREE_SHIPPING_ASSUMED");
+    if (recommended > marketCandidate) {
+      reasonCodes.add("MINIMUM_VIABLE_PRICE_APPLIED");
+    }
+    if (rule && recommended > rule.floor) {
+      reasonCodes.add("BUSINESS_COST_ABOVE_FLOOR");
+    }
+    const businessAnalysis = buildRepricingBusinessAnalysis(recommended, business);
+    businessAnalysis.business_rule_adjustments = Array.from(reasonCodes).filter((reason) => reason.includes("BUSINESS") || reason.includes("SHIPPING") || reason.includes("MINIMUM"));
+    return {
+      ...row,
+      recommended_price: recommended,
+      price_delta: delta,
+      percent_delta: Number(current) ? `${roundCurrency(delta / Number(current) * 100)}` : "",
+      confidence: row.confidence || "business_floor",
+      status: row.status === "skipped" || row.status === "approved" ? row.status : "dry_run",
+      review_decision: delta > 0 ? "increase_price" : row.review_decision || "no_change",
+      review_priority: delta > 0 && recommended > marketCandidate ? "high" : row.review_priority || "normal",
+      apply_ready: false,
+      reason_codes: Array.from(reasonCodes),
+      business_analysis: businessAnalysis
+    };
+  }
+
+  function applyRepricingFloorRules(rows, config = defaultRepricingFloorRuleConfig, businessProfile = defaultRepricingBusinessProfile) {
     return (Array.isArray(rows) ? rows : []).map((row) => {
       const current = row.current_price;
       const rule = matchedRepricingFloorRule(row, config);
@@ -2345,11 +2633,12 @@
           notes: Array.from(notes)
         };
       }
+      let pricedRow = row;
       if (Number(current) < rule.floor) {
         const recommended = Math.round(rule.floor * 100) / 100;
         const delta = Math.round((recommended - Number(current)) * 100) / 100;
         reasonCodes.add(rule.reason);
-        return {
+        pricedRow = {
           ...row,
           recommended_price: recommended,
           price_delta: delta,
@@ -2362,16 +2651,18 @@
           reason_codes: Array.from(reasonCodes),
           notes: Array.from(notes)
         };
+      } else {
+        reasonCodes.add("ABOVE_FLOOR_NO_CHANGE");
+        pricedRow = {
+          ...row,
+          recommended_price: row.recommended_price,
+          price_delta: row.price_delta,
+          review_decision: row.review_decision || "no_change",
+          reason_codes: Array.from(reasonCodes),
+          notes: Array.from(notes)
+        };
       }
-      reasonCodes.add("ABOVE_FLOOR_NO_CHANGE");
-      return {
-        ...row,
-        recommended_price: row.recommended_price,
-        price_delta: row.price_delta,
-        review_decision: row.review_decision || "no_change",
-        reason_codes: Array.from(reasonCodes),
-        notes: Array.from(notes)
-      };
+      return applyRepricingBusinessRules(pricedRow, rule, businessProfile);
     });
   }
 
@@ -2422,27 +2713,86 @@
     };
   }
 
-  function filterRepricingRows(rows, filter) {
-    const values = Array.isArray(rows) ? rows : [];
+  function repricingPriceBucket(row) {
+    const price = Number(row && row.current_price);
+    if (!Number.isFinite(price)) {
+      return "unknown";
+    }
+    if (price < 2) {
+      return "under_2";
+    }
+    if (price < 5) {
+      return "two_to_five";
+    }
+    if (price < 10) {
+      return "five_to_ten";
+    }
+    return "ten_plus";
+  }
+
+  function repricingSearchText(row) {
+    const raw = row && row.raw_row ? row.raw_row : {};
+    return [
+      row && row.title,
+      row && row.inventory_id,
+      row && row.user_sku,
+      row && row.catalog_sku,
+      row && row.condition,
+      row && row.variant,
+      row && row.finish,
+      row && row.set_name,
+      row && row.card_number,
+      row && row.marketplace_listing_id,
+      row && row.search_query,
+      raw.platform,
+      raw.raw_text
+    ].filter(Boolean).join(" ").toLowerCase();
+  }
+
+  function rowMatchesRepricingStatus(row, filter) {
     if (filter === "approved") {
-      return values.filter((row) => row.status === "approved");
+      return row.status === "approved";
     }
     if (filter === "safe") {
-      return values.filter(canApproveRepricingRow);
+      return canApproveRepricingRow(row);
     }
     if (filter === "needs_review") {
-      return values.filter((row) => row.status === "dry_run" && !canApproveRepricingRow(row));
+      return row.status === "dry_run" && !canApproveRepricingRow(row);
     }
     if (filter === "blocked") {
-      return values.filter((row) => row.status === "blocked");
+      return row.status === "blocked";
     }
     if (filter === "increase") {
-      return values.filter((row) => Number(row.price_delta || 0) > 0);
+      return Number(row.price_delta || 0) > 0;
     }
     if (filter === "decrease") {
-      return values.filter((row) => Number(row.price_delta || 0) < 0);
+      return Number(row.price_delta || 0) < 0;
     }
-    return values;
+    return true;
+  }
+
+  function filterRepricingRows(rows, filter) {
+    const values = Array.isArray(rows) ? rows : [];
+    const filters = normalizeRepricingFilterConfig(filter);
+    const search = filters.search.toLowerCase();
+    return values.filter((row) => {
+      if (!rowMatchesRepricingStatus(row, filters.status)) {
+        return false;
+      }
+      if (filters.game !== "all" && detectRepricingGame(row) !== filters.game) {
+        return false;
+      }
+      if (filters.platform !== "all" && detectRepricingPlatform(row) !== filters.platform) {
+        return false;
+      }
+      if (filters.priceBucket !== "all" && repricingPriceBucket(row) !== filters.priceBucket) {
+        return false;
+      }
+      if (search && !repricingSearchText(row).includes(search)) {
+        return false;
+      }
+      return true;
+    });
   }
 
   function ebaySoldSearchUrl(row) {
@@ -2538,7 +2888,89 @@
       </div>`;
   }
 
-  function renderRepricingFilters(activeFilter) {
+  function summarizeRepricingBusiness(rows) {
+    const values = Array.isArray(rows) ? rows : [];
+    const withAnalysis = values.filter((row) => row.business_analysis && row.business_analysis.estimated_net_profit !== null);
+    const minimumApplied = values.filter((row) => (row.reason_codes || []).includes("MINIMUM_VIABLE_PRICE_APPLIED")).length;
+    const totalProfit = withAnalysis.reduce((total, row) => total + Number(row.business_analysis.estimated_net_profit || 0), 0);
+    return {
+      analyzed: withAnalysis.length,
+      minimumApplied,
+      averageProfit: withAnalysis.length ? roundCurrency(totalProfit / withAnalysis.length) : 0,
+      minimumViablePrice: values[0] && values[0].business_analysis ? values[0].business_analysis.minimum_viable_price : null
+    };
+  }
+
+  function renderRepricingBusinessProfile(rows, profile = defaultRepricingBusinessProfile) {
+    const business = normalizeRepricingBusinessProfile(profile);
+    const summary = summarizeRepricingBusiness(rows);
+    const moneyInput = (key, label) => `
+      <label>
+        <span>${escapeHtml(label)}</span>
+        <input type="number" min="0" step="0.01" inputmode="decimal" data-repricing-business="${escapeHtml(key)}" value="${escapeHtml(String(business[key]))}">
+      </label>`;
+    return `
+      <div class="repricing-business-card">
+        <div>
+          <p class="eyebrow">Business pricing profile</p>
+          <h3>Include free shipping, supplies, fees, and profit.</h3>
+          <p>Recommendations use the higher of the market/floor result and your minimum viable price. The 1 oz eBay Standard Envelope default is ${escapeHtml(formatCurrency(business.ebayStandardEnvelopeOneOz))}.</p>
+        </div>
+        <div class="repricing-business-grid">
+          ${moneyInput("acquisitionCost", "Acquisition")}
+          ${moneyInput("sleeveCost", "Sleeve")}
+          ${moneyInput("topLoaderCost", "Top loader")}
+          ${moneyInput("teamBagCost", "Team bag")}
+          ${moneyInput("envelopeCost", "Envelope")}
+          ${moneyInput("labelAndTapeCost", "Label/tape")}
+          ${moneyInput("otherSupplyCost", "Other supplies")}
+          ${moneyInput("minimumProfit", "Min profit")}
+          ${moneyInput("ebayStandardEnvelopeOneOz", "ESE 1 oz")}
+          ${moneyInput("ebayStandardEnvelopeTwoOz", "ESE 2 oz")}
+          ${moneyInput("ebayStandardEnvelopeThreeOz", "ESE 3 oz")}
+          <label>
+            <span>Default weight</span>
+            <select data-repricing-business="defaultEnvelopeOunces">
+              ${[1, 2, 3].map((ounces) => `<option value="${ounces}"${business.defaultEnvelopeOunces === ounces ? " selected" : ""}>${ounces} oz</option>`).join("")}
+            </select>
+          </label>
+          <label>
+            <span>eBay fee rate</span>
+            <input type="number" min="0" step="0.0001" inputmode="decimal" data-repricing-business="ebayFinalValueFeeRate" value="${escapeHtml(String(business.ebayFinalValueFeeRate))}">
+          </label>
+          ${moneyInput("ebayPerOrderFeeUnderTen", "Fee <= $10")}
+          ${moneyInput("ebayPerOrderFeeOverTen", "Fee > $10")}
+          <label>
+            <span>Rounding</span>
+            <select data-repricing-business="roundingMode">
+              ${[
+                ["nearest_0_01", "Exact cents"],
+                ["nearest_0_05", "Round up $0.05"],
+                ["nearest_0_25", "Round up $0.25"],
+                ["ending_0_49", "End in $0.49"],
+                ["ending_0_99", "End in $0.99"]
+              ].map(([value, label]) => `<option value="${escapeHtml(value)}"${business.roundingMode === value ? " selected" : ""}>${escapeHtml(label)}</option>`).join("")}
+            </select>
+          </label>
+        </div>
+        <div class="repricing-floor-actions">
+          <button class="button secondary" id="repricing-save-business-profile" type="button">Save business profile</button>
+          <button class="button secondary" id="repricing-reset-business-profile" type="button">Reset business defaults</button>
+        </div>
+        <div class="registry-summary repricing-summary">
+          <div><span>Minimum viable</span><strong>${escapeHtml(formatCurrency(calculateMinimumViablePrice(business)))}</strong></div>
+          <div><span>Packaging</span><strong>${escapeHtml(formatCurrency(repricingPackagingCost(business)))}</strong></div>
+          <div><span>Shipping</span><strong>${escapeHtml(formatCurrency(repricingShippingCost(business)))}</strong></div>
+          <div><span>Business floor applied</span><strong>${summary.minimumApplied}</strong></div>
+          <div><span>Avg est. profit</span><strong>${escapeHtml(formatCurrency(summary.averageProfit))}</strong></div>
+        </div>
+      </div>`;
+  }
+
+  function renderRepricingFilters(rows, activeFilter) {
+    const filtersConfig = normalizeRepricingFilterConfig(activeFilter);
+    const visibleCount = filterRepricingRows(rows, filtersConfig).length;
+    const totalCount = Array.isArray(rows) ? rows.length : 0;
     const filters = [
       ["all", "All"],
       ["safe", "Auto-safe"],
@@ -2548,9 +2980,35 @@
       ["increase", "Increases"],
       ["decrease", "Decreases"]
     ];
-    return `<div class="repricing-filters" aria-label="Repricing filters">${filters.map(([value, label]) => `
-      <button class="repricing-filter${activeFilter === value ? " active" : ""}" type="button" data-repricing-filter="${escapeHtml(value)}">${escapeHtml(label)}</button>
-    `).join("")}</div>`;
+    const selectControl = (id, label, value, options) => `
+      <label>
+        <span>${escapeHtml(label)}</span>
+        <select id="${escapeHtml(id)}" data-repricing-filter-field="${escapeHtml(id)}">
+          ${options.map(([optionValue, optionLabel]) => `<option value="${escapeHtml(optionValue)}"${value === optionValue ? " selected" : ""}>${escapeHtml(optionLabel)}</option>`).join("")}
+        </select>
+      </label>`;
+    return `
+      <div class="repricing-filter-panel" aria-label="Repricing filters">
+        <div class="repricing-filter-header">
+          <div>
+            <p class="eyebrow">Review filters</p>
+            <strong>${escapeHtml(String(visibleCount))} of ${escapeHtml(String(totalCount))} rows visible</strong>
+          </div>
+          <button class="button secondary" id="repricing-clear-filters" type="button">Clear filters</button>
+        </div>
+        <div class="repricing-filters">${filters.map(([value, label]) => `
+          <button class="repricing-filter${filtersConfig.status === value ? " active" : ""}" type="button" data-repricing-filter="${escapeHtml(value)}">${escapeHtml(label)}</button>
+        `).join("")}</div>
+        <div class="repricing-filter-grid">
+          ${selectControl("game", "Game", filtersConfig.game, [["all", "All games"], ["pokemon", "Pokemon"], ["mtg", "Magic"], ["unknown", "Unknown"]])}
+          ${selectControl("platform", "Platform", filtersConfig.platform, [["all", "All platforms"], ["ebay", "eBay only"], ["crosslisted", "eBay + Mana Pool"], ["manapool", "Mana Pool only"], ["unknown", "Unknown"]])}
+          ${selectControl("priceBucket", "Current price", filtersConfig.priceBucket, [["all", "All prices"], ["under_2", "Under $2"], ["two_to_five", "$2-$5"], ["five_to_ten", "$5-$10"], ["ten_plus", "$10+"]])}
+          <label>
+            <span>Search</span>
+            <input id="repricing-filter-search" data-repricing-filter-field="search" type="search" value="${escapeHtml(filtersConfig.search)}" placeholder="Card, SKU, condition">
+          </label>
+        </div>
+      </div>`;
   }
 
   function renderReasonChips(row) {
@@ -2579,6 +3037,12 @@
           <strong>${escapeHtml(formatCurrency(row.current_price))}</strong>
           <span>Recommended</span>
           <strong>${escapeHtml(formatCurrency(row.recommended_price))}</strong>
+          ${row.business_analysis ? `
+            <span>Min viable</span>
+            <strong>${escapeHtml(formatCurrency(row.business_analysis.minimum_viable_price))}</strong>
+            <span>Est. profit</span>
+            <strong class="${Number(row.business_analysis.estimated_net_profit || 0) < 0 ? "negative" : "positive"}">${escapeHtml(formatCurrency(row.business_analysis.estimated_net_profit))}</strong>
+          ` : ""}
           <label class="repricing-price-input">
             <span>Set recommended</span>
             <input type="number" min="0" step="0.01" inputmode="decimal" data-repricing-recommend="${escapeHtml(row.id)}" value="${row.recommended_price === null || row.recommended_price === undefined ? "" : escapeHtml(String(row.recommended_price))}">
@@ -2849,7 +3313,7 @@
     }, index));
   }
 
-  function updateRepricingRecommendation(row, value) {
+  function updateRepricingRecommendation(row, value, businessProfile = defaultRepricingBusinessProfile) {
     const recommended = parseMoney(value);
     const current = row.current_price;
     const delta = current !== null && recommended !== null
@@ -2866,7 +3330,8 @@
       status: row.status === "skipped" ? "skipped" : "dry_run",
       apply_ready: false,
       reason_codes: Array.from(new Set([...(row.reason_codes || []), "MANUAL_RECOMMENDATION_OVERRIDE"])),
-      notes: recommended === null ? ["recommended_price_required"] : []
+      notes: recommended === null ? ["recommended_price_required"] : [],
+      business_analysis: buildRepricingBusinessAnalysis(recommended, businessProfile)
     };
   }
 
@@ -3524,7 +3989,8 @@
       rows: readStoredRepricingPlan(),
       snapshot: readStoredCardUploaderHelperSnapshot(),
       floorConfig: readStoredRepricingFloorRuleConfig(),
-      filter: "all",
+      businessProfile: readStoredRepricingBusinessProfile(),
+      filters: readStoredRepricingFilterConfig(),
       error: "",
       message: "",
       focusCandidates: false
@@ -3585,7 +4051,7 @@
               <div class="repricing-command-actions">
                 <button class="button secondary" id="repricing-helper-status" type="button">Check helper status</button>
                 <button class="button secondary" id="repricing-request-snapshot" type="button"${state.snapshot && state.snapshot.rows.length ? "" : " disabled"}>Load helper snapshot</button>
-                <button class="button primary" id="repricing-apply-live" type="button"${summarizeRepricingRows(state.rows).approved ? "" : " disabled"}>Download approved prices</button>
+                <button class="button primary" id="repricing-apply-live" type="button"${summarizeRepricingRows(state.rows).approved ? "" : " disabled"}>Prepare approved price updates</button>
               </div>
             </div>
             <ol class="repricing-instructions">
@@ -3610,9 +4076,10 @@
           <section class="operator-side-panel operator-main-panel" aria-labelledby="repricing-plan-title">
             <h2 id="repricing-plan-title">Price Review Candidates</h2>
             ${renderRepricingFloorRuleSummary(state.rows, state.floorConfig)}
+            ${renderRepricingBusinessProfile(state.rows, state.businessProfile)}
             ${renderRepricingSummary(state.rows)}
-            ${renderRepricingFilters(state.filter)}
-            ${renderRepricingRows(state.rows, state.filter)}
+            ${renderRepricingFilters(state.rows, state.filters)}
+            ${renderRepricingRows(state.rows, state.filters)}
           </section>
         </section>`;
 
@@ -3636,10 +4103,10 @@
           if (!state.snapshot || !state.snapshot.rows.length) {
             state.error = "No helper snapshot is available yet.";
           } else {
-            state.rows = applyRepricingFloorRules(repricingRowsFromAutomaticInventorySnapshot(state.snapshot), state.floorConfig);
+            state.rows = applyRepricingFloorRules(repricingRowsFromAutomaticInventorySnapshot(state.snapshot), state.floorConfig, state.businessProfile);
             writeStoredRepricingPlan(state.rows);
             const floorSummary = summarizeRepricingFloorRules(state.rows);
-            state.filter = floorSummary.raised ? "increase" : "all";
+            state.filters = writeStoredRepricingFilterConfig({ ...state.filters, status: floorSummary.raised ? "increase" : "all" });
             state.focusCandidates = true;
             state.message = `Loaded ${state.snapshot.rows.length} helper rows into price review. Floor rules raised ${floorSummary.raised} rows for review.`;
           }
@@ -3664,6 +4131,24 @@
           await draw();
         });
       }
+      const saveBusinessProfile = document.getElementById("repricing-save-business-profile");
+      if (saveBusinessProfile) {
+        saveBusinessProfile.addEventListener("click", async () => {
+          state.error = "";
+          state.businessProfile = writeStoredRepricingBusinessProfile(readRepricingBusinessProfileInputs());
+          state.message = "Saved business pricing profile. Reapply floor rules to refresh current recommendations.";
+          await draw();
+        });
+      }
+      const resetBusinessProfile = document.getElementById("repricing-reset-business-profile");
+      if (resetBusinessProfile) {
+        resetBusinessProfile.addEventListener("click", async () => {
+          state.error = "";
+          state.businessProfile = writeStoredRepricingBusinessProfile(defaultRepricingBusinessProfile);
+          state.message = "Reset business pricing profile to CardVector defaults.";
+          await draw();
+        });
+      }
       const reapplyFloorRules = document.getElementById("repricing-reapply-floor-rules");
       if (reapplyFloorRules) {
         reapplyFloorRules.addEventListener("click", async () => {
@@ -3673,10 +4158,11 @@
           if (!state.snapshot || !state.snapshot.rows.length) {
             state.error = "No helper snapshot is available to reapply.";
           } else {
-            state.rows = applyRepricingFloorRules(repricingRowsFromAutomaticInventorySnapshot(state.snapshot), state.floorConfig);
+            state.businessProfile = writeStoredRepricingBusinessProfile(readRepricingBusinessProfileInputs());
+            state.rows = applyRepricingFloorRules(repricingRowsFromAutomaticInventorySnapshot(state.snapshot), state.floorConfig, state.businessProfile);
             writeStoredRepricingPlan(state.rows);
             const floorSummary = summarizeRepricingFloorRules(state.rows);
-            state.filter = floorSummary.raised ? "increase" : "all";
+            state.filters = writeStoredRepricingFilterConfig({ ...state.filters, status: floorSummary.raised ? "increase" : "all" });
             state.focusCandidates = true;
             state.message = `Reapplied floor rules to ${state.snapshot.rows.length} helper rows. Floor rules raised ${floorSummary.raised} rows for review.`;
           }
@@ -3685,14 +4171,46 @@
       }
       document.querySelectorAll("[data-repricing-filter]").forEach((button) => {
         button.addEventListener("click", async () => {
-          state.filter = button.getAttribute("data-repricing-filter") || "all";
+          state.filters = writeStoredRepricingFilterConfig({
+            ...state.filters,
+            status: button.getAttribute("data-repricing-filter") || "all"
+          });
           await draw();
         });
       });
+      document.querySelectorAll("[data-repricing-filter-field]").forEach((control) => {
+        control.addEventListener("change", async () => {
+          const field = control.getAttribute("data-repricing-filter-field");
+          state.filters = writeStoredRepricingFilterConfig({ ...state.filters, [field]: control.value });
+          await draw();
+        });
+      });
+      const filterSearch = document.getElementById("repricing-filter-search");
+      if (filterSearch) {
+        filterSearch.addEventListener("input", () => {
+          state.filters = writeStoredRepricingFilterConfig({ ...state.filters, search: filterSearch.value });
+        });
+        filterSearch.addEventListener("keydown", async (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            await draw();
+          }
+        });
+        filterSearch.addEventListener("blur", async () => {
+          await draw();
+        });
+      }
+      const clearFilters = document.getElementById("repricing-clear-filters");
+      if (clearFilters) {
+        clearFilters.addEventListener("click", async () => {
+          state.filters = writeStoredRepricingFilterConfig(defaultRepricingFilterConfig);
+          await draw();
+        });
+      }
       document.querySelectorAll("[data-repricing-recommend]").forEach((input) => {
         input.addEventListener("change", async () => {
           const id = input.getAttribute("data-repricing-recommend");
-          state.rows = state.rows.map((row) => row.id === id ? updateRepricingRecommendation(row, input.value) : row);
+          state.rows = state.rows.map((row) => row.id === id ? updateRepricingRecommendation(row, input.value, state.businessProfile) : row);
           writeStoredRepricingPlan(state.rows);
           await draw();
         });
