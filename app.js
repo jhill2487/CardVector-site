@@ -3469,7 +3469,8 @@
       snapshot: readStoredCardUploaderHelperSnapshot(),
       filter: "all",
       error: "",
-      message: ""
+      message: "",
+      focusCandidates: false
     };
 
     async function draw() {
@@ -3581,6 +3582,8 @@
             state.rows = applyRepricingFloorRules(repricingRowsFromAutomaticInventorySnapshot(state.snapshot));
             writeStoredRepricingPlan(state.rows);
             const floorSummary = summarizeRepricingFloorRules(state.rows);
+            state.filter = floorSummary.raised ? "increase" : "all";
+            state.focusCandidates = true;
             state.message = `Loaded ${state.snapshot.rows.length} helper rows into price review. Floor rules raised ${floorSummary.raised} rows for review.`;
           }
           await draw();
@@ -3625,6 +3628,12 @@
           const payload = reviewedRepricingExport(approved);
           const stamp = new Date().toISOString().slice(0, 10);
           downloadTextFile(`carduploader-approved-price-plan-${stamp}.json`, JSON.stringify(payload, null, 2));
+        });
+      }
+      if (state.focusCandidates) {
+        state.focusCandidates = false;
+        requestAnimationFrame(() => {
+          document.getElementById("repricing-plan-title")?.scrollIntoView({ behavior: "smooth", block: "start" });
         });
       }
     }
