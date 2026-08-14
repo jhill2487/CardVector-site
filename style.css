@@ -1927,7 +1927,7 @@ h3 {
   gap: 8px;
 }
 
-.repricing-floor-grid div {
+.repricing-floor-grid label {
   min-width: 0;
   padding: 12px;
   background: white;
@@ -1936,7 +1936,7 @@ h3 {
 }
 
 .repricing-floor-grid span,
-.repricing-floor-grid strong {
+.repricing-floor-grid input {
   display: block;
 }
 
@@ -1948,10 +1948,28 @@ h3 {
   text-transform: uppercase;
 }
 
-.repricing-floor-grid strong {
+.repricing-floor-grid input {
+  width: 100%;
   margin-top: 4px;
+  padding: 8px 9px;
   color: var(--blue-950);
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  font: inherit;
   font-size: 1.05rem;
+  font-weight: 900;
+}
+
+.repricing-floor-grid input:focus {
+  outline: 2px solid rgba(37, 99, 235, 0.2);
+  border-color: var(--blue-500);
+}
+
+.repricing-floor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .repricing-command-bar {
