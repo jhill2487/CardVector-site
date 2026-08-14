@@ -2037,6 +2037,12 @@
 
   const repricingReviewStorageKey = "cardvector.repricingPlan.v1";
   const cardUploaderHelperSnapshotStorageKey = "cardvector.carduploaderAutomaticInventorySnapshot.v1";
+  const repricingFloorRuleConfig = Object.freeze({
+    defaultFloor: 1.48,
+    pokemonHoloFloor: 1.98,
+    pokemonUltraRareFloor: 2.98,
+    mtgFoilFloor: 1.98
+  });
   const repricingPlanColumns = Object.freeze({
     inventory_id: ["inventory_id", "Inventory ID", "CardUploader ID", "external_inventory_id"],
     row_number: ["row_number", "Row", "Row Number"],
@@ -2202,6 +2208,125 @@
     return rows.filter((row) => row.inventory_id || row.title || row.user_sku || row.catalog_sku);
   }
 
+  function repricingRuleText(row) {
+    const raw = row && row.raw_row ? row.raw_row : {};
+    return [
+      row && row.title,
+      row && row.condition,
+      row && row.variant,
+      row && row.finish,
+      row && row.set_name,
+      row && row.card_number,
+      row && row.marketplace,
+      raw.title,
+      raw.condition,
+      raw.variant,
+      raw.finish,
+      raw.platform,
+      raw.raw_text
+    ].filter(Boolean).join(" ").toLowerCase();
+  }
+
+  function detectRepricingGame(row) {
+    const text = repricingRuleText(row);
+    if (/\b(mtg|magic|magic the gathering|mana ?pool)\b/.test(text)) {
+      return "mtg";
+    }
+    if (/\b(pokemon|poke|holo|reverse holo|ex|gx|v|vmax|vstar|trainer gallery|illustration rare|secret rare)\b/.test(text)) {
+      return "pokemon";
+    }
+    return "unknown";
+  }
+
+  function matchedRepricingFloorRule(row) {
+    const text = repricingRuleText(row);
+    const game = detectRepricingGame(row);
+    const candidates = [{
+      id: "default_floor",
+      label: "Default floor",
+      floor: repricingFloorRuleConfig.defaultFloor,
+      reason: "BELOW_DEFAULT_FLOOR"
+    }];
+    if (game === "pokemon" && /\b(reverse holo|holo|foil)\b/.test(text)) {
+      candidates.push({
+        id: "pokemon_holo_floor",
+        label: "Pokemon holo floor",
+        floor: repricingFloorRuleConfig.pokemonHoloFloor,
+        reason: "POKEMON_HOLO_FLOOR_APPLIED"
+      });
+    }
+    if (game === "pokemon" && /\b(ex|gx|v|vmax|vstar|secret rare|illustration rare|special illustration|trainer gallery|full art|alt art|rainbow|gold)\b/.test(text)) {
+      candidates.push({
+        id: "pokemon_ultra_rare_floor",
+        label: "Pokemon ultra rare floor",
+        floor: repricingFloorRuleConfig.pokemonUltraRareFloor,
+        reason: "POKEMON_ULTRA_RARE_FLOOR_APPLIED"
+      });
+    }
+    if (game === "mtg" && /\b(foil|etched|showcase|borderless)\b/.test(text)) {
+      candidates.push({
+        id: "mtg_foil_floor",
+        label: "MTG foil floor",
+        floor: repricingFloorRuleConfig.mtgFoilFloor,
+        reason: "MTG_FOIL_FLOOR_APPLIED"
+      });
+    }
+    return candidates.sort((a, b) => b.floor - a.floor)[0];
+  }
+
+  function applyRepricingFloorRules(rows) {
+    return (Array.isArray(rows) ? rows : []).map((row) => {
+      const current = row.current_price;
+      const rule = matchedRepricingFloorRule(row);
+      const reasonCodes = new Set(row.reason_codes || []);
+      const notes = new Set(row.notes || []);
+      reasonCodes.add("FLOOR_RULE_EVALUATED");
+      if (detectRepricingGame(row) === "unknown") {
+        reasonCodes.add("CARD_GAME_UNKNOWN");
+      }
+      if (current === null || current === undefined) {
+        notes.add("current_price_required");
+        return {
+          ...row,
+          recommended_price: null,
+          price_delta: null,
+          percent_delta: "",
+          review_decision: "manual_review",
+          review_priority: "review",
+          reason_codes: Array.from(reasonCodes),
+          notes: Array.from(notes)
+        };
+      }
+      if (Number(current) < rule.floor) {
+        const recommended = Math.round(rule.floor * 100) / 100;
+        const delta = Math.round((recommended - Number(current)) * 100) / 100;
+        reasonCodes.add(rule.reason);
+        return {
+          ...row,
+          recommended_price: recommended,
+          price_delta: delta,
+          percent_delta: Number(current) ? `${Math.round((delta / Number(current) * 100) * 100) / 100}` : "",
+          confidence: row.confidence || "floor_rule",
+          status: row.status === "skipped" || row.status === "approved" ? row.status : "dry_run",
+          review_decision: "increase_price",
+          review_priority: rule.id === "default_floor" ? "normal" : "high",
+          apply_ready: false,
+          reason_codes: Array.from(reasonCodes),
+          notes: Array.from(notes)
+        };
+      }
+      reasonCodes.add("ABOVE_FLOOR_NO_CHANGE");
+      return {
+        ...row,
+        recommended_price: row.recommended_price,
+        price_delta: row.price_delta,
+        review_decision: row.review_decision || "no_change",
+        reason_codes: Array.from(reasonCodes),
+        notes: Array.from(notes)
+      };
+    });
+  }
+
   function canApproveRepricingRow(row) {
     return row
       && row.status !== "blocked"
@@ -2313,6 +2438,47 @@
         <div><span>Increases</span><strong>${summary.increases}</strong></div>
         <div><span>Decreases</span><strong>${summary.decreases}</strong></div>
         <div><span>Net Delta</span><strong>${escapeHtml(formatCurrency(summary.totalDelta))}</strong></div>
+      </div>`;
+  }
+
+  function summarizeRepricingFloorRules(rows) {
+    const values = Array.isArray(rows) ? rows : [];
+    const countReason = (reason) => values.filter((row) => (row.reason_codes || []).includes(reason)).length;
+    return {
+      evaluated: countReason("FLOOR_RULE_EVALUATED"),
+      defaultFloor: countReason("BELOW_DEFAULT_FLOOR"),
+      pokemonHolo: countReason("POKEMON_HOLO_FLOOR_APPLIED"),
+      pokemonUltraRare: countReason("POKEMON_ULTRA_RARE_FLOOR_APPLIED"),
+      mtgFoil: countReason("MTG_FOIL_FLOOR_APPLIED"),
+      raised: values.filter((row) => Number(row.price_delta || 0) > 0).length,
+      unknownGame: countReason("CARD_GAME_UNKNOWN")
+    };
+  }
+
+  function renderRepricingFloorRuleSummary(rows) {
+    const summary = summarizeRepricingFloorRules(rows);
+    return `
+      <div class="repricing-floor-card">
+        <div>
+          <p class="eyebrow">Floor Rule Recommendations</p>
+          <h3>Conservative floor pricing is staged for review only.</h3>
+          <p>Rows below a matched floor are pre-filled with a recommended price. You still approve each row manually before anything can leave CardVector.</p>
+        </div>
+        <div class="repricing-floor-grid">
+          <div><span>Default</span><strong>${escapeHtml(formatCurrency(repricingFloorRuleConfig.defaultFloor))}</strong></div>
+          <div><span>Pokemon holo</span><strong>${escapeHtml(formatCurrency(repricingFloorRuleConfig.pokemonHoloFloor))}</strong></div>
+          <div><span>Pokemon ultra rare</span><strong>${escapeHtml(formatCurrency(repricingFloorRuleConfig.pokemonUltraRareFloor))}</strong></div>
+          <div><span>MTG foil</span><strong>${escapeHtml(formatCurrency(repricingFloorRuleConfig.mtgFoilFloor))}</strong></div>
+        </div>
+        <div class="registry-summary repricing-summary">
+          <div><span>Evaluated</span><strong>${summary.evaluated}</strong></div>
+          <div><span>Raised</span><strong>${summary.raised}</strong></div>
+          <div><span>Default Floor</span><strong>${summary.defaultFloor}</strong></div>
+          <div><span>Pokemon Holo</span><strong>${summary.pokemonHolo}</strong></div>
+          <div><span>Pokemon Rare</span><strong>${summary.pokemonUltraRare}</strong></div>
+          <div><span>MTG Foil</span><strong>${summary.mtgFoil}</strong></div>
+          <div><span>Unknown Game</span><strong>${summary.unknownGame}</strong></div>
+        </div>
       </div>`;
   }
 
@@ -2643,6 +2809,7 @@
       percent_delta: pct,
       status: row.status === "skipped" ? "skipped" : "dry_run",
       apply_ready: false,
+      reason_codes: Array.from(new Set([...(row.reason_codes || []), "MANUAL_RECOMMENDATION_OVERRIDE"])),
       notes: recommended === null ? ["recommended_price_required"] : []
     };
   }
@@ -3382,21 +3549,9 @@
               <li>Bulk preparation remains local and read-only until the apply workflow is separately characterized and approved.</li>
             </ul>
           </section>
-          <section class="operator-side-panel operator-main-panel" aria-labelledby="repricing-scan-results-title">
-            <h2 id="repricing-scan-results-title">Automatic Inventory Snapshot</h2>
-            ${state.snapshot && state.snapshot.rows.length ? `
-              <div class="registry-summary repricing-summary">
-                <div><span>Rows</span><strong>${escapeHtml(state.snapshot.rows.length)}</strong></div>
-                <div><span>Captured</span><strong>${escapeHtml(state.snapshot.captured_at || "n/a")}</strong></div>
-                <div><span>Source</span><strong>${escapeHtml(state.snapshot.title || "CardUploader")}</strong></div>
-                <div><span>Mode</span><strong>Read Only</strong></div>
-              </div>
-              <p class="operator-note">Source URL: ${escapeHtml(state.snapshot.url)}</p>
-              ${renderCardUploaderAutomaticInventoryRows(state.snapshot)}
-            ` : '<p class="operator-empty">No helper snapshot loaded yet.</p>'}
-          </section>
           <section class="operator-side-panel operator-main-panel" aria-labelledby="repricing-plan-title">
             <h2 id="repricing-plan-title">Price Review Candidates</h2>
+            ${renderRepricingFloorRuleSummary(state.rows)}
             ${renderRepricingSummary(state.rows)}
             ${renderRepricingFilters(state.filter)}
             ${renderRepricingRows(state.rows, state.filter)}
@@ -3423,9 +3578,10 @@
           if (!state.snapshot || !state.snapshot.rows.length) {
             state.error = "No helper snapshot is available yet.";
           } else {
-            state.rows = repricingRowsFromAutomaticInventorySnapshot(state.snapshot);
+            state.rows = applyRepricingFloorRules(repricingRowsFromAutomaticInventorySnapshot(state.snapshot));
             writeStoredRepricingPlan(state.rows);
-            state.message = `Loaded ${state.snapshot.rows.length} helper rows into price review.`;
+            const floorSummary = summarizeRepricingFloorRules(state.rows);
+            state.message = `Loaded ${state.snapshot.rows.length} helper rows into price review. Floor rules raised ${floorSummary.raised} rows for review.`;
           }
           await draw();
         });
