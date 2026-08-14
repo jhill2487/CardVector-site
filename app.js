@@ -2041,7 +2041,7 @@
   const repricingFilterConfigStorageKey = "cardvector.repricingFilters.v1";
   const repricingBusinessProfileStorageKey = "cardvector.repricingBusinessProfile.v1";
   const defaultRepricingFloorRuleConfig = Object.freeze({
-    defaultFloor: 1.48,
+    defaultFloor: 1.58,
     pokemonHoloFloor: 1.98,
     pokemonUltraRareFloor: 2.98,
     mtgFoilFloor: 1.98
@@ -3012,11 +3012,11 @@
   }
 
   function renderReasonChips(row) {
-    const values = [...(row.reason_codes || []), ...(row.notes || [])];
+    const values = [...(row.notes || [])];
     if (!values.length) {
-      return '<span class="repricing-chip">NO_NOTES</span>';
+      return "";
     }
-    return values.slice(0, 6).map((value) => `<span class="repricing-chip${(row.notes || []).includes(value) ? " warning" : ""}">${escapeHtml(value)}</span>`).join("");
+    return values.slice(0, 3).map((value) => `<span class="repricing-chip warning">${escapeHtml(value)}</span>`).join("");
   }
 
   function renderRepricingRows(rows, filter) {
@@ -3027,27 +3027,20 @@
     return `<div class="repricing-list">${filtered.map((row) => `
       <article class="operator-list-row repricing-row ${escapeHtml(row.status)}">
         <div class="repricing-main">
-          <strong>${escapeHtml(row.title || row.inventory_id || "Untitled price candidate")}</strong>
-          <span>${escapeHtml(row.inventory_id || "No CardUploader ID")} &middot; ${escapeHtml(row.catalog_sku || row.user_sku || "No SKU")} &middot; ${escapeHtml(row.condition || "No condition")}</span>
-          <span>${escapeHtml([row.set_name, row.card_number, row.variant, row.finish].filter(Boolean).join(" · "))}</span>
-          <div class="repricing-chips">${renderReasonChips(row)}</div>
+          <strong>${escapeHtml(row.title || "Untitled price candidate")}</strong>
+          <span>${escapeHtml([detectRepricingGame(row).toUpperCase(), row.condition || "No condition", row.variant, row.finish].filter(Boolean).join(" - "))}</span>
+          ${row.notes && row.notes.length ? `<div class="repricing-chips">${renderReasonChips(row)}</div>` : ""}
         </div>
         <div class="repricing-price-stack">
-          <span>Current</span>
-          <strong>${escapeHtml(formatCurrency(row.current_price))}</strong>
-          <span>Recommended</span>
-          <strong>${escapeHtml(formatCurrency(row.recommended_price))}</strong>
-          ${row.business_analysis ? `
-            <span>Min viable</span>
-            <strong>${escapeHtml(formatCurrency(row.business_analysis.minimum_viable_price))}</strong>
-            <span>Est. profit</span>
-            <strong class="${Number(row.business_analysis.estimated_net_profit || 0) < 0 ? "negative" : "positive"}">${escapeHtml(formatCurrency(row.business_analysis.estimated_net_profit))}</strong>
-          ` : ""}
+          <div><span>Current</span><strong>${escapeHtml(formatCurrency(row.current_price))}</strong></div>
           <label class="repricing-price-input">
-            <span>Set recommended</span>
+            <span>Target</span>
             <input type="number" min="0" step="0.01" inputmode="decimal" data-repricing-recommend="${escapeHtml(row.id)}" value="${row.recommended_price === null || row.recommended_price === undefined ? "" : escapeHtml(String(row.recommended_price))}">
           </label>
-          <span class="${Number(row.price_delta || 0) < 0 ? "negative" : "positive"}">${escapeHtml(formatCurrency(row.price_delta))}</span>
+          ${row.business_analysis ? `
+            <div><span>Profit</span><strong class="${Number(row.business_analysis.estimated_net_profit || 0) < 0 ? "negative" : "positive"}">${escapeHtml(formatCurrency(row.business_analysis.estimated_net_profit))}</strong></div>
+          ` : ""}
+          <div><span>Delta</span><strong class="${Number(row.price_delta || 0) < 0 ? "negative" : "positive"}">${escapeHtml(formatCurrency(row.price_delta))}</strong></div>
         </div>
         <div class="repricing-actions">
           <span>${escapeHtml(repricingDecisionLabel(row))}</span>
@@ -3058,7 +3051,6 @@
       </article>
     `).join("")}</div>`;
   }
-
   function renderCardUploaderAutomaticInventoryRows(snapshot) {
     const rows = snapshot && Array.isArray(snapshot.rows) ? snapshot.rows : [];
     if (!rows.length) {
