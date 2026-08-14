@@ -2146,6 +2146,20 @@ h3 {
   border-color: #f2d195;
 }
 
+.repricing-game-warning {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 6px;
+  color: #7a4a00;
+  background: #fff7e6;
+  border: 1px solid #f2d195;
+  border-radius: 999px;
+  font-size: .66rem;
+  font-weight: 900;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
 .repricing-price-stack,
 .repricing-actions {
   display: grid;

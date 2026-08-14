@@ -2369,6 +2369,7 @@
   function repricingRuleText(row) {
     const raw = row && row.raw_row ? row.raw_row : {};
     return [
+      row && row.card_game,
       row && row.title,
       row && row.condition,
       row && row.variant,
@@ -2380,6 +2381,8 @@
       raw.condition,
       raw.variant,
       raw.finish,
+      raw.tcg,
+      raw.game,
       raw.platform,
       raw.evidence_text,
       ...(raw.action_labels || []),
@@ -2395,15 +2398,77 @@
     ].filter(Boolean).join(" ").toLowerCase();
   }
 
+  function normalizeRepricingGameLabel(value) {
+    const text = String(value || "").toLowerCase().replace(/pok\u00e9/g, "poke").replace(/[^a-z0-9]+/g, " ").trim();
+    if (!text) {
+      return "";
+    }
+    if (/\b(pokemon|poke mon|pokemon english|pokemon japanese|pokemon jp)\b/.test(text)) {
+      return "pokemon";
+    }
+    if (/\b(mtg|magic|magic the gathering)\b/.test(text)) {
+      return "mtg";
+    }
+    if (/\b(yugioh|yu gi oh)\b/.test(text)) {
+      return "yugioh";
+    }
+    if (/\b(lorcana)\b/.test(text)) {
+      return "lorcana";
+    }
+    if (/\b(one piece)\b/.test(text)) {
+      return "one_piece";
+    }
+    return "";
+  }
+
+  function repricingGameEvidence(row) {
+    const raw = row && row.raw_row ? row.raw_row : {};
+    return [
+      row && row.card_game,
+      raw.tcg,
+      raw.game,
+      raw.category,
+      raw.product_line
+    ].map(normalizeRepricingGameLabel).find(Boolean) || "";
+  }
+
   function detectRepricingGame(row) {
+    const explicit = repricingGameEvidence(row);
+    if (explicit) {
+      return explicit;
+    }
     const text = repricingRuleText(row);
-    if (/\b(mtg|magic|magic the gathering|mana ?pool)\b/.test(text)) {
+    if (/\b(mtg|magic|magic the gathering)\b/.test(text)) {
       return "mtg";
     }
     if (/\b(pokemon|poke|holo|reverse holo|ex|gx|v|vmax|vstar|trainer gallery|illustration rare|secret rare)\b/.test(text)) {
       return "pokemon";
     }
     return "unknown";
+  }
+
+  function repricingGameDisplayLabel(row) {
+    const game = detectRepricingGame(row);
+    if (game === "pokemon") {
+      return "Pokemon";
+    }
+    if (game === "mtg") {
+      return "MTG";
+    }
+    if (game === "yugioh") {
+      return "Yu-Gi-Oh";
+    }
+    if (game === "lorcana") {
+      return "Lorcana";
+    }
+    if (game === "one_piece") {
+      return "One Piece";
+    }
+    return "Unknown game";
+  }
+
+  function repricingGameConfidence(row) {
+    return repricingGameEvidence(row) ? "explicit" : detectRepricingGame(row) === "unknown" ? "unknown" : "inferred";
   }
 
   function detectRepricingPlatform(row) {
@@ -3028,7 +3093,7 @@
       <article class="operator-list-row repricing-row ${escapeHtml(row.status)}">
         <div class="repricing-main">
           <strong>${escapeHtml(row.title || "Untitled price candidate")}</strong>
-          <span>${escapeHtml([detectRepricingGame(row).toUpperCase(), row.condition || "No condition", row.variant, row.finish].filter(Boolean).join(" - "))}</span>
+          <span>${escapeHtml([repricingGameDisplayLabel(row), row.condition || "No condition", row.variant, row.finish].filter(Boolean).join(" - "))}${repricingGameConfidence(row) === "unknown" ? ' <span class="repricing-game-warning">Game?</span>' : ""}</span>
           ${row.notes && row.notes.length ? `<div class="repricing-chips">${renderReasonChips(row)}</div>` : ""}
         </div>
         <div class="repricing-price-stack">
@@ -3256,6 +3321,7 @@
           title: mapped.card || cells[0] || rawText.slice(0, 120),
           status: mapped.status || "",
           platform: mapped.platform || "",
+          tcg: mapped.tcg || mapped.game || "",
           catalog_sku: mapped["catalog sku"] || catalogSku,
           user_sku: mapped["user sku"] || location,
           location,
@@ -3289,6 +3355,7 @@
       title: row.title || "",
       user_sku: row.user_sku || "",
       catalog_sku: row.catalog_sku || "",
+      card_game: row.tcg || row.game || "",
       marketplace: "carduploader",
       current_price: row.current_price,
       recommended_price: "",
