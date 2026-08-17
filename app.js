@@ -419,7 +419,7 @@
         <p>${escapeHtml(post.summary)}</p>
         <div class="brief-card-footer">
           <span>${escapeHtml(post.dateLabel)}</span>
-          <a class="button secondary" href="/market-briefs/${escapeHtml(post.slug)}">Open Brief</a>
+          <a class="button secondary" href="/market-briefs/${escapeHtml(post.slug)}/">Open Brief</a>
         </div>
       </article>`;
   }
@@ -447,8 +447,8 @@
           ${posts.map(renderMarketBriefCard).join("")}
         </div>
         <nav class="brief-internal-links" aria-label="Related Putnam Collectibles pages">
-          <a href="/tools/carduploader">CardUploader workflow</a>
-          <a href="/sell">Sell Pokemon cards</a>
+          <a href="/tools/carduploader/">CardUploader workflow</a>
+          <a href="/sell/">Sell Pokemon cards</a>
           <a href="${siteLinks.EBAY_STORE_URL}" target="_blank" rel="noopener noreferrer">Shop Pokemon cards on eBay</a>
           <a href="${siteLinks.TCGPLAYER_STORE_URL}" target="_blank" rel="noopener noreferrer">Shop Pokemon cards on TCGplayer</a>
         </nav>
@@ -486,7 +486,7 @@
     const post = posts.find((item) => item.slug === slug) || posts[0];
     main.innerHTML = `
       <article class="blog-shell blog-post wrap" aria-labelledby="market-brief-post-title">
-        <a class="operator-inline-link" href="/market-briefs">Back to Market Briefs</a>
+        <a class="operator-inline-link" href="/market-briefs/">Back to Market Briefs</a>
         <p class="eyebrow">${escapeHtml(post.label)}</p>
         <h1 id="market-brief-post-title">${escapeHtml(post.title)}</h1>
         <p class="blog-meta">${escapeHtml(post.dateLabel)} &middot; ${escapeHtml(post.status)}</p>
@@ -504,9 +504,9 @@
         </div>
         ${renderAffiliateLinkPanel(post)}
         <nav class="brief-internal-links" aria-label="Related Putnam Collectibles pages">
-          <a href="/market-briefs">More Pokemon market briefs</a>
-          <a href="/tools/carduploader">CardUploader seller workflow</a>
-          <a href="/sell">Sell a Pokemon card collection</a>
+          <a href="/market-briefs/">More Pokemon market briefs</a>
+          <a href="/tools/carduploader/">CardUploader seller workflow</a>
+          <a href="/sell/">Sell a Pokemon card collection</a>
         </nav>
         <aside class="brief-disclosure">
           <strong>How this brief is prepared</strong>
