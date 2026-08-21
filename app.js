@@ -440,7 +440,7 @@
           </article>
           <article>
             <h2>How to use them</h2>
-            <p>Use the weekly notes as a starting point for checking recent sold listings, stale inventory, card condition, and listing quality before making price changes.</p>
+            <p>Use these notes as a starting point for checking recent sold listings, stale inventory, card condition, and listing quality before making price changes.</p>
           </article>
         </div>
         <div class="brief-grid">
@@ -510,7 +510,7 @@
         </nav>
         <aside class="brief-disclosure">
           <strong>How this brief is prepared</strong>
-          <p>Putnam Collectibles uses ChatGPT-assisted research to identify possible market updates, then reviews the brief before publication. Future weekly posts should include dated sources and current marketplace checks.</p>
+          <p>Putnam Collectibles uses ChatGPT-assisted research to identify possible market updates, then reviews each brief before publication. Future posts should include dated sources and current marketplace checks.</p>
         </aside>
       </article>`;
     document.title = `${post.seoTitle || post.title} | Putnam Collectibles`;
