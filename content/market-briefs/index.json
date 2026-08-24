@@ -1,6 +1,68 @@
 {
   "posts": [
     {
+      "slug": "pokemon-card-pricing-net-margin-market-hype",
+      "label": "CardVector Market Brief",
+      "title": "Pokemon Card Pricing Strategy: Use Net Margin, Not Market Hype",
+      "seoTitle": "Pokemon Card Pricing Strategy: Price Singles by Net Margin, Not Hype",
+      "date": "2026-08-24",
+      "author": "CardVector",
+      "category": "Seller Strategy",
+      "status": "published",
+      "summary": "Learn a durable Pokemon card pricing strategy for small sellers: use completed sales, fee math, shipping costs, product supply, and net margin instead of active asking prices or hype.",
+      "description": "Learn a durable Pokemon card pricing strategy for small sellers: use completed sales, fee math, shipping costs, product supply, and net margin instead of active asking prices or hype.",
+      "searchIntent": "",
+      "targetKeywords": [],
+      "tags": [
+        "Pokemon",
+        "Pricing",
+        "eBay",
+        "TCGplayer",
+        "Seller Strategy",
+        "Inventory Management"
+      ],
+      "affiliateLinks": [],
+      "source_path": "content/market-briefs/2026-08-24-pokemon-card-pricing-net-margin-market-hype.md",
+      "sections": [
+        {
+          "heading": "Brief",
+          "body": "# Pokemon Card Pricing Strategy: Use Net Margin, Not Market Hype\n\nPokemon card pricing feels simple until a seller has hundreds or thousands of singles listed across marketplaces. One card has a fresh wave of attention. Another has plenty of active listings but very few completed sales. A sealed product gets harder to find, then reappears after more supply reaches stores. A low-end card looks profitable at a glance, but shipping, supplies, marketplace fees, and time quietly erase the margin.\n\nThat is why a good Pokemon card pricing strategy should not begin with the loudest active listing or the most exciting social media trend. It should begin with a calmer question: after this card actually sells, what will the seller keep?\n\nFor small sellers, the most useful market signal is not hype. It is repeatable net margin based on completed sales, realistic fulfillment costs, and enough confidence that the card is being compared to the correct version."
+        },
+        {
+          "heading": "Why active asking prices are not enough",
+          "body": "Active listings show what sellers hope to receive. They do not prove what buyers are actually paying. That distinction matters in trading cards because a single card can have many near-identical versions: regular, reverse holo, stamped promo, alternate art, first edition, shadowless, graded, raw, damaged, Japanese, English, tournament-stamped, or bundled with other cards.\n\nA seller who prices from active asking prices alone can easily anchor to the wrong comp. The mistake is especially common when a listing title is short, a card image is unclear, or the marketplace search returns related cards because the exact version has limited activity.\n\nCompleted transactions are stronger evidence. They show buyer behavior, not seller optimism. They also reveal whether demand exists at a price point, how often the card sells, and whether the spread between low and high sales is narrow enough to trust.\n\nA practical workflow is to separate three signals:\n\n- Completed sales: what buyers recently paid.\n- Current competition: what similar sellers are asking now.\n- Your business floor: the lowest price that still makes sense after costs.\n\nCardVector.app is being shaped around that idea: pricing should be explainable, not just automatic. A recommendation should say why it exists, what evidence supports it, and when manual review is safer than a fast edit."
+        },
+        {
+          "heading": "Supply changes make pricing discipline more important",
+          "body": "Pokemon product availability has been a major theme for collectors and sellers. When demand is high and products are difficult to find, sealed product and singles can both attract short-term attention. When more product reaches retail, that pressure can ease, and sellers may see more copies of the same cards enter the market.\n\nThat does not mean every card falls, or that reprints make every product unattractive. It means sellers should separate scarcity from demand. Scarcity can be temporary. Durable demand is different: it comes from playable cards, iconic Pokemon, standout artwork, collector preference, low population in a specific condition, or long-term set popularity.\n\nFor inventory decisions, this means sellers should avoid treating every supply crunch as proof of permanent value. A better process is to ask:\n\n- Is the card moving because buyers consistently want it, or because product is temporarily hard to find?\n- Are completed sales frequent enough to trust the market signal?\n- Are prices clustering tightly, or are a few outlier sales distorting the view?\n- Would the recommendation still make sense if more sealed product becomes available?\n\nThis is where small sellers can outperform a purely reactive pricing approach. The goal is not to predict the market. The goal is to avoid overreacting to temporary attention while still recognizing real demand."
+        },
+        {
+          "heading": "Net margin should set the floor",
+          "body": "A card can sell quickly and still be a bad listing if the net margin is too thin. Low-end singles are where this becomes most obvious.\n\nThe seller does not keep the full sale price. Marketplace fees, payment-related fees, promoted listing costs, shipping, envelopes, sleeves, top loaders, team bags, labels, tape, and acquisition cost all matter. Even when a card was acquired cheaply, the seller still spends time sorting, scanning, listing, storing, pulling, packing, and handling customer service.\n\nThat is why the minimum viable price should be calculated before the seller thinks about matching the market. A strong floor price is not arbitrary. It should reflect the business model.\n\nA simple version of the calculation looks like this:\n\nMinimum viable price = acquisition cost + packaging cost + shipping cost + marketplace fees + desired minimum profit\n\nThe exact numbers will vary by seller and marketplace. The principle should not. If a card cannot clear that floor, the seller has options: hold it, bulk it, bundle it, move it to a different marketplace, include it in a lot, or decide that speed matters more than margin. But the seller should make that choice knowingly.\n\nThis is especially important when offering free shipping. Free shipping is not free to the seller. It is a pricing policy, and it should be priced into the recommendation."
+        },
+        {
+          "heading": "Marketplace rules change the economics",
+          "body": "Small card sellers should pay attention to marketplace operations, not just card demand. Recent marketplace updates point in the same direction: platforms are pushing toward clearer pricing tools, stronger seller protections, more predictable fulfillment economics, and better shipping visibility.\n\nFor sellers, that means pricing and operations are merging. A card price is no longer just a market-value decision. It is also a fulfillment decision.\n\nOn eBay, sellers have access to product-research tools that emphasize sold-price ranges, average shipping costs, sell-through, and longer historical sales windows. That is useful because the right comp is not only the closest title match. It is the closest title match in the right condition, category, time window, selling format, and shipping context.\n\nTCGplayer has also continued to refine seller economics. Market Price is based on recent sales rather than simply active listings, while seller tools and fee structures push sellers to think at the item level. Seller protection updates for qualifying untracked orders also matter because low-value cards often sit right at the edge where tracking is not economical but missing-mail risk still exists.\n\nThe lesson is straightforward: a seller should not review price without also reviewing fulfillment risk. If a card is cheap, slow-moving, and expensive to handle, the right recommendation may be \u201cdo not list individually,\u201d even if the market value is technically above zero."
+        },
+        {
+          "heading": "How to build better Pokemon card comps",
+          "body": "The best comps are boring in a good way. They match the card cleanly and remove noise.\n\nStart with identity. Confirm the card name, set, collector number, language, condition, variant, and whether it is raw or graded. Then check completed transactions. If results are thin, expand the time window before expanding the identity match. A slightly older exact comp is often more useful than a recent sale for the wrong version.\n\nNext, remove bad matches. Watch for lots, damaged copies, incorrect languages, graded cards mixed into raw searches, different variants, and listings where shipping terms make the sale price misleading. Also be careful with outliers. One unusually high or low sale can happen for reasons that have little to do with the card\u2019s ordinary market.\n\nFinally, translate market value into a recommendation. That means comparing the evidence against your floor price, current listing price, inventory age, sell-through expectations, and confidence level.\n\nA useful recommendation should include reason codes such as:\n\n- low data\n- high variance\n- stale listing\n- below minimum margin\n- strong completed-sales match\n- variant review required\n- shipping cost pressure\n- manual review recommended\n\nThat kind of explanation is more useful than a single number because it tells the seller what to trust and what to inspect."
+        },
+        {
+          "heading": "Temporary attention versus durable demand",
+          "body": "Pokemon markets move in cycles. New sets create attention. Competitive decks influence playable cards. Collector trends highlight specific Pokemon, artists, and rarities. Retail supply changes can shift sealed-product behavior. Marketplace promotions can temporarily affect sell-through.\n\nSmall sellers should monitor these cycles without letting them take over the business.\n\nTemporary attention often shows up as fast-changing active listings, social media chatter, and a small number of sharp sales. Durable demand shows up as repeat sales, consistent buyer interest, recognizable collector appeal, and pricing that holds up across different selling windows.\n\nThe safest pricing process respects both. It notices attention, but it requires evidence. It recognizes that some cards deserve fast repricing, while others should sit until enough real sales data exists."
+        },
+        {
+          "heading": "A practical pricing routine for small sellers",
+          "body": "A strong Pokemon card pricing strategy does not need to be complicated. It needs to be consistent.\n\nFor each card or batch, sellers can follow this sequence:\n\n1. Confirm card identity and variant.\n2. Check recent completed sales, not just active listings.\n3. Remove mismatched comps and outliers.\n4. Estimate market value from trustworthy evidence.\n5. Calculate minimum viable price from costs and fees.\n6. Compare the current price to both market value and business floor.\n7. Decide whether to increase, decrease, hold, bundle, or manually review.\n\nThis keeps the seller from making two common mistakes: chasing hype upward and racing competitors downward.\n\nThe better goal is controlled confidence. If the comps are strong, the margin is healthy, and the listing is clean, the seller can act. If the evidence is weak, the card should be reviewed rather than blindly repriced."
+        },
+        {
+          "heading": "The bottom line",
+          "body": "The best Pokemon card pricing strategy is not \u201cmatch the lowest listing.\u201d It is not \u201cfollow the hottest product.\u201d It is not \u201ctrust one market number without context.\u201d\n\nA better strategy is to combine completed-sales evidence with business math. Product supply, marketplace fees, seller protections, shipping expectations, and fulfillment costs all affect the real decision.\n\nFor small sellers, that is the difference between selling cards and running a repeatable card business. CardVector.app is being built around that difference: clear evidence, explainable pricing, and seller decisions that account for the actual economics behind each listing."
+        }
+      ]
+    },
+    {
       "slug": "avoid-bad-pokemon-card-comps",
       "label": "Market Brief",
       "title": "How to Avoid Bad Pokemon Card Comps and Pricing Mistakes",
