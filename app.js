@@ -146,6 +146,31 @@
     }
   });
 
+  const directStoreCartStorageKey = "cardvector.directStoreCart.v1";
+  const directStoreReservationsStorageKey = "cardvector.directStoreReservations.v1";
+  function readDirectStoreCartCount() {
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(directStoreCartStorageKey) || "{}");
+      const items = parsed && parsed.items && typeof parsed.items === "object" ? Object.values(parsed.items) : [];
+      return items.reduce((total, item) => total + Math.max(0, Number(item && item.quantity) || 0), 0);
+    } catch (_exc) {
+      return 0;
+    }
+  }
+
+  function refreshDirectStoreCartLabels() {
+    const count = readDirectStoreCartCount();
+    document.querySelectorAll("[data-cart-count-label]").forEach((node) => {
+      node.textContent = count ? `Cart (${count})` : "Cart";
+    });
+  }
+  refreshDirectStoreCartLabels();
+  window.addEventListener("storage", (event) => {
+    if (event.key === directStoreCartStorageKey) {
+      refreshDirectStoreCartLabels();
+    }
+  });
+
   const parts = window.location.pathname.split("/").filter(Boolean).map(decodeURIComponent);
   const hashRoute = currentHashRoute();
   if (!parts.length && !mobileHashRoutes.has(hashRoute)) {
@@ -304,6 +329,407 @@
         </article>
       </section>`;
     document.title = "Contact Putnam Collectibles";
+  }
+
+  const directStoreInventoryUrl = "/content/shop/direct-inventory.json";
+  const directStoreFallbackCatalog = Object.freeze({
+    schema_version: "1.0",
+    checkout_mode: "reservation_pilot",
+    currency: "USD",
+    generated_at: "",
+    items: []
+  });
+
+  function directStoreMoney(value, currency = "USD") {
+    const amount = Number(value);
+    if (!Number.isFinite(amount)) {
+      return "$0.00";
+    }
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(amount);
+  }
+
+  function normalizeDirectStoreItem(item) {
+    const id = String(item && (item.id || item.sku || item.marketplace_listing_id) || "").trim();
+    const title = String(item && (item.title || item.listing_title) || "").trim();
+    const price = Number(item && (item.price || item.current_price || item.direct_price));
+    const available = Math.max(0, Math.floor(Number(item && (item.quantity_available ?? item.available ?? item.quantity)) || 0));
+    if (!id || !title || !Number.isFinite(price) || price <= 0 || available <= 0) {
+      return null;
+    }
+    return {
+      id,
+      title,
+      game: String(item.game || item.card_game || "Trading Card").trim(),
+      condition: String(item.condition || "Near Mint").trim(),
+      variant: String(item.variant || "").trim(),
+      price,
+      quantity_available: available,
+      image_url: String(item.image_url || item.image || "").trim(),
+      source: String(item.source || "CardUploader inventory mirror").trim(),
+      source_listing_id: String(item.source_listing_id || item.marketplace_listing_id || "").trim(),
+      updated_at: String(item.updated_at || "").trim()
+    };
+  }
+
+  async function loadDirectStoreCatalog() {
+    try {
+      const response = await fetch(directStoreInventoryUrl, { cache: "no-cache" });
+      if (!response.ok) {
+        throw new Error(`Direct inventory returned ${response.status}`);
+      }
+      const payload = await response.json();
+      const items = Array.isArray(payload && payload.items)
+        ? payload.items.map(normalizeDirectStoreItem).filter(Boolean)
+        : [];
+      return {
+        schema_version: String(payload.schema_version || "1.0"),
+        checkout_mode: String(payload.checkout_mode || "reservation_pilot"),
+        currency: String(payload.currency || "USD"),
+        generated_at: String(payload.generated_at || ""),
+        items
+      };
+    } catch (_exc) {
+      return { ...directStoreFallbackCatalog, items: [] };
+    }
+  }
+
+  function readDirectStoreCart() {
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(directStoreCartStorageKey) || "{}");
+      return {
+        items: parsed && parsed.items && typeof parsed.items === "object" ? parsed.items : {}
+      };
+    } catch (_exc) {
+      return { items: {} };
+    }
+  }
+
+  function writeDirectStoreCart(cart) {
+    const normalized = { items: {} };
+    Object.entries(cart && cart.items || {}).forEach(([id, line]) => {
+      const quantity = Math.max(0, Math.floor(Number(line && line.quantity) || 0));
+      if (id && quantity > 0) {
+        normalized.items[id] = { quantity };
+      }
+    });
+    window.localStorage.setItem(directStoreCartStorageKey, JSON.stringify(normalized));
+    refreshDirectStoreCartLabels();
+    return normalized;
+  }
+
+  function directStoreCartQuantity(cart, itemId) {
+    return Math.max(0, Math.floor(Number(cart && cart.items && cart.items[itemId] && cart.items[itemId].quantity) || 0));
+  }
+
+  function setDirectStoreCartQuantity(cart, itemId, quantity, catalog) {
+    const item = catalog.items.find((candidate) => candidate.id === itemId);
+    if (!item) {
+      return writeDirectStoreCart(cart);
+    }
+    const nextQuantity = Math.max(0, Math.min(item.quantity_available, Math.floor(Number(quantity) || 0)));
+    const nextCart = { items: { ...(cart.items || {}) } };
+    if (nextQuantity > 0) {
+      nextCart.items[itemId] = { quantity: nextQuantity };
+    } else {
+      delete nextCart.items[itemId];
+    }
+    return writeDirectStoreCart(nextCart);
+  }
+
+  function directStoreCartLines(cart, catalog) {
+    return Object.entries(cart && cart.items || {})
+      .map(([id, line]) => {
+        const item = catalog.items.find((candidate) => candidate.id === id);
+        if (!item) {
+          return null;
+        }
+        const quantity = Math.max(0, Math.floor(Number(line && line.quantity) || 0));
+        if (!quantity) {
+          return null;
+        }
+        return {
+          item,
+          quantity,
+          line_total: Number((item.price * quantity).toFixed(2)),
+          available: quantity <= item.quantity_available
+        };
+      })
+      .filter(Boolean);
+  }
+
+  function directStoreCartSummary(cart, catalog) {
+    const lines = directStoreCartLines(cart, catalog);
+    return {
+      lines,
+      quantity: lines.reduce((total, line) => total + line.quantity, 0),
+      subtotal: Number(lines.reduce((total, line) => total + line.line_total, 0).toFixed(2)),
+      unavailable: lines.filter((line) => !line.available)
+    };
+  }
+
+  function directStoreReservations() {
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(directStoreReservationsStorageKey) || "[]");
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_exc) {
+      return [];
+    }
+  }
+
+  function writeDirectStoreReservation(reservation) {
+    const reservations = directStoreReservations();
+    reservations.unshift(reservation);
+    window.localStorage.setItem(directStoreReservationsStorageKey, JSON.stringify(reservations.slice(0, 20)));
+    return reservation;
+  }
+
+  function createDirectStoreReservation(catalog, cart, customer) {
+    const summary = directStoreCartSummary(cart, catalog);
+    if (!summary.lines.length) {
+      return { ok: false, message: "Add at least one available card to your cart before checkout." };
+    }
+    if (summary.unavailable.length) {
+      return { ok: false, message: "One or more cart quantities exceed current availability. Adjust the cart and try again." };
+    }
+    const email = String(customer && customer.email || "").trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      return { ok: false, message: "Enter a valid email address for checkout updates." };
+    }
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 10 * 60 * 1000);
+    const reservation = {
+      id: `CVR-${now.getTime().toString(36).toUpperCase()}`,
+      status: "checkout_ready_for_payment_integration",
+      payment_status: "not_configured",
+      marketplace_release_status: "not_configured",
+      created_at: now.toISOString(),
+      expires_at: expiresAt.toISOString(),
+      customer: {
+        name: String(customer.name || "").trim(),
+        email,
+        postal_code: String(customer.postal_code || "").trim()
+      },
+      currency: catalog.currency,
+      subtotal: summary.subtotal,
+      quantity: summary.quantity,
+      lines: summary.lines.map((line) => ({
+        item_id: line.item.id,
+        title: line.item.title,
+        quantity: line.quantity,
+        unit_price: line.item.price,
+        line_total: line.line_total,
+        source: line.item.source,
+        source_listing_id: line.item.source_listing_id
+      }))
+    };
+    return { ok: true, reservation: writeDirectStoreReservation(reservation) };
+  }
+
+  function directStoreItemArt(item) {
+    if (item.image_url && /^https?:\/\//.test(item.image_url)) {
+      return `<img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.title)}" loading="lazy">`;
+    }
+    return `<div class="direct-card-placeholder" aria-hidden="true">${escapeHtml(item.game.slice(0, 3).toUpperCase())}</div>`;
+  }
+
+  function renderDirectStoreItem(item, cart, currency) {
+    const quantity = directStoreCartQuantity(cart, item.id);
+    return `
+      <article class="direct-store-item">
+        <div class="direct-store-art">${directStoreItemArt(item)}</div>
+        <div class="direct-store-copy">
+          <span class="marketplace-label">${escapeHtml(item.game)}</span>
+          <h2>${escapeHtml(item.title)}</h2>
+          <p>${escapeHtml([item.condition, item.variant].filter(Boolean).join(" / "))}</p>
+          <div class="direct-store-meta">
+            <strong>${directStoreMoney(item.price, currency)}</strong>
+            <span>${escapeHtml(item.quantity_available)} available</span>
+          </div>
+        </div>
+        <div class="direct-store-actions">
+          <button class="button primary" type="button" data-direct-add="${escapeHtml(item.id)}">Add to cart</button>
+          ${quantity ? `<span class="cart-line-note">In cart: ${escapeHtml(quantity)}</span>` : ""}
+        </div>
+      </article>`;
+  }
+
+  function renderDirectStoreCartLines(summary, currency) {
+    if (!summary.lines.length) {
+      return '<p class="operator-empty">Your cart is empty.</p>';
+    }
+    return summary.lines.map((line) => `
+      <article class="direct-cart-line">
+        <div>
+          <strong>${escapeHtml(line.item.title)}</strong>
+          <span>${escapeHtml(line.item.game)} &middot; ${escapeHtml(line.item.condition)}</span>
+          ${line.available ? "" : '<span class="cart-line-warning">Quantity exceeds current availability.</span>'}
+        </div>
+        <div class="direct-cart-controls" aria-label="Cart quantity controls">
+          <button type="button" data-cart-dec="${escapeHtml(line.item.id)}" aria-label="Decrease quantity">-</button>
+          <span>${escapeHtml(line.quantity)}</span>
+          <button type="button" data-cart-inc="${escapeHtml(line.item.id)}" aria-label="Increase quantity">+</button>
+          <button type="button" data-cart-remove="${escapeHtml(line.item.id)}">Remove</button>
+        </div>
+        <strong>${directStoreMoney(line.line_total, currency)}</strong>
+      </article>`).join("");
+  }
+
+  function renderDirectStoreShell(catalog, cart, options = {}) {
+    const summary = directStoreCartSummary(cart, catalog);
+    const list = catalog.items.length
+      ? catalog.items.map((item) => renderDirectStoreItem(item, cart, catalog.currency)).join("")
+      : `<article class="direct-store-empty">
+          <p class="eyebrow">Inventory feed pending</p>
+          <h2>Direct shopping is ready for inventory.</h2>
+          <p>The cart and reservation workflow are installed. The next step is publishing approved CardUploader inventory into the direct-store feed.</p>
+        </article>`;
+    main.innerHTML = `
+      <section class="direct-store-shell wrap" aria-labelledby="direct-store-title">
+        <div class="direct-store-hero">
+          <div>
+            <p class="eyebrow">Direct storefront pilot</p>
+            <h1 id="direct-store-title">Shop Putnam Collectibles Direct</h1>
+            <p>Build a cart from the CardVector direct inventory feed. Checkout currently creates a reservation record only; live payment capture and eBay delisting are not enabled yet.</p>
+          </div>
+          <a class="button secondary" href="/cart/">View Cart (${escapeHtml(summary.quantity)})</a>
+        </div>
+        <aside class="direct-store-safety">
+          <strong>Oversell safety first</strong>
+          <p>Adding to cart does not reserve inventory. Checkout re-checks current availability before creating a short reservation hold.</p>
+        </aside>
+        <div class="direct-store-layout">
+          <section class="direct-store-list" aria-label="Direct store cards">
+            ${list}
+          </section>
+          <aside class="direct-cart-panel" aria-labelledby="direct-cart-title">
+            <h2 id="direct-cart-title">Cart</h2>
+            <div id="direct-cart-lines">${renderDirectStoreCartLines(summary, catalog.currency)}</div>
+            <div class="direct-cart-total">
+              <span>Subtotal</span>
+              <strong>${directStoreMoney(summary.subtotal, catalog.currency)}</strong>
+            </div>
+            <a class="button primary" href="/cart/"${summary.quantity ? "" : " aria-disabled=\"true\""}>Checkout</a>
+            <p class="operator-note">Shipping, tax, Stripe, PayPal, and marketplace-removal automation are future checkout steps.</p>
+          </aside>
+        </div>
+        ${options.status ? `<div class="direct-store-status" role="status">${escapeHtml(options.status)}</div>` : ""}
+      </section>`;
+    document.title = "Shop Direct | Putnam Collectibles";
+    bindDirectStoreEvents(catalog);
+  }
+
+  function renderDirectStoreCartShell(catalog, cart, status = "") {
+    const summary = directStoreCartSummary(cart, catalog);
+    main.innerHTML = `
+      <section class="direct-store-shell wrap" aria-labelledby="direct-cart-page-title">
+        <div class="direct-store-hero">
+          <div>
+            <p class="eyebrow">Secure checkout foundation</p>
+            <h1 id="direct-cart-page-title">CardVector Cart</h1>
+            <p>Review your cart and create a short checkout hold. This pilot does not charge a payment method.</p>
+          </div>
+          <a class="button secondary" href="/shop/">Continue Shopping</a>
+        </div>
+        <div class="direct-cart-page">
+          <section class="direct-cart-panel direct-cart-page-panel" aria-labelledby="cart-review-title">
+            <h2 id="cart-review-title">Cart Review</h2>
+            <div id="direct-cart-lines">${renderDirectStoreCartLines(summary, catalog.currency)}</div>
+            <div class="direct-cart-total">
+              <span>Subtotal</span>
+              <strong>${directStoreMoney(summary.subtotal, catalog.currency)}</strong>
+            </div>
+          </section>
+          <form class="direct-checkout-form" id="direct-checkout-form">
+            <h2>Checkout Hold</h2>
+            <label>Name
+              <input name="name" autocomplete="name" placeholder="Your name">
+            </label>
+            <label>Email
+              <input name="email" type="email" autocomplete="email" required placeholder="you@example.com">
+            </label>
+            <label>Shipping ZIP
+              <input name="postal_code" autocomplete="postal-code" placeholder="ZIP code">
+            </label>
+            <button class="button primary" type="submit"${summary.quantity ? "" : " disabled"}>Create Checkout Hold</button>
+            <p class="operator-note">Payment authorization, capture, and automatic marketplace removal are intentionally not active in this first slice.</p>
+          </form>
+        </div>
+        ${status ? `<div class="direct-store-status" role="status">${escapeHtml(status)}</div>` : ""}
+      </section>`;
+    document.title = "Cart | Putnam Collectibles";
+    bindDirectStoreEvents(catalog);
+    const form = document.getElementById("direct-checkout-form");
+    if (form) {
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const latestCatalog = await loadDirectStoreCatalog();
+        const formData = new FormData(form);
+        const result = createDirectStoreReservation(latestCatalog, readDirectStoreCart(), {
+          name: formData.get("name"),
+          email: formData.get("email"),
+          postal_code: formData.get("postal_code")
+        });
+        if (!result.ok) {
+          renderDirectStoreCartShell(latestCatalog, readDirectStoreCart(), result.message);
+          return;
+        }
+        writeDirectStoreCart({ items: {} });
+        renderDirectStoreCartShell(
+          latestCatalog,
+          readDirectStoreCart(),
+          `Checkout hold ${result.reservation.id} created locally for ${directStoreMoney(result.reservation.subtotal, latestCatalog.currency)}. Live payment capture is not connected yet.`
+        );
+      });
+    }
+  }
+
+  function bindDirectStoreEvents(catalog) {
+    document.querySelectorAll("[data-direct-add]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const itemId = button.getAttribute("data-direct-add");
+        const cart = readDirectStoreCart();
+        setDirectStoreCartQuantity(cart, itemId, directStoreCartQuantity(cart, itemId) + 1, catalog);
+        renderDirectStoreShell(catalog, readDirectStoreCart(), { status: "Added to cart." });
+      });
+    });
+    document.querySelectorAll("[data-cart-inc]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const itemId = button.getAttribute("data-cart-inc");
+        const cart = readDirectStoreCart();
+        setDirectStoreCartQuantity(cart, itemId, directStoreCartQuantity(cart, itemId) + 1, catalog);
+        renderDirectStoreCartShell(catalog, readDirectStoreCart());
+      });
+    });
+    document.querySelectorAll("[data-cart-dec]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const itemId = button.getAttribute("data-cart-dec");
+        const cart = readDirectStoreCart();
+        setDirectStoreCartQuantity(cart, itemId, directStoreCartQuantity(cart, itemId) - 1, catalog);
+        renderDirectStoreCartShell(catalog, readDirectStoreCart());
+      });
+    });
+    document.querySelectorAll("[data-cart-remove]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const itemId = button.getAttribute("data-cart-remove");
+        setDirectStoreCartQuantity(readDirectStoreCart(), itemId, 0, catalog);
+        renderDirectStoreCartShell(catalog, readDirectStoreCart());
+      });
+    });
+  }
+
+  async function renderDirectStorePage() {
+    const catalog = await loadDirectStoreCatalog();
+    renderDirectStoreShell(catalog, readDirectStoreCart());
+  }
+
+  async function renderDirectStoreCartPage() {
+    const catalog = await loadDirectStoreCatalog();
+    renderDirectStoreCartShell(catalog, readDirectStoreCart());
   }
 
   const fallbackMarketBriefPosts = Object.freeze([
@@ -5965,6 +6391,16 @@
 
   if (route === "registry" || route === "location-registry") {
     renderOperatorRegistry();
+    return;
+  }
+
+  if (route === "shop") {
+    renderDirectStorePage();
+    return;
+  }
+
+  if (route === "cart") {
+    renderDirectStoreCartPage();
     return;
   }
 

@@ -1,0 +1,8 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-08-27T00:00:00-04:00",
+  "source": "cardvector_direct_store_feed",
+  "checkout_mode": "reservation_pilot",
+  "currency": "USD",
+  "items": []
+}

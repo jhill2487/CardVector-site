@@ -421,6 +421,11 @@ h3 {
   box-shadow: 0 14px 42px rgba(16, 32, 51, .08);
 }
 
+.marketplace-card-direct {
+  border-color: rgba(37, 99, 235, .28);
+  background: linear-gradient(180deg, #fff, var(--blue-50));
+}
+
 .marketplace-card p {
   max-width: 34rem;
   color: var(--muted);
@@ -554,6 +559,242 @@ h3 {
   font-size: .9rem;
   font-weight: 700;
   text-align: center;
+}
+
+.direct-store-shell {
+  padding: 48px 0 72px;
+}
+
+.direct-store-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 18px;
+}
+
+.direct-store-hero h1 {
+  margin: 0 0 10px;
+  color: var(--blue-950);
+  font-size: clamp(2.3rem, 7vw, 4.5rem);
+  line-height: .95;
+}
+
+.direct-store-hero p {
+  max-width: 760px;
+  margin: 0;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.direct-store-safety,
+.direct-store-status {
+  margin: 0 0 18px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--blue-50);
+}
+
+.direct-store-safety strong,
+.direct-store-status {
+  color: var(--blue-950);
+}
+
+.direct-store-safety p {
+  margin: 5px 0 0;
+  color: var(--muted);
+}
+
+.direct-store-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  gap: 18px;
+}
+
+.direct-store-list {
+  display: grid;
+  gap: 14px;
+}
+
+.direct-store-item,
+.direct-cart-line,
+.direct-store-empty,
+.direct-cart-panel,
+.direct-checkout-form {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 14px 42px rgba(16, 32, 51, .08);
+}
+
+.direct-store-item {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+}
+
+.direct-store-art img,
+.direct-card-placeholder {
+  width: 92px;
+  height: 128px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--blue-50);
+}
+
+.direct-card-placeholder {
+  display: grid;
+  place-items: center;
+  color: var(--blue-700);
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+
+.direct-store-copy h2 {
+  margin: 4px 0 6px;
+  color: var(--blue-950);
+  font-size: 1.18rem;
+  line-height: 1.15;
+}
+
+.direct-store-copy p,
+.cart-line-note,
+.cart-line-warning {
+  margin: 0;
+  color: var(--muted);
+  font-size: .88rem;
+  font-weight: 700;
+}
+
+.direct-store-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.direct-store-meta strong {
+  color: var(--blue-950);
+  font-size: 1.12rem;
+}
+
+.direct-store-meta span {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.direct-store-actions {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+
+.direct-store-empty {
+  padding: 22px;
+}
+
+.direct-store-empty h2,
+.direct-cart-panel h2,
+.direct-checkout-form h2 {
+  margin: 0 0 10px;
+  color: var(--blue-950);
+}
+
+.direct-cart-panel,
+.direct-checkout-form {
+  padding: 18px;
+}
+
+.direct-cart-panel {
+  position: sticky;
+  top: 96px;
+  align-self: start;
+}
+
+.direct-cart-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.direct-cart-line strong,
+.direct-cart-line span {
+  display: block;
+}
+
+.direct-cart-line strong {
+  color: var(--blue-950);
+}
+
+.cart-line-warning {
+  color: #9b1c1c;
+}
+
+.direct-cart-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.direct-cart-controls button {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--blue-950);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.direct-cart-total {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 12px 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--blue-950);
+  font-size: 1.12rem;
+}
+
+.direct-cart-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
+  gap: 18px;
+}
+
+.direct-cart-page-panel {
+  position: static;
+}
+
+.direct-checkout-form {
+  display: grid;
+  gap: 12px;
+  align-self: start;
+}
+
+.direct-checkout-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--blue-950);
+  font-weight: 800;
+}
+
+.direct-checkout-form input {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font: inherit;
 }
 
 .referral-disclosure {
@@ -2774,6 +3015,8 @@ h3 {
   .updates,
   .card-grid,
   .marketplace-grid,
+  .direct-store-layout,
+  .direct-cart-page,
   .whatnot-referral-grid,
   .sell-options,
   .carduploader-section,
@@ -2808,6 +3051,9 @@ h3 {
   }
 
   .marketplace-card,
+  .direct-store-item,
+  .direct-cart-panel,
+  .direct-checkout-form,
   .whatnot-callout,
   .carduploader-section,
   .contact-section,
@@ -2895,10 +3141,37 @@ h3 {
 
   .hero-actions .button,
   .marketplace-card .button,
+  .direct-store-actions .button,
+  .direct-cart-panel .button,
+  .direct-checkout-form .button,
   .whatnot-callout .button {
     width: 100%;
     min-height: 50px;
     text-align: center;
+  }
+
+  .direct-store-hero {
+    display: grid;
+    gap: 16px;
+  }
+
+  .direct-store-item {
+    grid-template-columns: 76px minmax(0, 1fr);
+  }
+
+  .direct-store-art img,
+  .direct-card-placeholder {
+    width: 76px;
+    height: 106px;
+  }
+
+  .direct-store-actions {
+    grid-column: 1 / -1;
+    justify-items: stretch;
+  }
+
+  .direct-cart-panel {
+    position: static;
   }
 
   .footer-inner {
