@@ -148,6 +148,7 @@
 
   const directStoreCartStorageKey = "cardvector.directStoreCart.v1";
   const directStoreReservationsStorageKey = "cardvector.directStoreReservations.v1";
+  const directStoreFiltersStorageKey = "cardvector.directStoreFilters.v1";
   function readDirectStoreCartCount() {
     try {
       const parsed = JSON.parse(window.localStorage.getItem(directStoreCartStorageKey) || "{}");
@@ -333,12 +334,25 @@
 
   const directStoreInventoryUrl = "/content/shop/direct-inventory.json";
   const directStoreFallbackCatalog = Object.freeze({
-    schema_version: "1.0",
-    checkout_mode: "reservation_pilot",
+    schema_version: "1.1",
+    checkout_mode: "hybrid_static_browse_live_availability_pending",
     currency: "USD",
     generated_at: "",
+    source: "cardvector_direct_store_feed",
+    source_file: "",
+    availability: {
+      mode: "static_browse_feed",
+      supabase_enabled: false,
+      live_checkout_required: true
+    },
+    summary: {
+      published_items: 0,
+      published_quantity: 0,
+      games: {}
+    },
     items: []
   });
+  const directStoreDisplayLimit = 96;
 
   function directStoreMoney(value, currency = "USD") {
     const amount = Number(value);
@@ -367,11 +381,16 @@
       game: String(item.game || item.card_game || "Trading Card").trim(),
       condition: String(item.condition || "Near Mint").trim(),
       variant: String(item.variant || "").trim(),
+      set_name: String(item.set_name || item.set || "").trim(),
+      card_number: String(item.card_number || item.number || "").trim(),
+      rarity: String(item.rarity || "").trim(),
       price,
       quantity_available: available,
       image_url: String(item.image_url || item.image || "").trim(),
       source: String(item.source || "CardUploader inventory mirror").trim(),
       source_listing_id: String(item.source_listing_id || item.marketplace_listing_id || "").trim(),
+      inventory_reference: String(item.inventory_reference || item.user_sku || "").trim(),
+      status: String(item.status || "available").trim(),
       updated_at: String(item.updated_at || "").trim()
     };
   }
@@ -391,11 +410,73 @@
         checkout_mode: String(payload.checkout_mode || "reservation_pilot"),
         currency: String(payload.currency || "USD"),
         generated_at: String(payload.generated_at || ""),
+        source: String(payload.source || ""),
+        source_file: String(payload.source_file || ""),
+        availability: payload.availability && typeof payload.availability === "object"
+          ? payload.availability
+          : directStoreFallbackCatalog.availability,
+        summary: payload.summary && typeof payload.summary === "object"
+          ? payload.summary
+          : directStoreFallbackCatalog.summary,
         items
       };
     } catch (_exc) {
       return { ...directStoreFallbackCatalog, items: [] };
     }
+  }
+
+  function readDirectStoreFilters() {
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(directStoreFiltersStorageKey) || "{}");
+      return {
+        search: String(parsed.search || "").trim(),
+        game: String(parsed.game || "all").trim() || "all"
+      };
+    } catch (_exc) {
+      return { search: "", game: "all" };
+    }
+  }
+
+  function writeDirectStoreFilters(filters) {
+    const normalized = {
+      search: String(filters && filters.search || "").trim(),
+      game: String(filters && filters.game || "all").trim() || "all"
+    };
+    window.localStorage.setItem(directStoreFiltersStorageKey, JSON.stringify(normalized));
+    return normalized;
+  }
+
+  function directStoreGameOptions(catalog) {
+    return Array.from(new Set(catalog.items.map((item) => item.game).filter(Boolean))).sort();
+  }
+
+  function filterDirectStoreItems(catalog, filters) {
+    const query = String(filters.search || "").toLowerCase();
+    const game = String(filters.game || "all");
+    return catalog.items.filter((item) => {
+      if (game !== "all" && item.game !== game) {
+        return false;
+      }
+      if (!query) {
+        return true;
+      }
+      return [
+        item.title,
+        item.game,
+        item.set_name,
+        item.card_number,
+        item.rarity,
+        item.condition,
+        item.variant
+      ].some((value) => String(value || "").toLowerCase().includes(query));
+    });
+  }
+
+  function directStoreFeedLabel(catalog) {
+    const generated = catalog.generated_at
+      ? new Date(catalog.generated_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+      : "not generated yet";
+    return `Static CardUploader snapshot - ${catalog.summary.published_items || catalog.items.length} items - updated ${generated}`;
   }
 
   function readDirectStoreCart() {
@@ -539,12 +620,18 @@
 
   function renderDirectStoreItem(item, cart, currency) {
     const quantity = directStoreCartQuantity(cart, item.id);
+    const detailLine = [
+      item.set_name,
+      item.card_number ? `#${item.card_number}` : "",
+      item.rarity
+    ].filter(Boolean).join(" / ");
     return `
       <article class="direct-store-item">
         <div class="direct-store-art">${directStoreItemArt(item)}</div>
         <div class="direct-store-copy">
           <span class="marketplace-label">${escapeHtml(item.game)}</span>
           <h2>${escapeHtml(item.title)}</h2>
+          ${detailLine ? `<p class="direct-store-detail">${escapeHtml(detailLine)}</p>` : ""}
           <p>${escapeHtml([item.condition, item.variant].filter(Boolean).join(" / "))}</p>
           <div class="direct-store-meta">
             <strong>${directStoreMoney(item.price, currency)}</strong>
@@ -581,12 +668,16 @@
 
   function renderDirectStoreShell(catalog, cart, options = {}) {
     const summary = directStoreCartSummary(cart, catalog);
-    const list = catalog.items.length
-      ? catalog.items.map((item) => renderDirectStoreItem(item, cart, catalog.currency)).join("")
+    const filters = options.filters || readDirectStoreFilters();
+    const filteredItems = filterDirectStoreItems(catalog, filters);
+    const visibleItems = filteredItems.slice(0, directStoreDisplayLimit);
+    const gameOptions = directStoreGameOptions(catalog);
+    const list = visibleItems.length
+      ? visibleItems.map((item) => renderDirectStoreItem(item, cart, catalog.currency)).join("")
       : `<article class="direct-store-empty">
           <p class="eyebrow">Inventory feed pending</p>
-          <h2>Direct shopping is ready for inventory.</h2>
-          <p>The cart and reservation workflow are installed. The next step is publishing approved CardUploader inventory into the direct-store feed.</p>
+          <h2>No cards match the current view.</h2>
+          <p>Try clearing the search or changing the game filter. The direct shop uses a static CardUploader snapshot for browsing.</p>
         </article>`;
     main.innerHTML = `
       <section class="direct-store-shell wrap" aria-labelledby="direct-store-title">
@@ -594,16 +685,38 @@
           <div>
             <p class="eyebrow">Direct storefront pilot</p>
             <h1 id="direct-store-title">Shop Putnam Collectibles Direct</h1>
-            <p>Build a cart from the CardVector direct inventory feed. Checkout currently creates a reservation record only; live payment capture and eBay delisting are not enabled yet.</p>
+            <p>Browse a lightweight CardUploader inventory snapshot without pulling original capture images from Supabase. Future checkout will re-check live availability before payment.</p>
           </div>
           <a class="button secondary" href="/cart/">View Cart (${escapeHtml(summary.quantity)})</a>
         </div>
         <aside class="direct-store-safety">
           <strong>Oversell safety first</strong>
-          <p>Adding to cart does not reserve inventory. Checkout re-checks current availability before creating a short reservation hold.</p>
+          <p>Adding to cart does not reserve inventory. This public page is a static browse feed; live availability, payment capture, and marketplace removal remain disabled until the checkout safety gate is connected.</p>
         </aside>
+        <div class="direct-store-feed-bar">
+          <div>
+            <strong>${escapeHtml(directStoreFeedLabel(catalog))}</strong>
+            <span>${escapeHtml(catalog.availability && catalog.availability.mode || "static_browse_feed")} / ${escapeHtml(catalog.source_file || "inventory feed")}</span>
+          </div>
+          <div class="direct-store-feed-counts">
+            <span>${escapeHtml(filteredItems.length)} matching</span>
+            <span>${escapeHtml(catalog.summary.published_quantity || 0)} total available</span>
+          </div>
+        </div>
+        <form class="direct-store-filters" id="direct-store-filters">
+          <label>Search cards
+            <input name="search" value="${escapeHtml(filters.search)}" placeholder="Name, set, number, rarity">
+          </label>
+          <label>Game
+            <select name="game">
+              <option value="all"${filters.game === "all" ? " selected" : ""}>All games</option>
+              ${gameOptions.map((game) => `<option value="${escapeHtml(game)}"${filters.game === game ? " selected" : ""}>${escapeHtml(game)}</option>`).join("")}
+            </select>
+          </label>
+        </form>
         <div class="direct-store-layout">
           <section class="direct-store-list" aria-label="Direct store cards">
+            ${filteredItems.length > visibleItems.length ? `<p class="direct-store-showing">Showing ${escapeHtml(visibleItems.length)} of ${escapeHtml(filteredItems.length)} matching cards. Use search or game filters to narrow the list.</p>` : ""}
             ${list}
           </section>
           <aside class="direct-cart-panel" aria-labelledby="direct-cart-title">
@@ -621,6 +734,17 @@
       </section>`;
     document.title = "Shop Direct | Putnam Collectibles";
     bindDirectStoreEvents(catalog);
+    const filterForm = document.getElementById("direct-store-filters");
+    if (filterForm) {
+      filterForm.addEventListener("input", () => {
+        const data = new FormData(filterForm);
+        const nextFilters = writeDirectStoreFilters({
+          search: data.get("search"),
+          game: data.get("game")
+        });
+        renderDirectStoreShell(catalog, readDirectStoreCart(), { filters: nextFilters });
+      });
+    }
   }
 
   function renderDirectStoreCartShell(catalog, cart, status = "") {

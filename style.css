@@ -606,6 +606,95 @@ h3 {
   color: var(--muted);
 }
 
+.direct-store-feed-bar,
+.direct-store-filters {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.direct-store-feed-bar {
+  padding: 14px 16px;
+  color: var(--blue-950);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 30px rgba(16, 32, 51, .06);
+}
+
+.direct-store-feed-bar strong,
+.direct-store-feed-bar span {
+  display: block;
+}
+
+.direct-store-feed-bar strong {
+  font-size: .98rem;
+}
+
+.direct-store-feed-bar span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: .84rem;
+  font-weight: 750;
+}
+
+.direct-store-feed-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.direct-store-feed-counts span {
+  margin: 0;
+  padding: 7px 10px;
+  color: var(--blue-950);
+  background: var(--blue-50);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: .8rem;
+  font-weight: 900;
+}
+
+.direct-store-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 260px);
+}
+
+.direct-store-filters label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: .78rem;
+  font-weight: 900;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.direct-store-filters input,
+.direct-store-filters select {
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 12px;
+  color: var(--blue-950);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font: inherit;
+  font-size: .95rem;
+  font-weight: 800;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.direct-store-filters input:focus,
+.direct-store-filters select:focus {
+  outline: 3px solid rgba(20, 108, 244, .18);
+  border-color: var(--blue-600);
+}
+
 .direct-store-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
@@ -661,12 +750,24 @@ h3 {
 }
 
 .direct-store-copy p,
+.direct-store-showing,
 .cart-line-note,
 .cart-line-warning {
   margin: 0;
   color: var(--muted);
   font-size: .88rem;
   font-weight: 700;
+}
+
+.direct-store-detail {
+  color: var(--blue-700) !important;
+}
+
+.direct-store-showing {
+  padding: 12px 14px;
+  background: var(--blue-50);
+  border: 1px solid var(--line);
+  border-radius: 10px;
 }
 
 .direct-store-meta {
@@ -3039,6 +3140,17 @@ h3 {
   .brief-card-footer {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .direct-store-feed-bar,
+  .direct-store-feed-counts,
+  .direct-store-filters {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .direct-store-feed-counts {
+    justify-content: stretch;
   }
 
   .card-grid,
