@@ -187,7 +187,8 @@
     WHATNOT_REFERRAL_URL: "https://whatnot.com/invite/putnam_collectibles",
     COLLECTION_INQUIRY_URL: "https://tally.so/r/ob1ABN",
     CONTACT_EMAIL: "Putnam.collects@gmail.com",
-    CONTACT_EMAIL_URL: "https://mail.google.com/mail/?view=cm&fs=1&to=Putnam.collects%40gmail.com&su=Putnam%20Collectibles%20Inquiry"
+    CONTACT_EMAIL_URL: "https://mail.google.com/mail/?view=cm&fs=1&to=Putnam.collects%40gmail.com&su=Putnam%20Collectibles%20Inquiry",
+    CHECKOUT_FUNCTION_URL: "https://iqdpfgpkagjxzedfxrvn.supabase.co/functions/v1/create-checkout-session"
   });
   const egressSafeMode = true;
   const egressSafeCacheMs = 5 * 60 * 1000;
@@ -333,6 +334,7 @@
   }
 
   const directStoreInventoryUrl = "/content/shop/direct-inventory.json";
+  const directStoreCheckoutTimeoutMs = 20000;
   const directStoreFallbackCatalog = Object.freeze({
     schema_version: "1.1",
     checkout_mode: "hybrid_static_browse_live_availability_pending",
@@ -393,6 +395,11 @@
       status: String(item.status || "available").trim(),
       updated_at: String(item.updated_at || "").trim()
     };
+  }
+
+  function directStoreCheckoutFunctionUrl() {
+    const url = String(siteLinks.CHECKOUT_FUNCTION_URL || "").trim();
+    return url.startsWith("https://") ? url : "";
   }
 
   async function loadDirectStoreCatalog() {
@@ -611,6 +618,55 @@
     return { ok: true, reservation: writeDirectStoreReservation(reservation) };
   }
 
+  async function createDirectStoreCheckoutSession(catalog, cart) {
+    const summary = directStoreCartSummary(cart, catalog);
+    if (!summary.lines.length) {
+      return { ok: false, message: "Add at least one available card to your cart before checkout." };
+    }
+    if (summary.unavailable.length) {
+      return { ok: false, message: "One or more cart quantities exceed current availability. Adjust the cart and try again." };
+    }
+    const endpoint = directStoreCheckoutFunctionUrl();
+    if (!endpoint) {
+      return { ok: false, message: "Secure checkout is not configured yet." };
+    }
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), directStoreCheckoutTimeoutMs);
+    try {
+      const payload = {
+        cart: {
+          items: Object.fromEntries(summary.lines.map((line) => [
+            line.item.id,
+            { quantity: line.quantity }
+          ]))
+        }
+      };
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result || !result.checkout_url) {
+        return {
+          ok: false,
+          message: String(result && result.error || result && result.message || "Secure checkout could not be started.")
+        };
+      }
+      return { ok: true, ...result };
+    } catch (error) {
+      return {
+        ok: false,
+        message: error && error.name === "AbortError"
+          ? "Secure checkout timed out. Please try again."
+          : "Secure checkout could not be reached. Please try again."
+      };
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  }
+
   function directStoreItemArt(item) {
     if (item.image_url && /^https?:\/\//.test(item.image_url)) {
       return `<img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.title)}" loading="lazy">`;
@@ -685,13 +741,13 @@
           <div>
             <p class="eyebrow">Direct storefront pilot</p>
             <h1 id="direct-store-title">Shop Putnam Collectibles Direct</h1>
-            <p>Browse a lightweight CardUploader inventory snapshot without pulling original capture images from Supabase. Future checkout will re-check live availability before payment.</p>
+            <p>Browse a lightweight CardUploader inventory snapshot without pulling original capture images from Supabase. Checkout re-checks availability before Stripe collects payment.</p>
           </div>
           <a class="button secondary" href="/cart/">View Cart (${escapeHtml(summary.quantity)})</a>
         </div>
         <aside class="direct-store-safety">
           <strong>Oversell safety first</strong>
-          <p>Adding to cart does not reserve inventory. This public page is a static browse feed; live availability, payment capture, and marketplace removal remain disabled until the checkout safety gate is connected.</p>
+          <p>Adding to cart does not reserve inventory. Secure checkout re-validates current feed availability before payment. Marketplace removal is handled after paid-order review.</p>
         </aside>
         <div class="direct-store-feed-bar">
           <div>
@@ -727,7 +783,7 @@
               <strong>${directStoreMoney(summary.subtotal, catalog.currency)}</strong>
             </div>
             <a class="button primary" href="/cart/"${summary.quantity ? "" : " aria-disabled=\"true\""}>Checkout</a>
-            <p class="operator-note">Shipping, tax, Stripe, PayPal, and marketplace-removal automation are future checkout steps.</p>
+            <p class="operator-note">Checkout uses Stripe for email, shipping address, and payment. Promotional email consent is optional.</p>
           </aside>
         </div>
         ${options.status ? `<div class="direct-store-status" role="status">${escapeHtml(options.status)}</div>` : ""}
@@ -749,13 +805,21 @@
 
   function renderDirectStoreCartShell(catalog, cart, status = "") {
     const summary = directStoreCartSummary(cart, catalog);
+    const query = new URLSearchParams(window.location.search);
+    let routeNotice = "";
+    if (query.get("checkout") === "success") {
+      routeNotice = "Payment completed. Order and shipping/tracking messages are sent as transactional updates for this purchase.";
+    } else if (query.get("checkout") === "cancelled") {
+      routeNotice = "Checkout was cancelled. Your browser cart is still available if you want to try again.";
+    }
+    const statusMessage = status || routeNotice;
     main.innerHTML = `
       <section class="direct-store-shell wrap" aria-labelledby="direct-cart-page-title">
         <div class="direct-store-hero">
           <div>
             <p class="eyebrow">Secure checkout foundation</p>
             <h1 id="direct-cart-page-title">CardVector Cart</h1>
-            <p>Review your cart and create a short checkout hold. This pilot does not charge a payment method.</p>
+            <p>Review your cart and continue to Stripe Checkout. Stripe collects email, shipping address, and payment details securely.</p>
           </div>
           <a class="button secondary" href="/shop/">Continue Shopping</a>
         </div>
@@ -769,21 +833,13 @@
             </div>
           </section>
           <form class="direct-checkout-form" id="direct-checkout-form">
-            <h2>Checkout Hold</h2>
-            <label>Name
-              <input name="name" autocomplete="name" placeholder="Your name">
-            </label>
-            <label>Email
-              <input name="email" type="email" autocomplete="email" required placeholder="you@example.com">
-            </label>
-            <label>Shipping ZIP
-              <input name="postal_code" autocomplete="postal-code" placeholder="ZIP code">
-            </label>
-            <button class="button primary" type="submit"${summary.quantity ? "" : " disabled"}>Create Checkout Hold</button>
-            <p class="operator-note">Payment authorization, capture, and automatic marketplace removal are intentionally not active in this first slice.</p>
+            <h2>Secure Checkout</h2>
+            <p>Stripe will collect the buyer email, shipping address, and payment information. Shipping and tracking messages are transactional order updates and do not require marketing opt-in.</p>
+            <p class="operator-note">Promotional emails are optional in Stripe Checkout. Marketplace removal stays separate until the paid order is ready for fulfillment.</p>
+            <button class="button primary" type="submit"${summary.quantity ? "" : " disabled"}>Continue to Secure Checkout</button>
           </form>
         </div>
-        ${status ? `<div class="direct-store-status" role="status">${escapeHtml(status)}</div>` : ""}
+        ${statusMessage ? `<div class="direct-store-status" role="status">${escapeHtml(statusMessage)}</div>` : ""}
       </section>`;
     document.title = "Cart | Putnam Collectibles";
     bindDirectStoreEvents(catalog);
@@ -791,23 +847,18 @@
     if (form) {
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
+        const button = form.querySelector("button[type=\"submit\"]");
+        if (button) {
+          button.disabled = true;
+          button.textContent = "Starting secure checkout...";
+        }
         const latestCatalog = await loadDirectStoreCatalog();
-        const formData = new FormData(form);
-        const result = createDirectStoreReservation(latestCatalog, readDirectStoreCart(), {
-          name: formData.get("name"),
-          email: formData.get("email"),
-          postal_code: formData.get("postal_code")
-        });
+        const result = await createDirectStoreCheckoutSession(latestCatalog, readDirectStoreCart());
         if (!result.ok) {
           renderDirectStoreCartShell(latestCatalog, readDirectStoreCart(), result.message);
           return;
         }
-        writeDirectStoreCart({ items: {} });
-        renderDirectStoreCartShell(
-          latestCatalog,
-          readDirectStoreCart(),
-          `Checkout hold ${result.reservation.id} created locally for ${directStoreMoney(result.reservation.subtotal, latestCatalog.currency)}. Live payment capture is not connected yet.`
-        );
+        window.location.assign(result.checkout_url);
       });
     }
   }
