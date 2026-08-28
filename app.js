@@ -835,7 +835,7 @@
           <form class="direct-checkout-form" id="direct-checkout-form">
             <h2>Secure Checkout</h2>
             <p>Stripe will collect the buyer email, shipping address, and payment information. Shipping and tracking messages are transactional order updates and do not require marketing opt-in.</p>
-            <p class="operator-note">Promotional emails are optional in Stripe Checkout. Marketplace removal stays separate until the paid order is ready for fulfillment.</p>
+            <p class="operator-note">Promotional email opt-in will be enabled after Stripe Checkout marketing consent is approved. Marketplace removal stays separate until the paid order is ready for fulfillment.</p>
             <button class="button primary" type="submit"${summary.quantity ? "" : " disabled"}>Continue to Secure Checkout</button>
           </form>
         </div>
