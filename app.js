@@ -747,7 +747,7 @@
         </div>
         <aside class="direct-store-safety">
           <strong>Oversell safety first</strong>
-          <p>Adding to cart does not reserve inventory. Secure checkout re-validates current feed availability before payment. Marketplace removal is handled after paid-order review.</p>
+          <p>Adding to cart does not reserve inventory. Secure checkout re-validates current feed availability before payment. Paid orders queue CardUploader/eBay release jobs for the private fulfillment helper.</p>
         </aside>
         <div class="direct-store-feed-bar">
           <div>
@@ -835,7 +835,7 @@
           <form class="direct-checkout-form" id="direct-checkout-form">
             <h2>Secure Checkout</h2>
             <p>Stripe will collect the buyer email, shipping address, and payment information. Shipping and tracking messages are transactional order updates and do not require marketing opt-in.</p>
-            <p class="operator-note">Promotional email opt-in will be enabled after Stripe Checkout marketing consent is approved. Marketplace removal stays separate until the paid order is ready for fulfillment.</p>
+            <p class="operator-note">Promotional email opt-in will be enabled after Stripe Checkout marketing consent is approved. Paid orders queue private CardUploader/eBay release jobs after Stripe confirms payment.</p>
             <button class="button primary" type="submit"${summary.quantity ? "" : " disabled"}>Continue to Secure Checkout</button>
           </form>
         </div>
