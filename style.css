@@ -426,6 +426,33 @@ h3 {
   background: linear-gradient(180deg, #fff, var(--blue-50));
 }
 
+.direct-contact-banner {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  margin-top: 1.5rem;
+  padding: 1.1rem 1.25rem;
+  border: 1px solid #b8cbea;
+  border-radius: 14px;
+  background: #eef5ff;
+  box-shadow: var(--shadow);
+}
+
+.direct-contact-banner h2 {
+  margin: 0;
+  font-size: clamp(1.25rem, 2vw, 1.65rem);
+}
+
+.direct-contact-banner p {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+}
+
+.direct-contact-banner-route {
+  margin-top: 1rem;
+}
+
 .marketplace-card p {
   max-width: 34rem;
   color: var(--muted);
@@ -3137,7 +3164,8 @@ h3 {
   }
 
   .brief-feature,
-  .brief-card-footer {
+  .brief-card-footer,
+  .direct-contact-banner {
     align-items: stretch;
     flex-direction: column;
   }
