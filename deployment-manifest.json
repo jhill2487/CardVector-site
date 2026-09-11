@@ -1,15 +1,14 @@
 {
   "source_repository": "jhill2487/CardVector",
   "source_path": "Docs/",
-  "source_commit": "aab16f9c96869aaed30e15907b773ef1ed4d9495",
-  "generated_at": "2026-09-11T10:29:03+00:00",
+  "source_commit": "8ce9c9803663a979aa78ba062c97b86206558b0c",
+  "generated_at": "2026-09-11T10:43:18+00:00",
   "public_files": [
     "index.html",
     "404.html",
     "app.js",
     "style.css",
     "robots.txt",
-    "content/shop/direct-inventory.json",
     "tools/carduploader/index.html",
     "CNAME",
     "_config.yml"
@@ -26,7 +25,6 @@
     "shop/index.html",
     "cart/index.html",
     "sell/index.html",
-    "content/shop/direct-inventory.json",
     "sitemap.xml"
   ],
   "market_brief_count": 5
