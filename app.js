@@ -162,7 +162,6 @@
     CARDUPLOADER_STORE_URL: "https://carduploader.com/store/putnamcollectibles",
     CARDUPLOADER_REFERRAL_URL: "https://carduploader.com/signup?ref=LIEA0817",
     WHATNOT_REFERRAL_URL: "https://whatnot.com/invite/putnam_collectibles",
-    COLLECTION_INQUIRY_URL: "https://tally.so/r/ob1ABN",
     CONTACT_EMAIL: "Putnam.collects@gmail.com",
     CONTACT_EMAIL_URL: "https://mail.google.com/mail/?view=cm&fs=1&to=Putnam.collects%40gmail.com&su=Putnam%20Collectibles%20Inquiry"
   });
@@ -259,27 +258,27 @@
     main.innerHTML = `
       <section class="qr-view wrap" aria-labelledby="sell-route-title">
         <article class="qr-card sell-route-card">
-          <p class="eyebrow">Putnam Collectibles</p>
-          <h1 id="sell-route-title">Sell Your Collection</h1>
-          <p class="hero-lede">Selling a collection or Near Mint English bulk? Tell us what you have and we&rsquo;ll review it.</p>
-          <div class="sell-options" aria-label="Items Putnam Collectibles currently reviews">
+          <p class="eyebrow">CardUploader buylist</p>
+          <h1 id="sell-route-title">Sell Through CardUploader</h1>
+          <p class="hero-lede">CardUploader storefront tools now handle buying and buylist workflows for Putnam Collectibles.</p>
+          <div class="sell-options" aria-label="CardUploader buylist guidance">
             <div>
-              <strong>Full or Partial Collections</strong>
-              <span>Share the size, games, highlights, and condition.</span>
+              <strong>Buylist Workflow</strong>
+              <span>Use the CardUploader storefront when buylist intake is available.</span>
             </div>
             <div>
-              <strong>Near Mint English Bulk</strong>
-              <span>Holo and reverse-holo bulk inquiries are welcome.</span>
+              <strong>Direct Questions</strong>
+              <span>Email Putnam Collectibles if you have a question before using the storefront.</span>
             </div>
           </div>
           <div class="entry-actions sell-route-actions">
-            <a class="button primary button-large" href="${siteLinks.COLLECTION_INQUIRY_URL}" target="_blank" rel="noopener noreferrer" aria-label="Submit a collection or bulk card inquiry to Putnam Collectibles">Submit Collection Inquiry</a>
+            <a class="button primary button-large" href="${escapeHtml(siteLinks.CARDUPLOADER_STORE_URL)}" target="_blank" rel="noopener noreferrer">Open CardUploader Storefront</a>
+            <a class="button secondary button-large" href="${escapeHtml(siteLinks.CONTACT_EMAIL_URL)}" target="_blank" rel="noopener noreferrer">Email Putnam Collectibles</a>
             <a class="button secondary" href="/">Return Home</a>
           </div>
-          <p class="qr-note">Near Mint English cards only at this time.</p>
         </article>
       </section>`;
-    document.title = "Sell Your Collection | Putnam Collectibles";
+    document.title = "Sell Through CardUploader | Putnam Collectibles";
   }
 
   function renderContactPage() {
@@ -288,11 +287,11 @@
         <article class="qr-card contact-route-card">
           <p class="eyebrow">Direct contact</p>
           <h1 id="contact-route-title">Contact Putnam Collectibles</h1>
-          <p class="hero-lede">Use the direct form or email ${escapeHtml(siteLinks.CONTACT_EMAIL)} for collection offers, general questions, card availability, or local inquiries.</p>
+          <p class="hero-lede">Email ${escapeHtml(siteLinks.CONTACT_EMAIL)} for general questions, card availability, or local inquiries.</p>
           <div class="contact-route-notes" aria-label="Contact guidance">
             <div>
               <strong>General inquiries</strong>
-              <span>Ask about cards, availability, collection sales, or bulk offers.</span>
+              <span>Ask about cards, availability, storefront questions, or local inquiries.</span>
             </div>
             <div>
               <strong>Marketplace orders</strong>
@@ -300,8 +299,7 @@
             </div>
           </div>
           <div class="entry-actions sell-route-actions">
-            <a class="button primary button-large" href="${siteLinks.COLLECTION_INQUIRY_URL}" target="_blank" rel="noopener noreferrer" aria-label="Send a direct message to Putnam Collectibles">Send Direct Message</a>
-            <a class="button secondary button-large" href="${siteLinks.CONTACT_EMAIL_URL}" target="_blank" rel="noopener noreferrer" aria-label="Email Putnam Collectibles directly">Email Putnam Collectibles</a>
+            <a class="button primary button-large" href="${siteLinks.CONTACT_EMAIL_URL}" target="_blank" rel="noopener noreferrer" aria-label="Email Putnam Collectibles directly">Email Putnam Collectibles</a>
             <a class="button secondary" href="/">Return Home</a>
           </div>
         </article>
@@ -478,7 +476,7 @@
         </div>
         <nav class="brief-internal-links" aria-label="Related Putnam Collectibles pages">
           <a href="/tools/carduploader/">CardUploader workflow</a>
-          <a href="/sell/">Sell Pokemon cards</a>
+          <a href="${siteLinks.CARDUPLOADER_STORE_URL}" target="_blank" rel="noopener noreferrer">CardUploader buylist</a>
           <a href="${siteLinks.CARDUPLOADER_STORE_URL}" target="_blank" rel="noopener noreferrer">Shop Putnam Collectibles on CardUploader</a>
         </nav>
         <aside class="brief-disclosure">
@@ -535,7 +533,7 @@
         <nav class="brief-internal-links" aria-label="Related Putnam Collectibles pages">
           <a href="/market-briefs/">More Pokemon market briefs</a>
           <a href="/tools/carduploader/">CardUploader seller workflow</a>
-          <a href="/sell/">Sell a Pokemon card collection</a>
+        <a href="${siteLinks.CARDUPLOADER_STORE_URL}" target="_blank" rel="noopener noreferrer">CardUploader buylist</a>
         </nav>
         <aside class="brief-disclosure">
           <strong>How this brief is prepared</strong>
