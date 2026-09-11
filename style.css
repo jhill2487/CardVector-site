@@ -422,6 +422,7 @@ h3 {
 }
 
 .marketplace-card-direct {
+  grid-column: 1 / -1;
   border-color: rgba(37, 99, 235, .28);
   background: linear-gradient(180deg, #fff, var(--blue-50));
 }

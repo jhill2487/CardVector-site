@@ -185,6 +185,9 @@
   const siteLinks = Object.freeze({
     EBAY_STORE_URL: "https://www.ebay.com/str/jhilltcg?mkcid=1&mkrid=711-53200-19255-0&siteid=0&campid=5339178316&customid=&toolid=10001&mkevt=1",
     TCGPLAYER_STORE_URL: "https://www.tcgplayer.com/sellers/Putnam-Collectibles/747c057d",
+    MANAPOOL_STORE_URL: "https://manapool.com/shop/putnamcollectibles",
+    CARDUPLOADER_STORE_URL: "https://carduploader.com/store/putnamcollectibles",
+    CARDUPLOADER_REFERRAL_URL: "https://carduploader.com/signup?ref=LIEA0817",
     WHATNOT_REFERRAL_URL: "https://whatnot.com/invite/putnam_collectibles",
     COLLECTION_INQUIRY_URL: "https://tally.so/r/ob1ABN",
     CONTACT_EMAIL: "Putnam.collects@gmail.com",
@@ -377,15 +380,15 @@
           <div>
             <p class="eyebrow">Direct store coming soon</p>
             <h1 id="direct-store-paused-title">CardVector direct checkout is not public yet.</h1>
-            <p>The secure cart and Stripe checkout foundation is being kept ready behind the scenes while public purchases continue through the current marketplaces.</p>
+            <p>The secure cart and Stripe checkout foundation is being kept ready behind the scenes while public purchases move through the CardUploader storefront.</p>
           </div>
-          <a class="button secondary" href="/">Return Home</a>
+          <a class="button primary" href="${escapeHtml(siteLinks.CARDUPLOADER_STORE_URL)}" target="_blank" rel="noopener noreferrer">Shop CardUploader Store</a>
         </div>
         <aside class="direct-contact-banner direct-contact-banner-route" aria-labelledby="direct-store-contact-title">
           <div>
             <p class="eyebrow">Direct purchase option</p>
             <h2 id="direct-store-contact-title">See something in one of our stores?</h2>
-            <p>Email <strong>${escapeHtml(siteLinks.CONTACT_EMAIL)}</strong> if you find a card on eBay, TCGplayer, or Manapool and want to ask about buying direct.</p>
+            <p>Email <strong>${escapeHtml(siteLinks.CONTACT_EMAIL)}</strong> if you see something in the CardUploader storefront and want to ask a question before buying.</p>
           </div>
           <a class="button primary" href="${escapeHtml(siteLinks.CONTACT_EMAIL_URL)}" target="_blank" rel="noopener noreferrer">Email Putnam Collectibles</a>
         </aside>
@@ -980,8 +983,8 @@
   function defaultMarketBriefAffiliateLinks() {
     return [
       {
-        label: "Shop Putnam Collectibles on eBay",
-        url: siteLinks.EBAY_STORE_URL
+        label: "Shop Putnam Collectibles on CardUploader",
+        url: siteLinks.CARDUPLOADER_STORE_URL
       }
     ];
   }
@@ -1060,16 +1063,16 @@
         <div class="blog-hero">
           <p class="eyebrow">Pokemon market updates for sellers</p>
           <h1 id="market-briefs-page-title">Pokemon Market Briefs for Card Sellers</h1>
-          <p>Seller-focused notes on Pokemon card prices, collector demand, eBay and TCGplayer marketplace signals, inventory age, and practical pricing strategy.</p>
+          <p>Seller-focused notes on Pokemon product supply, collector demand, CardUploader workflows, marketplace signals, inventory age, and practical pricing discipline.</p>
         </div>
         <div class="brief-seo-summary" aria-label="What Pokemon market briefs cover">
           <article>
             <h2>What these briefs cover</h2>
-            <p>Each brief is written for small trading card sellers who need clear market context before pricing, repricing, or organizing inventory.</p>
+            <p>Each brief is written for small trading card sellers who need clear market context before organizing inventory, improving listings, or making pricing decisions.</p>
           </article>
           <article>
             <h2>How to use them</h2>
-            <p>Use these notes as a starting point for checking recent sold listings, stale inventory, card condition, and listing quality before making price changes.</p>
+            <p>Use these notes as a starting point for checking supply, demand signals, stale inventory, card condition, listing quality, and recent sold evidence.</p>
           </article>
         </div>
         <div class="brief-grid">
@@ -1078,8 +1081,7 @@
         <nav class="brief-internal-links" aria-label="Related Putnam Collectibles pages">
           <a href="/tools/carduploader/">CardUploader workflow</a>
           <a href="/sell/">Sell Pokemon cards</a>
-          <a href="${siteLinks.EBAY_STORE_URL}" target="_blank" rel="noopener noreferrer">Shop Pokemon cards on eBay</a>
-          <a href="${siteLinks.TCGPLAYER_STORE_URL}" target="_blank" rel="noopener noreferrer">Shop Pokemon cards on TCGplayer</a>
+          <a href="${siteLinks.CARDUPLOADER_STORE_URL}" target="_blank" rel="noopener noreferrer">Shop Putnam Collectibles on CardUploader</a>
         </nav>
         <aside class="brief-disclosure">
           <strong>Editorial note</strong>
