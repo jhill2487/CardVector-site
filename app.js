@@ -160,6 +160,7 @@
     TCGPLAYER_STORE_URL: "https://www.tcgplayer.com/sellers/Putnam-Collectibles/747c057d",
     MANAPOOL_STORE_URL: "https://manapool.com/shop/putnamcollectibles",
     CARDUPLOADER_STORE_URL: "https://carduploader.com/store/putnamcollectibles",
+    CARDUPLOADER_BUYLIST_URL: "https://carduploader.com/buylist/putnamcollectibles",
     CARDUPLOADER_REFERRAL_URL: "https://carduploader.com/signup?ref=LIEA0817",
     WHATNOT_REFERRAL_URL: "https://whatnot.com/invite/putnam_collectibles",
     CONTACT_EMAIL: "Putnam.collects@gmail.com",
@@ -260,11 +261,11 @@
         <article class="qr-card sell-route-card">
           <p class="eyebrow">CardUploader buylist</p>
           <h1 id="sell-route-title">Sell Through CardUploader</h1>
-          <p class="hero-lede">CardUploader storefront tools now handle buying and buylist workflows for Putnam Collectibles.</p>
+          <p class="hero-lede">Use the Putnam Collectibles CardUploader buylist when you have cards to sell.</p>
           <div class="sell-options" aria-label="CardUploader buylist guidance">
             <div>
               <strong>Buylist Workflow</strong>
-              <span>Use the CardUploader storefront when buylist intake is available.</span>
+              <span>Open the Putnam Collectibles buylist on CardUploader.</span>
             </div>
             <div>
               <strong>Direct Questions</strong>
@@ -272,7 +273,7 @@
             </div>
           </div>
           <div class="entry-actions sell-route-actions">
-            <a class="button primary button-large" href="${escapeHtml(siteLinks.CARDUPLOADER_STORE_URL)}" target="_blank" rel="noopener noreferrer">Open CardUploader Storefront</a>
+            <a class="button primary button-large" href="${escapeHtml(siteLinks.CARDUPLOADER_BUYLIST_URL)}" target="_blank" rel="noopener noreferrer">Open CardUploader Buylist</a>
             <a class="button secondary button-large" href="${escapeHtml(siteLinks.CONTACT_EMAIL_URL)}" target="_blank" rel="noopener noreferrer">Email Putnam Collectibles</a>
             <a class="button secondary" href="/">Return Home</a>
           </div>
@@ -476,7 +477,7 @@
         </div>
         <nav class="brief-internal-links" aria-label="Related Putnam Collectibles pages">
           <a href="/tools/carduploader/">CardUploader workflow</a>
-          <a href="${siteLinks.CARDUPLOADER_STORE_URL}" target="_blank" rel="noopener noreferrer">CardUploader buylist</a>
+          <a href="${siteLinks.CARDUPLOADER_BUYLIST_URL}" target="_blank" rel="noopener noreferrer">CardUploader buylist</a>
           <a href="${siteLinks.CARDUPLOADER_STORE_URL}" target="_blank" rel="noopener noreferrer">Shop Putnam Collectibles on CardUploader</a>
         </nav>
         <aside class="brief-disclosure">
@@ -533,7 +534,7 @@
         <nav class="brief-internal-links" aria-label="Related Putnam Collectibles pages">
           <a href="/market-briefs/">More Pokemon market briefs</a>
           <a href="/tools/carduploader/">CardUploader seller workflow</a>
-        <a href="${siteLinks.CARDUPLOADER_STORE_URL}" target="_blank" rel="noopener noreferrer">CardUploader buylist</a>
+        <a href="${siteLinks.CARDUPLOADER_BUYLIST_URL}" target="_blank" rel="noopener noreferrer">CardUploader buylist</a>
         </nav>
         <aside class="brief-disclosure">
           <strong>How this brief is prepared</strong>

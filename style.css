@@ -991,6 +991,41 @@ h3 {
   font-weight: 650;
 }
 
+.selling-platform-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(260px, .75fr);
+  gap: 34px;
+  align-items: center;
+  margin-top: 26px;
+  padding: 30px 34px;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 14px 42px rgba(16, 32, 51, .08);
+}
+
+.selling-platform-copy p,
+.selling-platform-action p {
+  color: var(--muted);
+}
+
+.selling-platform-action {
+  display: grid;
+  gap: 13px;
+}
+
+.selling-platform-action .button {
+  width: 100%;
+  text-align: center;
+}
+
+.selling-platform-action .affiliate-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: .82rem;
+  font-weight: 650;
+}
+
 .sell-section {
   position: relative;
   display: grid;
@@ -3028,6 +3063,7 @@ h3 {
 
   .whatnot-callout,
   .carduploader-section,
+  .selling-platform-section,
   .sell-section {
     grid-template-columns: 1fr;
   }
@@ -3149,6 +3185,7 @@ h3 {
   .whatnot-referral-grid,
   .sell-options,
   .carduploader-section,
+  .selling-platform-section,
   .contact-section,
   .contact-route-notes,
   .brief-seo-summary,
@@ -3197,6 +3234,7 @@ h3 {
   .direct-checkout-form,
   .whatnot-callout,
   .carduploader-section,
+  .selling-platform-section,
   .contact-section,
   .sell-section {
     padding: 24px;
