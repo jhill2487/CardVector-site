@@ -53,7 +53,7 @@
     ]
   }
   </script>
-  <link rel="stylesheet" href="/style.css?v=20260911-carduploader-storefront">
+  <link rel="stylesheet" href="/style.css?v=20260914-homepage-layout">
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -85,30 +85,22 @@
 
     <section class="hero wrap">
       <div class="hero-copy">
-        <p class="eyebrow">Buying &bull; Selling &bull; Trading Pok&eacute;mon Cards</p>
+        <p class="eyebrow">Buying &bull; Selling &bull; Trading Cards</p>
         <img class="hero-logo" src="/assets/putnam-profile-onepiece.png" alt="Putnam Collectibles logo" width="148" height="148">
         <h1>PUTNAM COLLECTIBLES</h1>
-        <p class="hero-lede">Shop current Putnam Collectibles inventory through our CardUploader storefront, or use the CardUploader buylist when you have cards to sell.</p>
+        <p class="hero-lede">Shop current Putnam Collectibles inventory or sell cards through the CardUploader storefront and buylist.</p>
         <div class="hero-actions" aria-label="Primary actions">
           <a class="button primary button-large" href="https://carduploader.com/store/putnamcollectibles" target="_blank" rel="noopener noreferrer">Shop CardUploader Store</a>
+          <a class="button secondary button-large" href="https://carduploader.com/buylist/putnamcollectibles" target="_blank" rel="noopener noreferrer">Sell Through Buylist</a>
         </div>
       </div>
     </section>
 
-    <aside class="direct-contact-banner wrap" aria-labelledby="direct-contact-title">
-      <div>
-        <p class="eyebrow">Direct purchase option</p>
-        <h2 id="direct-contact-title">See something in one of our stores?</h2>
-        <p>Email <strong>Putnam.collects@gmail.com</strong> if you see something in our CardUploader storefront and want to ask a question before buying.</p>
-      </div>
-      <a class="button primary" href="https://mail.google.com/mail/?view=cm&fs=1&to=Putnam.collects%40gmail.com&su=Putnam%20Collectibles%20Inquiry" target="_blank" rel="noopener noreferrer" aria-label="Email Putnam Collectibles about buying direct">Email Putnam Collectibles</a>
-    </aside>
-
     <section class="marketplaces wrap" id="shop" aria-labelledby="shop-title">
       <div class="section-heading">
         <p class="eyebrow">Primary storefront</p>
-        <h2 id="shop-title">Shop Putnam Collectibles</h2>
-        <p>CardUploader is becoming our preferred storefront and inventory hub.</p>
+        <h2 id="shop-title">Shop or Sell Through CardUploader</h2>
+        <p>CardUploader is our preferred storefront, buylist, and inventory hub.</p>
       </div>
       <div class="marketplace-grid">
         <article class="marketplace-card marketplace-card-direct">
@@ -117,6 +109,14 @@
           <p>Browse Putnam Collectibles cards in the storefront connected to the workflow we use to manage inventory and listings.</p>
           <a class="marketplace-shop-button marketplace-shop-primary" href="https://carduploader.com/store/putnamcollectibles" target="_blank" rel="noopener noreferrer" aria-label="Shop Putnam Collectibles on CardUploader">
             <span>Shop</span><strong>CardUploader</strong><span aria-hidden="true">&nearr;</span>
+          </a>
+        </article>
+        <article class="marketplace-card marketplace-card-direct">
+          <span class="marketplace-label">Sell cards</span>
+          <h3>CardUploader Buylist</h3>
+          <p>Use the Putnam Collectibles buylist when you have cards to sell or want to see what we are currently reviewing.</p>
+          <a class="marketplace-shop-button marketplace-shop-secondary" href="https://carduploader.com/buylist/putnamcollectibles" target="_blank" rel="noopener noreferrer" aria-label="Open the Putnam Collectibles CardUploader buylist">
+            <span>Sell</span><strong>Buylist</strong><span aria-hidden="true">&nearr;</span>
           </a>
         </article>
       </div>
@@ -149,10 +149,10 @@
     <section class="carduploader-section wrap" id="carduploader" aria-labelledby="carduploader-title">
       <div class="carduploader-copy">
         <p class="eyebrow">Recommended seller tool</p>
-        <h2 id="carduploader-title">CardUploader is becoming our main storefront and inventory workflow.</h2>
+        <h2 id="carduploader-title">CardUploader powers our storefront and inventory workflow.</h2>
         <p>
           Putnam Collectibles uses CardUploader for card identification, listing creation,
-          inventory workflows, and the customer storefront we expect to make live soon.
+          inventory workflows, and our customer storefront.
         </p>
       </div>
       <div class="carduploader-action carduploader-brand-card">
@@ -212,7 +212,7 @@
       </div>
     </section>
 
-    <section class="sell-section wrap" id="sell" aria-labelledby="sell-title">
+    <section class="sell-section wrap" id="sell" aria-labelledby="sell-title" hidden>
       <span class="route-alias" id="bulk" aria-hidden="true"></span>
       <span class="route-alias" id="buylist" aria-hidden="true"></span>
       <div class="sell-copy">
@@ -285,13 +285,10 @@
         <li><a href="/#contact">Contact</a></li>
         <li><span>Powered by CardVector</span></li>
       </ul>
-      <ul class="footer-admin" aria-label="Operator tools">
-        <li><a href="/operator" aria-label="Open CardVector Operator Dashboard">Operator</a></li>
-      </ul>
     </div>
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-  <script src="/app.js?v=20260911-carduploader-storefront" defer></script>
+  <script src="/app.js?v=20260930-public-home" defer></script>
 </body>
 </html>

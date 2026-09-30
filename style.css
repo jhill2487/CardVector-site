@@ -162,17 +162,17 @@ a:hover {
 }
 
 .hero {
-  min-height: 430px;
+  min-height: 320px;
   display: grid;
   grid-template-columns: minmax(0, 820px);
   align-items: center;
   justify-content: center;
-  padding: 52px 0 56px;
+  padding: 34px 0 38px;
   text-align: center;
 }
 
 .brand-banner {
-  padding-top: 28px;
+  padding-top: 18px;
 }
 
 .brand-banner a {
@@ -185,7 +185,9 @@ a:hover {
 .brand-banner img {
   display: block;
   width: 100%;
+  max-height: 360px;
   height: auto;
+  object-fit: cover;
   background: var(--blue-950);
 }
 
@@ -193,7 +195,7 @@ a:hover {
   display: block;
   width: 148px;
   height: 148px;
-  margin: 0 auto 22px;
+  margin: 0 auto 18px;
   border-radius: 50%;
   object-fit: cover;
   box-shadow: 0 18px 50px rgba(11, 31, 68, .20);
@@ -219,7 +221,7 @@ h1 {
   max-width: 800px;
   margin-bottom: 18px;
   color: var(--blue-950);
-  font-size: clamp(3.4rem, 8vw, 6.8rem);
+  font-size: clamp(2.9rem, 7vw, 5.6rem);
   line-height: .9;
   letter-spacing: -.055em;
 }
@@ -243,7 +245,7 @@ h3 {
   margin-right: auto;
   margin-left: auto;
   color: var(--muted);
-  font-size: 1.2rem;
+  font-size: 1.12rem;
 }
 
 .hero-actions {
@@ -251,7 +253,7 @@ h3 {
   flex-wrap: wrap;
   justify-content: center;
   gap: 14px;
-  margin-top: 32px;
+  margin-top: 24px;
 }
 
 .button {
@@ -422,7 +424,6 @@ h3 {
 }
 
 .marketplace-card-direct {
-  grid-column: 1 / -1;
   border-color: rgba(37, 99, 235, .28);
   background: linear-gradient(180deg, #fff, var(--blue-50));
 }
@@ -1556,12 +1557,6 @@ h3 {
   margin: 0;
   padding: 0;
   list-style: none;
-}
-
-.footer .footer-admin {
-  gap: 12px;
-  font-size: .82rem;
-  opacity: .68;
 }
 
 .qr-view {

@@ -124,18 +124,7 @@
 
   const mobileHashRoutes = new Set([
     "mobile",
-    "mobile-capture",
-    "operator",
-    "operator-dashboard",
-    "registry",
-    "location-registry",
-    "batches",
-    "batch-workflow",
-    "listings",
-    "listing-reconciliation",
-    "existing-listing-review",
-    "repricing",
-    "price-review"
+    "mobile-capture"
   ]);
   function currentHashRoute() {
     return window.location.hash.replace(/^#\/?/, "").toLowerCase();
@@ -308,31 +297,31 @@
     document.title = "Contact Putnam Collectibles";
   }
 
-  function renderRetiredCheckoutPage() {
+  function renderRetiredPublicRoutePage(title = "Page Not Available") {
     main.innerHTML = `
-      <section class="qr-view wrap" aria-labelledby="retired-checkout-title">
+      <section class="qr-view wrap" aria-labelledby="retired-public-route-title">
         <article class="qr-card contact-route-card">
-          <p class="eyebrow">Putnam Collectibles storefront</p>
-          <h1 id="retired-checkout-title">Shop through CardUploader</h1>
-          <p class="hero-lede">CardVector.app no longer runs a direct cart or payment checkout. Current buying and selling activity is handled through the Putnam Collectibles CardUploader storefront.</p>
-          <div class="contact-route-notes" aria-label="Storefront guidance">
+          <p class="eyebrow">Putnam Collectibles</p>
+          <h1 id="retired-public-route-title">${escapeHtml(title)}</h1>
+          <p class="hero-lede">This CardVector.app page is no longer public. Please use the current storefront, buylist, market briefs, or contact page.</p>
+          <div class="contact-route-notes" aria-label="Current public links">
             <div>
-              <strong>Buy cards</strong>
+              <strong>Shop cards</strong>
               <span>Browse available Putnam Collectibles inventory on CardUploader.</span>
             </div>
             <div>
-              <strong>Questions</strong>
-              <span>Email ${escapeHtml(siteLinks.CONTACT_EMAIL)} with availability or collection questions.</span>
+              <strong>Sell cards</strong>
+              <span>Open the Putnam Collectibles CardUploader buylist.</span>
             </div>
           </div>
           <div class="entry-actions sell-route-actions">
             <a class="button primary button-large" href="${escapeHtml(siteLinks.CARDUPLOADER_STORE_URL)}" target="_blank" rel="noopener noreferrer">Shop CardUploader Store</a>
-            <a class="button secondary button-large" href="${escapeHtml(siteLinks.CONTACT_EMAIL_URL)}" target="_blank" rel="noopener noreferrer">Email Putnam Collectibles</a>
+            <a class="button secondary button-large" href="${escapeHtml(siteLinks.CARDUPLOADER_BUYLIST_URL)}" target="_blank" rel="noopener noreferrer">Open CardUploader Buylist</a>
             <a class="button secondary" href="/">Return Home</a>
           </div>
         </article>
       </section>`;
-    document.title = "Shop CardUploader | Putnam Collectibles";
+    document.title = `${title} | Putnam Collectibles`;
   }
 
   const fallbackMarketBriefPosts = Object.freeze([
@@ -1328,7 +1317,7 @@
       <section class="operator-shell wrap" aria-labelledby="operator-title">
         <div class="operator-hero">
           <p class="eyebrow">CardVector workspace</p>
-          <h1 id="operator-title">Operator Dashboard</h1>
+          <h1 id="operator-title">Internal Tools Retired</h1>
           <p>Use CardVector.app as the primary operating surface for CardUploader batch references and controlled repricing review.</p>
         </div>
         <div class="operator-grid" aria-label="Operator workflows">
@@ -1344,7 +1333,7 @@
           </a>
         </div>
       </section>`;
-    document.title = "Operator Dashboard | CardVector";
+    document.title = "Internal Tools Retired | CardVector";
   }
 
   function registryWarningHtml(registry) {
@@ -1647,7 +1636,7 @@
             <p>Signed in as ${escapeHtml(authStateLabel(user))}. This page shows only batches with CardUploader batch-history links.</p>
           </div>
           <div class="operator-toolbar-actions">
-            <a class="button secondary" href="/operator">Operator Dashboard</a>
+            <a class="button secondary" href="/">Return Home</a>
             <a class="button primary" href="https://carduploader.com/dashboard/history" target="_blank" rel="noopener noreferrer">Open CardUploader Batches</a>
           </div>
         </div>
@@ -4129,7 +4118,7 @@
               <p class="operator-note">CardUploader remains inventory truth. CardVector reads the latest helper snapshot from this browser and never asks you to paste scripts or JSON.</p>
             </div>
             <div class="operator-toolbar-actions">
-              <a class="button secondary" href="/operator">Operator Dashboard</a>
+              <a class="button secondary" href="/">Return Home</a>
               <a class="button primary" href="https://carduploader.com/dashboard/inventory/automatic" target="_blank" rel="noopener noreferrer">Open CardUploader Automatic Inventory</a>
             </div>
           </div>
@@ -4405,7 +4394,7 @@
             </div>
             <div class="operator-toolbar-actions">
               <button class="button secondary" id="listing-refresh-supabase" type="button">Refresh from Supabase</button>
-              <a class="button secondary" href="/operator">Operator Dashboard</a>
+              <a class="button secondary" href="/">Return Home</a>
               <a class="button secondary" href="/operator/batches">Batch Workflow</a>
             </div>
           </div>
@@ -4558,7 +4547,7 @@
             <h1 id="listing-reconciliation-title">Existing Listing Review</h1>
             <p>Sign in to import marketplace CSV snapshots for reconciliation review.</p>
           </div>
-          <a class="button secondary" href="/operator">Operator Dashboard</a>
+          <a class="button secondary" href="/">Return Home</a>
         </div>
         <div class="capture-operator" id="operator-listings-user" aria-live="polite">Operator: not signed in</div>
         <div class="capture-auth operator-auth" id="operator-listings-auth"></div>
@@ -4636,7 +4625,7 @@
           </div>
           <div class="operator-toolbar-actions">
             <button class="button secondary" id="registry-refresh-supabase" type="button">Refresh from Supabase</button>
-            <a class="button secondary" href="/operator">Operator Dashboard</a>
+            <a class="button secondary" href="/">Return Home</a>
             <a class="button primary" href="https://carduploader.com/dashboard/history" target="_blank" rel="noopener noreferrer">Open CardUploader Batches</a>
           </div>
         </div>
@@ -4675,7 +4664,7 @@
             <h1 id="registry-title">ETB / Location Registry</h1>
             <p>Sign in to load synchronized Supabase ETBs, slots, capture sessions, and CardUploader batch references.</p>
           </div>
-          <a class="button secondary" href="/operator">Operator Dashboard</a>
+          <a class="button secondary" href="/">Return Home</a>
         </div>
         <div class="capture-operator" id="operator-registry-user" aria-live="polite">Operator: not signed in</div>
         <div class="capture-auth operator-auth" id="operator-registry-auth"></div>
@@ -4723,7 +4712,7 @@
             <h1 id="batch-workflow-title">Batch Workflow</h1>
             <p>Sign in to load synchronized CardUploader batch references, ETB locations, and capture handoff state.</p>
           </div>
-          <a class="button secondary" href="/operator">Operator Dashboard</a>
+          <a class="button secondary" href="/">Return Home</a>
         </div>
         <div class="capture-operator" id="operator-batches-user" aria-live="polite">Operator: not signed in</div>
         <div class="capture-auth operator-auth" id="operator-batches-auth"></div>
@@ -5971,48 +5960,32 @@
   }
 
   if (route === "operator" || route === "operator-dashboard") {
-    if (parts[1] && ["registry", "locations", "location-registry"].includes(parts[1].toLowerCase())) {
-      renderOperatorRegistry();
-      return;
-    }
-    if (parts[1] && ["batches", "batch-workflow"].includes(parts[1].toLowerCase())) {
-      renderOperatorBatchWorkflow();
-      return;
-    }
-    if (parts[1] && ["listings", "listing-reconciliation", "existing-listing-review"].includes(parts[1].toLowerCase())) {
-      renderOperatorListingReconciliation();
-      return;
-    }
-    if (parts[1] && ["repricing", "price-review"].includes(parts[1].toLowerCase())) {
-      renderOperatorRepricingReview();
-      return;
-    }
-    renderOperatorDashboard();
+    renderRetiredPublicRoutePage("Page Not Available");
     return;
   }
 
   if (route === "registry" || route === "location-registry") {
-    renderOperatorRegistry();
+    renderRetiredPublicRoutePage("Page Not Available");
     return;
   }
 
-  if (route === "shop" || route === "cart") {
-    renderRetiredCheckoutPage();
+  if (route === "cart") {
+    renderRetiredPublicRoutePage("Page Not Available");
     return;
   }
 
   if (route === "batches" || route === "batch-workflow") {
-    renderOperatorBatchWorkflow();
+    renderRetiredPublicRoutePage("Page Not Available");
     return;
   }
 
   if (route === "listings" || route === "listing-reconciliation" || route === "existing-listing-review") {
-    renderOperatorListingReconciliation();
+    renderRetiredPublicRoutePage("Page Not Available");
     return;
   }
 
   if (route === "repricing" || route === "price-review") {
-    renderOperatorRepricingReview();
+    renderRetiredPublicRoutePage("Page Not Available");
     return;
   }
 
@@ -6049,7 +6022,7 @@
         <p>CardVector no longer stages new mobile capture sessions, uploads mobile originals, or downloads mobile capture queues.</p>
         <div class="operator-toolbar-actions">
           <a class="button primary" href="https://carduploader.com/dashboard/history" target="_blank" rel="noopener noreferrer">Open CardUploader Batches</a>
-          <a class="button secondary" href="/operator">Operator Dashboard</a>
+          <a class="button secondary" href="/">Return Home</a>
         </div>
       </section>`
     );
