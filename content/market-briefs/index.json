@@ -1,6 +1,79 @@
 {
   "posts": [
     {
+      "slug": "tcg-promo-card-inventory-event-prerelease-product-inserts",
+      "label": "CardVector Market Brief",
+      "title": "Event Promos Are Not Pack Pulls: A Better Inventory System for TCG Sellers",
+      "seoTitle": "How to Track TCG Promo Cards, Prerelease Cards, and Product Inserts",
+      "date": "2026-10-27",
+      "author": "CardVector",
+      "category": "Seller Operations",
+      "status": "published",
+      "summary": "Learn how small trading card sellers can track event promos, prerelease cards, deck inserts, and special treatments without confusing their origins or inventory.",
+      "description": "Learn how small trading card sellers can track event promos, prerelease cards, deck inserts, and special treatments without confusing their origins or inventory.",
+      "searchIntent": "",
+      "targetKeywords": [],
+      "tags": [
+        "Pokemon",
+        "Magic The Gathering",
+        "Yu-Gi-Oh",
+        "Disney Lorcana",
+        "Gundam",
+        "Promotional Cards",
+        "Inventory Management",
+        "Seller Education",
+        "CardVector"
+      ],
+      "affiliateLinks": [],
+      "source_path": "content/market-briefs/2026-10-27-tcg-promo-card-inventory-event-prerelease-product-inserts.md",
+      "sections": [
+        {
+          "heading": "Brief",
+          "body": "# Event Promos Are Not Pack Pulls: A Better Inventory System for TCG Sellers\n\nA card can enter a seller's inventory through a booster pack, a ready-to-play deck, a prerelease kit, a tournament prize, or a promotional giveaway. The card name might be familiar, but the path it took to reach the buyer can matter as much as the artwork or rarity.\n\nThat creates a deceptively simple problem for small trading card businesses: **two cards with the same character or function are not necessarily the same product**.\n\nThe answer is not to memorize every promotion. It is to build an inventory record that preserves where a card came from, what version it is, and whether it can be sold separately."
+        },
+        {
+          "heading": "Why promotional inventory deserves its own workflow",
+          "body": "Most sellers already distinguish sealed products from singles. Promotional cards need another layer of attention because distribution can be tied to events, product bundles, store programs, or participation requirements.\n\nConsider four recent examples.\n\nPok\u00e9mon's 30th Celebration Espeon ex and Umbreon ex Battle Decks, scheduled for October 30, include different exclusive illustration rare-style promotional cards: Victini with Espeon ex and Zeraora with Umbreon ex. These are components of specific deck products, not ordinary booster pulls.\n\nDisney Lorcana's Hyperia City prerelease boxes, introduced for October 16 events ahead of the October 23 wider release, include six boosters and one random promotional card.\n\nBandai's Stardust Trails [GD06] release events run from October 30 through November 8 at participating locations, with promotional cards associated with participation and winning. Bandai cautions that some events may begin later in certain areas.\n\nKonami reported that some Yu-Gi-Oh! Beyond the Brave Premiere! event kits containing promotional materials were delayed, even though booster packs were expected to reach stores.\n\nThese are different distribution systems. Treating them as one generic pile of \u201cnew set cards\u201d makes errors more likely."
+        },
+        {
+          "heading": "Separate the card from its acquisition channel",
+          "body": "An accurate inventory record starts with the physical object: game, card name, set or promotional numbering, language, finish, condition, and any verified special marking.\n\nThen add a separate field for acquisition channel.\n\nExamples include booster opening, sealed deck breakdown, prerelease kit, event participation, tournament prize, direct purchase, or trade. This field explains the card's history within your business; it does not automatically establish official rarity or guarantee exclusivity.\n\nPromotional labels are sometimes used loosely in online listings. A card may be included as a bonus in a product without being an event-exclusive prize. Conversely, an event-distributed version may have a specific stamp or identifier that a standard printing lacks.\n\nUse the publisher's checklist or product description to identify the actual version. If the evidence is unclear, do not invent an exclusive designation."
+        },
+        {
+          "heading": "A sealed product has a bill of materials",
+          "body": "For sellers who open decks or collections to sell singles, a sealed product should be treated like a bundle with a known list of contents.\n\nRecord the source product, quantity opened, and expected components. When you break it down, create resulting singles as separate inventory records and reduce the sealed quantity accordingly.\n\nThis prevents a costly mistake: selling a sealed deck and its exclusive promo as though both were still independently available.\n\nPrerelease boxes and collector products may include randomized cards, fixed promotional inserts, accessories, or event-specific materials. A randomized component should not be recorded as a known card until the box is opened and inspected.\n\nIf the business sells intact boxes, leave their contents inside the sealed inventory record. If it opens a box, reconcile what was actually found before publishing singles."
+        },
+        {
+          "heading": "Event rewards need an eligibility check",
+          "body": "Event materials can carry restrictions that ordinary retail cards do not. A participation reward, prize, or promotional item may be distributed under program rules, and eligibility can depend on attendance, winning, store participation, or another condition.\n\nBefore advertising a reward, confirm what the organizer actually provides and when. Do not promise a specific promo simply because its image appears on an event page.\n\nThe Gundam GD06 announcement distinguishes participation rewards from additional winner rewards and advises players to confirm local scheduling. That is more precise than saying \u201cevery event kit contains the same promos.\u201d\n\nFor event cards obtained legitimately, retain enough information to describe them accurately: event name, distribution program, and card identifier. There is no need to collect personal details about attendees.\n\nFollow applicable event and marketplace rules. Not every event item should automatically be treated as unrestricted merchandise."
+        },
+        {
+          "heading": "A promo delay is not a booster shortage",
+          "body": "Konami's Beyond the Brave notice illustrates why inventory needs separate status fields.\n\nBooster packs were expected for Premiere! events while some promotional kits would arrive later. Some stores could reschedule events.\n\nA seller looking only at the expansion release date might assume the full event package was available. A better system tracks booster inventory, promotional inventory, and event schedules independently.\n\nThis also prevents mistaken scarcity narratives. If a promo is difficult to find immediately after launch, delayed distribution may be a factor rather than unusually strong collector demand.\n\nThe practical response is verification, not speculation."
+        },
+        {
+          "heading": "Collector treatments create another identification problem",
+          "body": "Special artwork and premium finishes complicate the picture.\n\nRavensburger's Hyperia City materials distinguish standard boosters from Collector Boosters and describe Illustrious serialized cards as exclusive to the collector configuration. That is a product-treatment distinction, not a prerelease participation reward.\n\nA serialized card, a prerelease promo, and a standard single should not be combined into one generic variant merely because they belong to the same expansion.\n\nFor Magic, the upcoming Star Trek release includes distinct Commander deck products with new cards, while Wizards has warned of product-specific regional delays. The presence of a card in a Commander deck is not proof that a particular booster configuration contains it.\n\nUse precise categories: **product insert, event promo, tournament reward, premium treatment, and standard printing**. More than one field may be needed."
+        },
+        {
+          "heading": "Build a lightweight promo inventory ledger",
+          "body": "A spreadsheet or inventory database can handle this. For each special card, record:\n\n- Exact game, card name, number, language, and treatment\n- Source product or event program\n- Acquisition date and quantity actually received\n- Condition and storage location\n- Whether the source product remains sealed or was opened\n- Listing identifiers across marketplaces\n- Verification source for any exclusive claim\n\nA reference to an official product page can prevent confusion months later when a card is relisted.\n\nKeep physical quantities separate from expected quantities. \u201cScheduled to arrive\u201d and \u201cavailable to ship\u201d are not synonyms.\n\nIf you sell across eBay, TCGplayer, or a direct storefront, each listing should point back to the same physical unit or shared available quantity. A one-copy promo makes overselling especially frustrating."
+        },
+        {
+          "heading": "Use photos to verify, not replace, the record",
+          "body": "Clear photographs help customers identify a promo stamp, unusual finish, or serialized marking. They also help the seller confirm the correct card during order picking.\n\nBut an image alone cannot explain event distribution rules or prove a card was available only through one channel. Use photos alongside verified product identifiers and a factual description of origin.\n\nFor sealed products, do not imply that a randomized insert is guaranteed unless the manufacturer explicitly guarantees it."
+        },
+        {
+          "heading": "Turn event information into better customer service",
+          "body": "Customers ask questions that reveal gaps in listing information: Is this the deck promo or booster version? Was it a tournament reward? Does this box include the promo? Is the pictured card the exact copy being shipped?\n\nA strong inventory system makes those questions easier to answer.\n\nEducational storefront pages can explain the difference between standard printings, promotional inserts, and event rewards. That helps collectors browse confidently without making claims about future value.\n\nFor CardVector.app, the broader lesson is that inventory quality begins before the listing is written. A seller must understand what was acquired and how it became a sellable unit."
+        },
+        {
+          "heading": "The durable seller lesson",
+          "body": "Promotional cards are not one uniform category. They move through retail products, organized play, prerelease events, and premium collector configurations.\n\nRecent releases across Pok\u00e9mon, Lorcana, Gundam, Yu-Gi-Oh!, and Magic show how easily those channels overlap. The solution is a repeatable record: identify the exact card, preserve its source, reconcile physical quantity, and verify claims of exclusivity.\n\nThat process outlasts any individual event calendar. It makes listings clearer, prevents inventory mistakes, and helps collectors receive exactly what they expected."
+        }
+      ]
+    },
+    {
       "slug": "trading-card-listing-photos-variant-condition-accuracy",
       "label": "CardVector Market Brief",
       "title": "A Card Photo Is an Inventory Record: How to Prevent TCG Variant Errors",
