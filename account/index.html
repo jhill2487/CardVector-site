@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="description" content="CardVector collector account registration and sign in.">
+  <title>Collector Account | CardVector</title>
+  <link rel="stylesheet" href="/account/style.css">
+</head>
+<body>
+  <header class="top"><a href="/" class="brand">CardVector</a><a href="/">Back to site</a></header>
+  <main class="shell">
+    <div class="intro"><p class="eyebrow">THE BUYER-DRIVEN CARD MARKETPLACE</p><h1>Your collector account</h1><p>Join CardVector to build a wanted list and connect with sellers as marketplace features launch.</p></div>
+    <section id="auth-panel" class="panel" aria-labelledby="auth-heading">
+      <div class="switcher" role="group" aria-label="Account action"><button type="button" id="tab-login" aria-pressed="true">Sign in</button><button type="button" id="tab-register" aria-pressed="false">Create account</button></div>
+      <h2 id="auth-heading">Sign in</h2>
+      <form id="auth-form">
+        <label for="email">Email address</label><input id="email" type="email" autocomplete="email" required maxlength="254">
+        <label for="password">Password</label><input id="password" type="password" autocomplete="current-password" minlength="8" required>
+        <div id="registration-fields" hidden><label for="display-name">Display name</label><input id="display-name" autocomplete="nickname" maxlength="60"><p class="hint">Your public-facing collector name. You can change it later.</p></div>
+        <button class="primary" id="submit-auth" type="submit">Sign in</button>
+      </form>
+      <button id="forgot-password" type="button" class="link-button">Forgot password?</button>
+    </section>
+    <section class="panel" id="account-panel" hidden aria-labelledby="account-heading">
+      <h2 id="account-heading">Your account</h2><p id="account-email"></p>
+      <form id="profile-form"><label for="profile-name">Display name</label><input id="profile-name" maxlength="60" required autocomplete="nickname"><label for="favorite-tcg">Favorite trading card game (optional)</label><select id="favorite-tcg"><option value="">Select a game</option><option>Pokémon</option><option>Magic: The Gathering</option><option>Yu-Gi-Oh!</option><option>One Piece</option><option>Other</option></select><button class="primary" type="submit">Save profile</button></form>
+      <button id="sign-out" type="button" class="secondary">Sign out</button>
+    </section>
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+  <script src="/account/app.js" defer></script>
+</body>
+</html>
