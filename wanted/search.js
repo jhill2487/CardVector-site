@@ -6,6 +6,19 @@
   const input = $("card-query"), results = $("results"), status = $("search-status");
   const cache = new Map();
   const PAGE_SIZE = 24;
+  const setNames = new Map();
+  const setLabels = new Map();
+  async function loadSetNames() {
+    try {
+      const response = await fetch("https://api.tcgdex.net/v2/en/sets");
+      if (!response.ok) return;
+      const sets = await response.json();
+      if (!Array.isArray(sets)) return;
+      for (const set of sets) if (set.id && set.name) setNames.set(set.id, set.name);
+      for (const [label, id] of setLabels) label.textContent = setNames.get(id) || "Set details on selection";
+    } catch (_) { /* Search continues without set names if unavailable. */ }
+  }
+  loadSetNames();
   let debounce, controller, requestId = 0, matches = [], visible = 0, selectedController, selectedCard = null;
   const supabaseClient = window.supabase?.createClient("https://iqdpfgpkagjxzedfxrvn.supabase.co", "sb_publishable_76aiLaAm5Z4Kv67GkuTo-g_Psx5HINH");
   function feedback(text) { status.textContent = text; }
@@ -25,8 +38,15 @@
       const button = document.createElement("button"); button.type = "button"; button.className = "card";
       button.append(picture(card));
       const name = document.createElement("strong"); name.textContent = card.name;
-      const info = document.createElement("small"); info.textContent = "Card #" + (card.localId || "—") + " · " + card.id;
-      button.append(name, info);
+      const setId = card.id.slice(0, card.id.lastIndexOf("-"));
+      const info = document.createElement("small");
+      info.textContent = setNames.get(setId) || "Set details on selection";
+      if (!setNames.size) setLabels.set(info, setId);
+      const number = document.createElement("small");
+      number.textContent = "Card #" + (card.localId || "—");
+      const finish = document.createElement("small");
+      finish.textContent = "Select to see available finishes";
+      button.append(name, info, number, finish);
       button.addEventListener("click", () => selectCard(card));
       fragment.append(button);
     }
@@ -119,7 +139,10 @@
       const set = document.createElement("p"); set.textContent = "Set: " + (details.set?.name || "Unknown");
       const number = document.createElement("p"); number.textContent = "Card #: " + (details.localId || card.localId || "Unknown");
       const reference = document.createElement("p"); reference.textContent = "TCGdex ID: " + card.id;
-      text.append(heading, set, number, reference); addMarketReference(text, details); box.append(img, text); body.replaceChildren(box);
+      const finishes = Object.entries({normal:"Non-holo",holo:"Holo",reverse:"Reverse holo",firstEdition:"1st Edition",wPromo:"Promo"}).filter(([key]) => details.variants?.[key] === true).map(([, label]) => label);
+      const finishLabel = document.createElement("p");
+      finishLabel.textContent = "Available finishes: " + (finishes.length ? finishes.join(", ") : "Not specified by TCGdex");
+      text.append(heading, set, number, finishLabel); addMarketReference(text, details); box.append(img, text); body.replaceChildren(box);
       selectedCard = { card_id: card.id, card_name: details.name || card.name, set_name: details.set?.name || "Unknown", card_number: details.localId || card.localId || "Unknown", image_url: details.image || card.image || null };
     } catch (error) {
       if (error.name !== "AbortError") body.textContent = "Could not load card details. Select the card again to retry.";
