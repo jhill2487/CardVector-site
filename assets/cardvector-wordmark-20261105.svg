@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 650 124" role="img" aria-labelledby="title">
+<title id="title">CardVector</title>
+<g fill="none" stroke="#f8fcff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round">
+<path d="M42 97 23 40 Q22 34 28 32 L62 22"/>
+<path d="M52 101 38 27 Q37 20 44 19 L79 13"/>
+<path d="M68 13 123 17 Q129 18 128 24 L120 88 Q119 94 112 94 L64 89"/>
+</g>
+<path d="M5 105 C44 96 93 78 142 45 L130 43 165 25 154 63 149 53 C96 84 53 101 5 105Z" fill="#ff8316"/>
+<path d="M14 104 C64 92 108 72 150 53" stroke="#ffb03a" stroke-width="2" fill="none"/>
+<g font-family="Arial,Helvetica,sans-serif" font-size="70" font-weight="900" font-style="italic" letter-spacing="-3.6">
+<text x="173" y="88" fill="#f9fbff">Card</text>
+<text x="335" y="88" fill="#ff8517">Vector</text>
+</g>
+</svg>

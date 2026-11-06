@@ -36,3 +36,7 @@ h1 em{color:#ff922a}
 .footer-inner span,.footer-inner small{color:#bac8d9}
 a:focus-visible{outline:3px solid #00dbea;outline-offset:3px}
 @media(max-width:820px){.wordmark .brand-logo{width:48px;height:46px}.wordmark{font-size:1.35rem}.hero{padding-top:52px;padding-bottom:65px}}
+
+/* Lock logo and wordmark into one proportional unit, matching reference. */
+.wordmark .brand-wordmark{display:block;width:clamp(200px,23vw,298px);height:auto;max-width:100%;object-fit:contain}
+@media(max-width:820px){.wordmark .brand-wordmark{width:clamp(180px,54vw,270px)}}

@@ -1,8 +1,8 @@
 {
   "source_repository": "jhill2487/CardVector",
   "source_path": "Docs/",
-  "source_commit": "a90b1b9613d1f88e37a07f78e09c3e9ac3913500",
-  "generated_at": "2026-11-06T01:51:36+00:00",
+  "source_commit": "4967949f0acfd3a7cf9a092cbd29a001c019e3d1",
+  "generated_at": "2026-11-06T01:54:29+00:00",
   "public_files": [
     "index.html",
     "404.html",
@@ -25,7 +25,8 @@
     "assets/putnam-profile-onepiece.png",
     "assets/putnam-ebay-banner.png",
     "assets/cardvector-mark.svg",
-    "assets/cardvector-mark-v2.svg"
+    "assets/cardvector-mark-v2.svg",
+    "assets/cardvector-wordmark-20261105.svg"
   ],
   "generated_content": [
     "content/market-briefs/index.json",
