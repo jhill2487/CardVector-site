@@ -7,6 +7,7 @@
   const status = $("status");
   let mode = "login";
   let client;
+  let recoveryMode = new URLSearchParams(location.hash.slice(1)).get("type") === "recovery";
 
   function message(text, isError = false) {
     status.textContent = text;
@@ -36,12 +37,20 @@
     $("favorite-tcg").value = data?.favorite_tcg || "";
     message(data ? "" : "Welcome! Save your display name to finish setting up your profile.");
   }
+  function showRecovery() {
+    recoveryMode = true;
+    $("auth-panel").hidden = true;
+    $("account-panel").hidden = true;
+    $("recovery-panel").hidden = false;
+    message("Choose a new password to secure your CardVector account.");
+  }
   async function refresh() {
     const { data, error } = await client.auth.getUser();
     if (error && error.name !== "AuthSessionMissingError") {
       message("Could not check sign-in status. Please try again.", true);
     }
-    if (data?.user) await loadAccount(data.user);
+    if (data?.user && recoveryMode) showRecovery();
+    else if (data?.user) await loadAccount(data.user);
     else { $("auth-panel").hidden = false; $("account-panel").hidden = true; }
   }
   async function submitAuth(event) {
@@ -95,6 +104,31 @@
     });
     message(error ? error.message : "If this email is registered, a password reset link has been sent.", Boolean(error));
   }
+  async function submitRecovery(event) {
+    event.preventDefault();
+    const button = $("save-new-password");
+    const password = $("new-password").value;
+    if (password !== $("confirm-password").value) {
+      message("Passwords do not match.", true);
+      return;
+    }
+    button.disabled = true;
+    try {
+      const { data: { user }, error: userError } = await client.auth.getUser();
+      if (userError || !user) throw new Error("Recovery link has expired. Request a new password reset email.");
+      const { error } = await client.auth.updateUser({ password });
+      if (error) throw error;
+      recoveryMode = false;
+      $("recovery-panel").hidden = true;
+      history.replaceState(null, "", "/account/");
+      await refresh();
+      message("Password updated successfully. Your CardVector account is ready.");
+    } catch (error) {
+      message(error.message || "Unable to update your password.", true);
+    } finally {
+      button.disabled = false;
+    }
+  }
   async function init() {
     if (!window.supabase?.createClient) {
       message("Account service is unavailable. Please reload this page.", true);
@@ -105,6 +139,7 @@
     $("tab-register").addEventListener("click", () => setMode("register"));
     $("auth-form").addEventListener("submit", submitAuth);
     $("profile-form").addEventListener("submit", saveProfile);
+    $("recovery-form").addEventListener("submit", submitRecovery);
     $("forgot-password").addEventListener("click", resetPassword);
     $("sign-out").addEventListener("click", async () => {
       const { error } = await client.auth.signOut();
@@ -112,14 +147,7 @@
       else { await refresh(); message("Signed out."); }
     });
     client.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") {
-        const password = prompt("Enter a new password (minimum 8 characters):");
-        if (password && password.length >= 8) {
-          client.auth.updateUser({ password }).then(({ error }) =>
-            message(error ? error.message : "Password updated.", Boolean(error))
-          );
-        } else if (password) message("Password must be at least 8 characters.", true);
-      }
+      if (event === "PASSWORD_RECOVERY") showRecovery();
     });
     await refresh();
   }

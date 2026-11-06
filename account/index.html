@@ -5,10 +5,10 @@
   <meta name="robots" content="noindex">
   <meta name="description" content="CardVector collector account registration and sign in.">
   <title>Collector Account | CardVector</title>
-  <link rel="stylesheet" href="/account/style.css?v=20261105-orange&cv=4cd89c51d62f">
+  <link rel="stylesheet" href="/account/style.css?v=20261105-orange&cv=2350353e75db">
 </head>
 <body>
-  <header class="top"><a href="/" class="brand"><img src="/assets/cardvector-twin-arrow.svg?cv=4cd89c51d62f" alt="CardVector" width="240" height="46"></a><a href="/">Back to site</a></header>
+  <header class="top"><a href="/" class="brand"><img src="/assets/cardvector-twin-arrow.svg?cv=2350353e75db" alt="CardVector" width="240" height="46"></a><a href="/">Back to site</a></header>
   <main class="shell">
     <div class="intro"><p class="eyebrow">THE BUYER-DRIVEN CARD MARKETPLACE</p><h1>Your collector account</h1><p>Join CardVector to build a wanted list and connect with sellers as marketplace features launch.</p></div>
     <section id="auth-panel" class="panel" aria-labelledby="auth-heading">
@@ -22,6 +22,17 @@
       </form>
       <button id="forgot-password" type="button" class="link-button">Forgot password?</button>
     </section>
+    <section class="panel" id="recovery-panel" hidden aria-labelledby="recovery-heading">
+      <h2 id="recovery-heading">Set a new password</h2>
+      <p>Enter your new CardVector account password below.</p>
+      <form id="recovery-form">
+        <label for="new-password">New password</label>
+        <input id="new-password" type="password" autocomplete="new-password" minlength="8" required>
+        <label for="confirm-password">Confirm new password</label>
+        <input id="confirm-password" type="password" autocomplete="new-password" minlength="8" required>
+        <button class="primary" id="save-new-password" type="submit">Update password</button>
+      </form>
+    </section>
     <section class="panel" id="account-panel" hidden aria-labelledby="account-heading">
       <h2 id="account-heading">Your account</h2><p id="account-email"></p>
       <form id="profile-form"><label for="profile-name">Display name</label><input id="profile-name" maxlength="60" required autocomplete="nickname"><label for="favorite-tcg">Favorite trading card game (optional)</label><select id="favorite-tcg"><option value="">Select a game</option><option>Pokémon</option><option>Magic: The Gathering</option><option>Yu-Gi-Oh!</option><option>One Piece</option><option>Other</option></select><button class="primary" type="submit">Save profile</button></form>
@@ -30,6 +41,6 @@
     <p id="status" class="status" role="status" aria-live="polite"></p>
   </main>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-  <script src="/account/app.js?cv=4cd89c51d62f" defer></script>
+  <script src="/account/app.js?cv=2350353e75db" defer></script>
 </body>
 </html>
