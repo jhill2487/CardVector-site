@@ -2,3 +2,5 @@
 #want-form{margin:20px 0;padding:16px;border:1px solid #35566d;border-radius:12px;background:#081b2d}#want-form label{display:block;margin:14px 0 7px;font-weight:700}#want-form input,#want-form select{width:100%;padding:12px;border-radius:8px;border:1px solid #63859e;background:#081524;color:#fff;font:inherit}#save-want{width:100%;margin-top:19px;background:#ff8316;border:0;color:#101b2b}#want-status{min-height:1.6em;color:#9ee3f5}
 
 #want-form .offer-flex{display:flex;align-items:flex-start;gap:10px;font-weight:600}#want-form .offer-flex input{width:20px;min-width:20px;height:20px;margin:2px 0 0;accent-color:#ff8316}
+
+.market-reference{margin:15px 0;padding:13px;border:1px solid #426783;border-radius:10px;background:#091e30}.market-reference strong{color:#9dddf3}.market-reference p{font-size:.95rem;margin:9px 0;color:#fff;text-transform:capitalize}.market-reference small{display:block;color:#b0c9d8;line-height:1.5;margin-top:8px}

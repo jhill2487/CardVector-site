@@ -69,6 +69,39 @@
       feedback("Card search is temporarily unavailable. Please try again.");
     }
   }
+  function addMarketReference(container, details) {
+    const pricing = details.pricing?.tcgplayer;
+    const section = document.createElement("div");
+    section.className = "market-reference";
+    const label = document.createElement("strong");
+    label.textContent = "TCGplayer market reference";
+    section.append(label);
+    const variants = pricing ? Object.entries(pricing).filter(([key, value]) =>
+      key !== "updated" && key !== "unit" && value && typeof value === "object" &&
+      Number.isFinite(value.marketPrice) && value.marketPrice > 0) : [];
+    if (pricing?.unit === "USD" && variants.length) {
+      for (const [variant, data] of variants) {
+        const line = document.createElement("p");
+        const variantLabel = variant.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[-_]/g, " ");
+        line.textContent = variantLabel + ": " + new Intl.NumberFormat("en-US", {style:"currency", currency:"USD"}).format(data.marketPrice);
+        section.append(line);
+      }
+      const updated = pricing.updated ? new Date(pricing.updated) : null;
+      if (updated && !Number.isNaN(updated.getTime())) {
+        const time = document.createElement("small");
+        time.textContent = "Pricing updated " + updated.toLocaleDateString();
+        section.append(time);
+      }
+    } else {
+      const unavailable = document.createElement("p");
+      unavailable.textContent = "No reliable USD market reference available for this card.";
+      section.append(unavailable);
+    }
+    const note = document.createElement("small");
+    note.textContent = "Informational only. Check the correct printing and finish. Your maximum offer is entirely your choice; this does not set it automatically.";
+    section.append(note);
+    container.append(section);
+  }
   async function selectCard(card) {
     if (selectedController) selectedController.abort();
     selectedController = new AbortController();
@@ -86,7 +119,7 @@
       const set = document.createElement("p"); set.textContent = "Set: " + (details.set?.name || "Unknown");
       const number = document.createElement("p"); number.textContent = "Card #: " + (details.localId || card.localId || "Unknown");
       const reference = document.createElement("p"); reference.textContent = "TCGdex ID: " + card.id;
-      text.append(heading, set, number, reference); box.append(img, text); body.replaceChildren(box);
+      text.append(heading, set, number, reference); addMarketReference(text, details); box.append(img, text); body.replaceChildren(box);
       selectedCard = { card_id: card.id, card_name: details.name || card.name, set_name: details.set?.name || "Unknown", card_number: details.localId || card.localId || "Unknown", image_url: details.image || card.image || null };
     } catch (error) {
       if (error.name !== "AbortError") body.textContent = "Could not load card details. Select the card again to retry.";
