@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 116" role="img" aria-labelledby="title">
+<title id="title">CardVector — trading cards and upward arrow</title>
+<g fill="none" stroke="#F5F9FD" stroke-width="5.7" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M36 89 18 39 Q17 34 22 32 L44 24"/>
+  <path d="M45 96 30 24 Q29 19 35 18 L68 12"/>
+  <path d="M55 9 110 14 Q116 14 115 21 L108 83 Q107 89 100 89 L53 85"/>
+</g>
+<path d="M4 105 C37 90 75 72 119 46 L109 43 151 23 138 65 134 54 C91 80 44 98 4 105Z" fill="#FF8517"/>
+<path d="M8 105 C50 94 94 72 135 53" fill="none" stroke="#FFB347" stroke-width="1.8" stroke-linecap="round"/>
+</svg>
