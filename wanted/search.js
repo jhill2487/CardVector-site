@@ -6,7 +6,8 @@
   const input = $("card-query"), results = $("results"), status = $("search-status");
   const cache = new Map();
   const PAGE_SIZE = 24;
-  let debounce, controller, requestId = 0, matches = [], visible = 0, selectedController;
+  let debounce, controller, requestId = 0, matches = [], visible = 0, selectedController, selectedCard = null;
+  const supabaseClient = window.supabase?.createClient("https://iqdpfgpkagjxzedfxrvn.supabase.co", "sb_publishable_76aiLaAm5Z4Kv67GkuTo-g_Psx5HINH");
   function feedback(text) { status.textContent = text; }
   function imageUrl(card) { return card.image ? card.image + "/low.webp" : ""; }
   function picture(card, eager = false) {
@@ -72,7 +73,7 @@
     if (selectedController) selectedController.abort();
     selectedController = new AbortController();
     const panel = $("selected"), body = $("selected-content");
-    panel.hidden = false; body.textContent = "Loading exact card details…";
+    panel.hidden = false; selectedCard = null; body.textContent = "Loading exact card details…";
     panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
     try {
       const response = await fetch(API + "/" + encodeURIComponent(card.id), {signal: selectedController.signal});
@@ -86,10 +87,34 @@
       const number = document.createElement("p"); number.textContent = "Card #: " + (details.localId || card.localId || "Unknown");
       const reference = document.createElement("p"); reference.textContent = "TCGdex ID: " + card.id;
       text.append(heading, set, number, reference); box.append(img, text); body.replaceChildren(box);
+      selectedCard = { card_id: card.id, card_name: details.name || card.name, set_name: details.set?.name || "Unknown", card_number: details.localId || card.localId || "Unknown", image_url: details.image || card.image || null };
     } catch (error) {
       if (error.name !== "AbortError") body.textContent = "Could not load card details. Select the card again to retry.";
     }
   }
+  $("want-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const button = $("save-want"), message = $("want-status");
+    if (!selectedCard) { message.textContent = "Select a card and wait for its details to load."; return; }
+    if (!supabaseClient) { message.textContent = "Account service unavailable. Reload the page."; return; }
+    button.disabled = true;
+    message.textContent = "Saving request…";
+    try {
+      const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+      if (authError || !user) { message.textContent = "Sign in to save your wanted card. Open My account, then return here."; return; }
+      const { error } = await supabaseClient.from("cv_wanted_requests").insert({
+        user_id: user.id, source: "tcgdex", ...selectedCard,
+        minimum_condition: $("minimum-condition").value,
+        max_price_usd: Number($("max-price").value),
+        quantity: Number($("want-quantity").value),
+        consider_lower_condition: $("consider-lower-condition").checked
+      });
+      if (error) throw error;
+      message.textContent = "Added to your wanted list. View it in your account dashboard.";
+      $("want-form").reset();
+    } catch (error) { message.textContent = error.message || "Could not save request."; }
+    finally { button.disabled = false; }
+  });
   input.addEventListener("input", () => {
     const query = input.value.trim().replace(/\s+/g, " ");
     $("clear-search").hidden = !query;

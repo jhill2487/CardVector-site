@@ -38,6 +38,47 @@
     $("dashboard-name").textContent = data?.display_name || user.user_metadata?.display_name || "Collector";
     $("favorite-tcg").value = data?.favorite_tcg || "";
     message(data ? "" : "Welcome! Save your display name to finish setting up your profile.");
+    await loadWantedRequests(user.id);
+  }
+  async function loadWantedRequests(userId) {
+    const target = $("wanted-list");
+    target.textContent = "Loading your requests…";
+    const { data, error } = await client.from("cv_wanted_requests")
+      .select("id,card_name,set_name,card_number,minimum_condition,max_price_usd,quantity,consider_lower_condition,created_at")
+      .eq("user_id", userId).eq("status", "active").order("created_at", {ascending:false}).limit(50);
+    if (error) {
+      target.textContent = "Could not load requests: " + error.message;
+      $("wanted-count").textContent = "Unavailable";
+      return;
+    }
+    $("wanted-count").textContent = data.length + (data.length === 50 ? "+" : "") + " active";
+    target.replaceChildren();
+    if (!data.length) {
+      const p = document.createElement("p"); p.className = "hint";
+      p.textContent = "No open requests yet. Search for a card to add your first.";
+      target.append(p);
+      return;
+    }
+    for (const request of data) {
+      const row = document.createElement("div"); row.className = "wanted-item";
+      const details = document.createElement("div");
+      const name = document.createElement("strong"); name.textContent = request.card_name + " · " + request.set_name;
+      const terms = document.createElement("p"); terms.className = "hint";
+      terms.textContent = "#" + request.card_number + " · " + request.minimum_condition + " or better · Qty " +
+        request.quantity + " · Max $" + Number(request.max_price_usd).toFixed(2) +
+        (request.consider_lower_condition ? " · Open to lower-condition offers" : "");
+      details.append(name,terms);
+      const close = document.createElement("button");
+      close.type = "button"; close.className = "secondary"; close.textContent = "Close request";
+      close.addEventListener("click", async () => {
+        close.disabled = true;
+        const { error: closeError } = await client.from("cv_wanted_requests")
+          .update({status:"closed",updated_at:new Date().toISOString()}).eq("id",request.id).eq("user_id",userId);
+        if (closeError) { message("Could not close request: " + closeError.message,true); close.disabled = false; }
+        else await loadWantedRequests(userId);
+      });
+      row.append(details,close); target.append(row);
+    }
   }
   function showRecovery() {
     recoveryMode = true;
