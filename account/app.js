@@ -30,10 +30,12 @@
     $("auth-panel").hidden = true;
     $("account-panel").hidden = false;
     $("account-email").textContent = user.email || "";
+    $("dashboard-name").textContent = user.user_metadata?.display_name || "Collector";
     const { data, error } = await client.from("cv_profiles")
       .select("display_name,favorite_tcg").eq("user_id", user.id).maybeSingle();
     if (error) { message("Profile could not be loaded. " + error.message, true); return; }
     $("profile-name").value = data?.display_name || user.user_metadata?.display_name || "";
+    $("dashboard-name").textContent = data?.display_name || user.user_metadata?.display_name || "Collector";
     $("favorite-tcg").value = data?.favorite_tcg || "";
     message(data ? "" : "Welcome! Save your display name to finish setting up your profile.");
   }
@@ -92,6 +94,7 @@
         onboarding_completed_at: new Date().toISOString()
       }, { onConflict: "user_id" });
       if (error) throw error;
+      $("dashboard-name").textContent = display_name;
       message("Your collector profile has been saved.");
     } catch (error) { message(error.message || "Could not save profile.", true); }
     finally { button.disabled = false; }

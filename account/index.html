@@ -5,10 +5,10 @@
   <meta name="robots" content="noindex">
   <meta name="description" content="CardVector collector account registration and sign in.">
   <title>Collector Account | CardVector</title>
-  <link rel="stylesheet" href="/account/style.css?v=20261105-orange&cv=a15dbffbba51">
+  <link rel="stylesheet" href="/account/style.css?v=20261105-orange&cv=420913a3c322">
 </head>
 <body>
-  <header class="top"><a href="/" class="brand"><img src="/assets/cardvector-twin-arrow.svg?cv=a15dbffbba51" alt="CardVector" width="240" height="46"></a><a href="/">Back to site</a></header>
+  <header class="top"><a href="/" class="brand"><img src="/assets/cardvector-twin-arrow.svg?cv=420913a3c322" alt="CardVector" width="240" height="46"></a><a href="/">Back to site</a></header>
   <main class="shell">
     <div class="intro"><p class="eyebrow">THE BUYER-DRIVEN CARD MARKETPLACE</p><h1>Your collector account</h1><p>Join CardVector to build a wanted list and connect with sellers as marketplace features launch.</p></div>
     <p><a href="/wanted/" style="display:inline-block;margin:0 0 20px;color:#78dcf5;font-weight:750">Search Pokémon cards →</a></p>
@@ -35,13 +35,15 @@
       </form>
     </section>
     <section class="panel" id="account-panel" hidden aria-labelledby="account-heading">
-      <h2 id="account-heading">Your account</h2><p id="account-email"></p>
-      <form id="profile-form"><label for="profile-name">Display name</label><input id="profile-name" maxlength="60" required autocomplete="nickname"><label for="favorite-tcg">Favorite trading card game (optional)</label><select id="favorite-tcg"><option value="">Select a game</option><option>Pokémon</option><option>Magic: The Gathering</option><option>Yu-Gi-Oh!</option><option>One Piece</option><option>Other</option></select><button class="primary" type="submit">Save profile</button></form>
+      <div class="dashboard-head"><div><p class="eyebrow">COLLECTOR DASHBOARD</p><h2 id="account-heading">Welcome, <span id="dashboard-name">Collector</span></h2><p id="account-email"></p></div><span class="signed-in-badge">● Signed in</span></div>
+      <section class="dashboard-wants" aria-labelledby="wanted-heading"><div class="dashboard-section-head"><h3 id="wanted-heading">Open wanted requests</h3><span class="wanted-count">0 active</span></div><p class="hint">You haven't submitted any wanted-card requests yet. Saving requests is coming soon.</p><a class="primary" href="/wanted/" style="text-align:center;text-decoration:none">Search Pokémon Cards →</a></section>
+      <details class="profile-settings"><summary>Edit collector profile</summary>
+      <form id="profile-form"><label for="profile-name">Display name</label><input id="profile-name" maxlength="60" required autocomplete="nickname"><label for="favorite-tcg">Favorite trading card game (optional)</label><select id="favorite-tcg"><option value="">Select a game</option><option>Pokémon</option><option>Magic: The Gathering</option><option>Yu-Gi-Oh!</option><option>One Piece</option><option>Other</option></select><button class="primary" type="submit">Save profile</button></form></details>
       <button id="sign-out" type="button" class="secondary">Sign out</button>
     </section>
     <p id="status" class="status" role="status" aria-live="polite"></p>
   </main>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-  <script src="/account/app.js?cv=a15dbffbba51" defer></script>
+  <script src="/account/app.js?cv=420913a3c322" defer></script>
 </body>
 </html>
