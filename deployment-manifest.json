@@ -1,8 +1,8 @@
 {
   "source_repository": "jhill2487/CardVector",
   "source_path": "Docs/",
-  "source_commit": "8af50e4f1988148dcb9b432b3eb9b1af010f0c03",
-  "generated_at": "2026-11-06T02:02:14+00:00",
+  "source_commit": "fc8b57f0a785998d8a3b67ed20df8204c5482757",
+  "generated_at": "2026-11-06T02:10:29+00:00",
   "public_files": [
     "index.html",
     "404.html",
@@ -27,7 +27,8 @@
     "assets/cardvector-mark.svg",
     "assets/cardvector-mark-v2.svg",
     "assets/cardvector-wordmark-20261105.svg",
-    "assets/cardvector-logo-traced.svg"
+    "assets/cardvector-logo-traced.svg",
+    "assets/cardvector-twin-arrow.svg"
   ],
   "generated_content": [
     "content/market-briefs/index.json",
