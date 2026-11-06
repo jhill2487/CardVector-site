@@ -5,12 +5,12 @@
   <meta name="robots" content="noindex">
   <meta name="description" content="CardVector collector account registration and sign in.">
   <title>Collector Account | CardVector</title>
-  <link rel="stylesheet" href="/account/style.css?v=20261105-orange&cv=63a9688d7f08">
+  <link rel="stylesheet" href="/account/style.css?v=20261105-orange&cv=747f65258c76">
 </head>
 <body>
-  <header class="top"><a href="/" class="brand"><img src="/assets/cardvector-twin-arrow.svg?cv=63a9688d7f08" alt="CardVector" width="240" height="46"></a><a href="/">Back to site</a></header>
+  <header class="top"><a href="/" class="brand"><img src="/assets/cardvector-twin-arrow.svg?cv=747f65258c76" alt="CardVector" width="240" height="46"></a><a href="/">Back to site</a></header>
   <main class="shell">
-    <div class="intro"><p class="eyebrow">THE BUYER-DRIVEN CARD MARKETPLACE</p><h1>Your collector account</h1><p>Join CardVector to build a wanted list and connect with sellers as marketplace features launch.</p></div>
+    <div class="intro"><p class="eyebrow">THE BUYER-DRIVEN CARD MARKETPLACE</p><h1>Sign in to CardVector</h1><p>Sign in to view your wanted requests or create a collector account.</p></div>
     <p><a href="/wanted/" style="display:inline-block;margin:0 0 20px;color:#78dcf5;font-weight:750">Search Pokémon cards →</a></p>
     <section id="auth-panel" class="panel" aria-labelledby="auth-heading">
       <div class="switcher" role="group" aria-label="Account action"><button type="button" id="tab-login" aria-pressed="true">Sign in</button><button type="button" id="tab-register" aria-pressed="false">Create account</button></div>
@@ -34,16 +34,9 @@
         <button class="primary" id="save-new-password" type="submit">Update password</button>
       </form>
     </section>
-    <section class="panel" id="account-panel" hidden aria-labelledby="account-heading">
-      <div class="dashboard-head"><div><p class="eyebrow">COLLECTOR DASHBOARD</p><h2 id="account-heading">Welcome, <span id="dashboard-name">Collector</span></h2><p id="account-email"></p></div><span class="signed-in-badge">● Signed in</span></div>
-      <section class="dashboard-wants" aria-labelledby="wanted-heading"><div class="dashboard-section-head"><h3 id="wanted-heading">Open wanted requests</h3><span class="wanted-count" id="wanted-count">0 active</span></div><div id="wanted-list" aria-live="polite"><p class="hint">Loading wanted requests…</p></div><a class="primary" href="/wanted/" style="text-align:center;text-decoration:none">Search Pokémon Cards →</a></section>
-      <details class="profile-settings"><summary>Edit collector profile</summary>
-      <form id="profile-form"><label for="profile-name">Display name</label><input id="profile-name" maxlength="60" required autocomplete="nickname"><label for="favorite-tcg">Favorite trading card game (optional)</label><select id="favorite-tcg"><option value="">Select a game</option><option>Pokémon</option><option>Magic: The Gathering</option><option>Yu-Gi-Oh!</option><option>One Piece</option><option>Other</option></select><button class="primary" type="submit">Save profile</button></form></details>
-      <button id="sign-out" type="button" class="secondary">Sign out</button>
-    </section>
     <p id="status" class="status" role="status" aria-live="polite"></p>
   </main>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-  <script src="/account/app.js?cv=63a9688d7f08" defer></script>
+  <script src="/account/app.js?cv=747f65258c76" defer></script>
 </body>
 </html>

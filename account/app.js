@@ -27,18 +27,8 @@
     message("");
   }
   async function loadAccount(user) {
-    $("auth-panel").hidden = true;
-    $("account-panel").hidden = false;
-    $("account-email").textContent = user.email || "";
-    $("dashboard-name").textContent = user.user_metadata?.display_name || "Collector";
-    const { data, error } = await client.from("cv_profiles")
-      .select("display_name,favorite_tcg").eq("user_id", user.id).maybeSingle();
-    if (error) { message("Profile could not be loaded. " + error.message, true); return; }
-    $("profile-name").value = data?.display_name || user.user_metadata?.display_name || "";
-    $("dashboard-name").textContent = data?.display_name || user.user_metadata?.display_name || "Collector";
-    $("favorite-tcg").value = data?.favorite_tcg || "";
-    message(data ? "" : "Welcome! Save your display name to finish setting up your profile.");
-    await loadWantedRequests(user.id);
+    const next = new URLSearchParams(location.search).get("next");
+    location.replace(next === "settings" ? "/settings/" : "/dashboard/");
   }
   async function loadWantedRequests(userId) {
     const target = $("wanted-list");
@@ -83,7 +73,7 @@
   function showRecovery() {
     recoveryMode = true;
     $("auth-panel").hidden = true;
-    $("account-panel").hidden = true;
+    
     $("recovery-panel").hidden = false;
     message("Choose a new password to secure your CardVector account.");
   }
@@ -94,7 +84,7 @@
     }
     if (data?.user && recoveryMode) showRecovery();
     else if (data?.user) await loadAccount(data.user);
-    else { $("auth-panel").hidden = false; $("account-panel").hidden = true; }
+    else { $("auth-panel").hidden = false;  }
   }
   async function submitAuth(event) {
     event.preventDefault();
@@ -182,14 +172,10 @@
     $("tab-login").addEventListener("click", () => setMode("login"));
     $("tab-register").addEventListener("click", () => setMode("register"));
     $("auth-form").addEventListener("submit", submitAuth);
-    $("profile-form").addEventListener("submit", saveProfile);
+
     $("recovery-form").addEventListener("submit", submitRecovery);
     $("forgot-password").addEventListener("click", resetPassword);
-    $("sign-out").addEventListener("click", async () => {
-      const { error } = await client.auth.signOut();
-      if (error) message(error.message, true);
-      else { await refresh(); message("Signed out."); }
-    });
+
     client.auth.onAuthStateChange((event) => {
       if (event === "PASSWORD_RECOVERY") showRecovery();
     });
