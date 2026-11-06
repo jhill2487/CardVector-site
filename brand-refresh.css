@@ -1,0 +1,38 @@
+/* CardVector orange / cyan design system */
+:root{--navy:#071423;--blue:#ff821b;--sky:#00dbea;--ink:#eff7ff;--muted:#bdcadd;--line:#29415b}
+body{background:#081524;color:#eff7ff}
+.header{background:#07111e;border-bottom-color:#193247}
+.wordmark{color:#fff;font-size:1.65rem;letter-spacing:-.06em}
+.wordmark .brand-logo{width:63px;height:58px;object-fit:contain}
+.wordmark .brand-orange{color:#ff821b}
+.navlinks a{color:#e9f6ff}
+.navlinks .nav-login{background:#ff821b;color:#0a1320}
+.hero{position:relative;padding-top:92px;padding-bottom:110px}
+.hero:before{content:"";position:absolute;inset:8% -4% 0 35%;background:radial-gradient(ellipse at center,#0c556066 0%,#ff821b13 38%,transparent 70%);pointer-events:none;z-index:-1}
+.eyebrow{color:#00dbea}
+h1,h2,h3{color:#fff}
+h1 em{color:#ff922a}
+.lede,.micro,.section-note,.section-lede,.steps p,.audience p,.bottom p{color:#b9c9dc}
+.primary{background:linear-gradient(135deg,#ffab39,#f66a00);color:#111725}
+.outline{color:#e6fcff;border-color:#00dbea}
+.outline:hover{background:#00dbea14}
+.visual{background:linear-gradient(145deg,#10324a,#0a1a33 70%);border:1px solid #23697a;box-shadow:0 24px 80px #ff821b19,0 0 42px #00dbea13}
+.visual-label{color:#00dbea}
+.request-card{background:#10263b;color:#fff;border:1px solid #ff821b66}
+.request-tag{color:#ff9d3b}
+.request-details small{color:#bad2e2}
+.match-line{background:#15384b;color:#e9faff}
+.visual-note{color:#bed7e6}
+.band{background:#0b2235;border-top:1px solid #29415b;border-bottom:1px solid #29415b}
+.steps article,.audience article,.bottom article{background:#0b1d30;border-color:#29415b}
+.step{background:#17394b;color:#00dbea}
+.cta{background:linear-gradient(100deg,#102e42,#08213c)}
+.cta .eyebrow{color:#ff9a33}
+.cta p{color:#c7d9e8}
+.light{background:#ff821b;color:#0a1521}
+.bottom a{color:#00dbea}
+.footer{background:#07111e;border-top-color:#29415b}
+.footer-inner strong{color:#fff}
+.footer-inner span,.footer-inner small{color:#bac8d9}
+a:focus-visible{outline:3px solid #00dbea;outline-offset:3px}
+@media(max-width:820px){.wordmark .brand-logo{width:48px;height:46px}.wordmark{font-size:1.35rem}.hero{padding-top:52px;padding-bottom:65px}}
