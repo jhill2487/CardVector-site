@@ -8,6 +8,7 @@
   const PAGE_SIZE = 24;
   const setNames = new Map();
   const setLabels = new Map();
+  const mode = $("search-by"), setFilter = $("filter-set");
   async function loadSetNames() {
     try {
       const response = await fetch("https://api.tcgdex.net/v2/en/sets");
@@ -15,6 +16,7 @@
       const sets = await response.json();
       if (!Array.isArray(sets)) return;
       for (const set of sets) if (set.id && set.name) setNames.set(set.id, set.name);
+      for (const set of [...sets].filter(s => s.id && s.name).sort((a,b) => a.name.localeCompare(b.name))) setFilter.add(new Option(set.name, set.id));
       for (const [label, id] of setLabels) label.textContent = setNames.get(id) || "Set details on selection";
     } catch (_) { /* Search continues without set names if unavailable. */ }
   }
@@ -60,6 +62,7 @@
     renderNext();
   }
   function rank(cards, query) {
+    if (!query) return cards.slice().sort((a,b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
     const q = query.toLocaleLowerCase();
     return cards.slice().sort((a, b) => {
       const score = (c) => { const n = c.name.toLocaleLowerCase(); return n === q ? 0 : n.startsWith(q) ? 1 : n.includes(q) ? 2 : 3; };
@@ -69,18 +72,30 @@
   async function search(query) {
     const id = ++requestId;
     if (controller) controller.abort();
-    if (query.length < 2) { render([]); results.replaceChildren(); feedback("Enter at least 2 characters to search."); return; }
-    if (cache.has(query)) { render(cache.get(query)); feedback("Results ready."); return; }
+    const field = mode.value, chosenSet = setFilter.value;
+    if (query.length < 2 && !(field === "set" && chosenSet)) { render([]); results.replaceChildren(); feedback("Enter at least 2 characters, or choose a set."); return; }
+    const cacheKey = [field, query, chosenSet].join("|");
+    if (cache.has(cacheKey)) { render(cache.get(cacheKey)); feedback("Results ready."); return; }
     controller = new AbortController();
     feedback("Searching Pokémon cards…");
     try {
-      const response = await fetch(API + "?name=" + encodeURIComponent(query), { signal: controller.signal });
+      const params = new URLSearchParams();
+      if (field === "name" && query) params.set("name", query);
+      if (field === "illustrator" && query) params.set("illustrator", query);
+      if (chosenSet) params.set("set.id", chosenSet);
+      // Set-name searches resolve the official set ID before retrieving cards.
+      if (field === "set" && !chosenSet) {
+        const target = [...setNames.entries()].filter(([,name]) => name.toLowerCase().includes(query.toLowerCase())).map(([id]) => id);
+        if (target.length !== 1) { feedback(target.length ? "Select the exact set from the dropdown." : "No matching set. Select a set from the dropdown."); render([]); return; }
+        params.set("set.id", target[0]);
+      }
+      const response = await fetch(API + "?" + params.toString(), { signal: controller.signal });
       if (!response.ok) throw new Error("TCGdex returned " + response.status);
       const data = await response.json();
       if (!Array.isArray(data)) throw new Error("Unexpected search response");
       if (id !== requestId) return;
       const sorted = rank(data.filter(c => c && typeof c.id === "string" && typeof c.name === "string"), query);
-      cache.set(query, sorted);
+      cache.set(cacheKey, sorted);
       if (cache.size > 30) cache.delete(cache.keys().next().value);
       render(sorted); feedback(sorted.length ? "Select a card to confirm its exact printing." : "No matching cards found.");
     } catch (error) {
@@ -171,13 +186,22 @@
     } catch (error) { message.textContent = error.message || "Could not save request."; }
     finally { button.disabled = false; }
   });
+  function updateSearchMode() {
+    const selected = mode.value;
+    $("query-label").textContent = selected === "illustrator" ? "Illustrator name" : selected === "set" ? "Set name (or select a set)" : "Card name";
+    input.placeholder = selected === "illustrator" ? "Try Mitsuhiro Arita" : selected === "set" ? "Try Evolving Skies" : "Try Umbreon VMAX or Charizard";
+    input.value = ""; results.replaceChildren(); $("result-count").textContent = ""; $("more-results").hidden = true;
+    feedback(selected === "set" ? "Choose a set or enter its name." : "Enter at least 2 characters to search.");
+  }
+  mode.addEventListener("change", updateSearchMode);
+  setFilter.addEventListener("change", () => { input.dispatchEvent(new Event("input")); });
   input.addEventListener("input", () => {
     const query = input.value.trim().replace(/\s+/g, " ");
     $("clear-search").hidden = !query;
     clearTimeout(debounce);
     if (controller) controller.abort();
-    if (query.length < 2) { ++requestId; results.replaceChildren(); $("result-count").textContent = ""; $("more-results").hidden = true; feedback("Enter at least 2 characters to search."); return; }
-    if (cache.has(query.toLocaleLowerCase())) { search(query.toLocaleLowerCase()); return; }
+    if (query.length < 2 && !(mode.value === "set" && setFilter.value)) { ++requestId; results.replaceChildren(); $("result-count").textContent = ""; $("more-results").hidden = true; feedback("Enter at least 2 characters, or select a set."); return; }
+    if (cache.has([mode.value,query.toLocaleLowerCase(),setFilter.value].join("|"))) { search(query.toLocaleLowerCase()); return; }
     feedback("Searching…");
     debounce = setTimeout(() => search(query.toLocaleLowerCase()), 220);
   });
