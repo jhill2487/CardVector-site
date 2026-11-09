@@ -8,15 +8,27 @@
   const PAGE_SIZE = 24;
   const setNames = new Map();
   const setLabels = new Map();
+  const pocketSetIds = new Set();
+  const pocketCatalog = fetch("https://api.tcgdex.net/v2/en/series/tcgp").then(async response => {
+    if (!response.ok) throw new Error("Pocket series unavailable");
+    const series = await response.json();
+    if (!Array.isArray(series.sets)) throw new Error("Pocket series unavailable");
+    for (const set of series.sets) if (set.id) pocketSetIds.add(String(set.id).toLowerCase());
+  });
+  function isPhysicalCard(card) {
+    const id = String(card?.id || ""), setId = id.slice(0,id.lastIndexOf("-")).toLowerCase();
+    return !pocketSetIds.has(setId) && !String(card?.image || "").toLowerCase().includes("/tcgp/");
+  }
   const mode = $("search-by"), setFilter = $("filter-set");
   async function loadSetNames() {
     try {
       const response = await fetch("https://api.tcgdex.net/v2/en/sets");
       if (!response.ok) return;
       const sets = await response.json();
+      await pocketCatalog;
       if (!Array.isArray(sets)) return;
-      for (const set of sets) if (set.id && set.name) setNames.set(set.id, set.name);
-      for (const set of [...sets].filter(s => s.id && s.name).sort((a,b) => a.name.localeCompare(b.name))) setFilter.add(new Option(set.name, set.id));
+      for (const set of sets) if (set.id && set.name && !pocketSetIds.has(String(set.id).toLowerCase())) setNames.set(set.id, set.name);
+      for (const set of [...sets].filter(s => s.id && s.name && !pocketSetIds.has(String(s.id).toLowerCase())).sort((a,b) => a.name.localeCompare(b.name))) setFilter.add(new Option(set.name, set.id));
       for (const [label, id] of setLabels) label.textContent = setNames.get(id) || "Set details on selection";
     } catch (_) { /* Search continues without set names if unavailable. */ }
   }
@@ -111,6 +123,8 @@
     controller = new AbortController();
     feedback("Searching Pokémon cards…");
     try {
+      await pocketCatalog;
+      if (chosenSet && pocketSetIds.has(chosenSet.toLowerCase())) throw new Error("Digital-only set excluded");
       const params = new URLSearchParams();
       if (field === "name" && query) params.set("name", query);
       if (field === "illustrator" && query) params.set("illustrator", query);
@@ -132,7 +146,7 @@
       const cards = browseSet ? data.cards : data;
       if (!Array.isArray(cards)) throw new Error("Unexpected search response");
       if (id !== requestId) return;
-      const validCards = cards.filter(c => c && typeof c.id === "string" && typeof c.name === "string");
+      const validCards = cards.filter(c => c && typeof c.id === "string" && typeof c.name === "string" && isPhysicalCard(c));
       const sorted = browseSet ? validCards.sort(cardNumberCompare) : rank(validCards, query);
       cache.set(cacheKey, sorted);
       if (cache.size > 30) cache.delete(cache.keys().next().value);
@@ -186,6 +200,7 @@
       const response = await fetch(API + "/" + encodeURIComponent(card.id), {signal: selectedController.signal});
       if (!response.ok) throw new Error("Unable to fetch card details");
       const details = await response.json();
+      if (!isPhysicalCard(details) || String(details.set?.serie?.id || details.set?.serie || "").toLowerCase() === "tcgp") { body.textContent = "Digital-only cards are not supported."; return; }
       const box = document.createElement("div"); box.className = "selected-detail";
       const img = picture(details, true);
       const text = document.createElement("div");
@@ -206,6 +221,8 @@
     event.preventDefault();
     const button = $("save-want"), message = $("want-status");
     if (!selectedCard) { message.textContent = "Select a card and wait for its details to load."; return; }
+    try { await pocketCatalog; } catch (_) { message.textContent = "Physical-card verification unavailable."; return; }
+    if (!isPhysicalCard({id:selectedCard.card_id, image:selectedCard.image_url})) { message.textContent = "Digital-only cards cannot be requested."; return; }
     if (!supabaseClient) { message.textContent = "Account service unavailable. Reload the page."; return; }
     button.disabled = true;
     message.textContent = "Saving request…";
