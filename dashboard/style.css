@@ -76,3 +76,10 @@
  .dashboard-card-identity>strong{font-size:.91rem}
  .dashboard-card-identity .dashboard-card-set{font-size:.72rem}
 }
+
+/* Consolidated dashboard request controls */
+.dashboard-close{margin-top:8px;align-self:flex-start;padding:8px 11px;font-size:.8rem}
+.dashboard-wants .wants-toolbar{margin-top:14px}
+.dashboard-card-identity .dashboard-card-badge{background:#173e37}
+.dashboard-card-identity .dashboard-card-badge:not(:first-child){line-height:1.4}
+@media(max-width:600px){.dashboard-wants .wants-toolbar{grid-template-columns:1fr 1fr}.dashboard-wants .wants-toolbar label:last-child{grid-column:1/-1}}
