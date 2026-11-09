@@ -5,3 +5,17 @@
 
 /* Always-editable buying terms on each My Wants card. */
 .wanted-item{display:flex;flex-wrap:wrap;align-items:center;gap:12px 18px;padding:20px 0}.wanted-item>div:first-child{flex:1 0 100%}.wanted-item .inline-fields{flex:1 0 100%;margin:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));background:#0b2337;gap:14px;border:1px solid #345b74}.inline-fields label{font-size:.9rem;color:#dce8f4}.inline-fields label input:not([type=checkbox]),.inline-fields label select{min-height:42px}.inline-fields .check-row{font-size:.87rem}.inline-fields .request-actions{grid-column:1/-1;justify-content:flex-start}.inline-fields .request-actions button{min-height:42px}.wanted-item>.request-actions{margin-left:auto}.wanted-item>.request-actions button{font-size:.83rem}@media(max-width:640px){.wanted-item .inline-fields{grid-template-columns:1fr;padding:14px}.wanted-item>.request-actions{width:100%}}
+
+/* Recent wants use the same image-led visual hierarchy as catalog search. */
+.dashboard-wants #wanted-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:15px;margin-top:15px}
+.dashboard-card{border:1px solid #36566f;border-radius:13px;background:#10273e;padding:13px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.dashboard-card-image{width:100%;aspect-ratio:.715;max-height:310px;display:grid;place-items:center;background:#081a2c;border-radius:9px;overflow:hidden}
+.dashboard-card-image img{width:100%;height:100%;object-fit:contain}
+.dashboard-card-placeholder{color:#9fbece;padding:16px;text-align:center}
+.dashboard-card-info{display:flex;flex-direction:column;align-items:flex-start;gap:7px;min-width:0}
+.dashboard-card-info>strong:first-child{font-size:1rem;color:#fff}
+.dashboard-card-set,.dashboard-card-terms{font-size:.84rem;color:#bfd2e0;line-height:1.4}
+.dashboard-card-price{font-size:1.13rem;color:#fff}
+.dashboard-card-badge{font-size:.76rem;background:#173e37;color:#b6f9db;border:1px solid #28745b;border-radius:999px;padding:3px 9px}
+.dashboard-card-link{margin-top:6px;color:#82e4f0;font-weight:700;font-size:.9rem}
+@media(max-width:560px){.dashboard-wants #wanted-list{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.dashboard-card{padding:10px}.dashboard-card-image{max-height:240px}.dashboard-card-info{gap:6px}.dashboard-card-set,.dashboard-card-terms{font-size:.78rem}}
