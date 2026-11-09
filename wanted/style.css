@@ -11,3 +11,10 @@
 .public-want-notice{border:1px solid #e6973f;background:#332616;color:#fff2db;border-radius:10px;padding:12px 14px;margin:13px 0}
 .public-want-notice strong{display:block;color:#ffbb70;margin-bottom:5px}
 .public-want-notice p{margin:0;line-height:1.5;font-size:.9rem}
+
+/* Only printings documented for the selected TCGdex card are offered. */
+#want-form .finish-fieldset{margin:14px 0 0;padding:11px 13px;border:1px solid #63859e;border-radius:9px}
+#want-form .finish-fieldset legend{font-weight:700;padding:0 5px}
+#want-form .finish-check{display:flex;gap:10px;align-items:center;font-weight:500}
+#want-form .finish-check input{width:20px;min-width:20px;height:20px;accent-color:#ff8316}
+#want-form .finish-fieldset[hidden]{display:none}
