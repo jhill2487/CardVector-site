@@ -30,4 +30,4 @@ save.disabled=true;feedback.textContent="Saving…";const accepted=[...(preferre
 const {data:updated,error:saveError}=await client.from("cv_wanted_requests").update({max_price_usd:amount,quantity:count,minimum_condition:condition.value,preferred_finish:preferred.value||null,accepted_finishes:accepted,consider_lower_condition:lower.checked,updated_at:new Date().toISOString()}).eq("id",item.id).eq("user_id",user.id).eq("status","active").select("id").maybeSingle();
 if(saveError||!updated){feedback.textContent=saveError?.message||"Request could not be updated.";save.disabled=false;return}
 feedback.textContent="Saved";await init()});
-info.append(name,set,badge,form,feedback);row.append(visual,info);list.append(row)}}init()})();
+const identity=document.createElement("div");identity.className="dashboard-card-identity";identity.append(name,set,badge);const left=document.createElement("div");left.className="dashboard-card-left";left.append(visual,identity);info.append(form,feedback);row.append(left,info);list.append(row)}}init()})();

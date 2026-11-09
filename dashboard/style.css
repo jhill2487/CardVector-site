@@ -60,3 +60,19 @@
  .dashboard-wants .dashboard-card-form>label{font-size:.7rem}
  .dashboard-wants .dashboard-card-form input[type=number],.dashboard-wants .dashboard-card-form select{padding:6px 4px}
 }
+
+/* Image, card identity and status share a compact left column; editable terms sit alongside. */
+.dashboard-wants .dashboard-card{grid-template-columns:clamp(145px,24%,195px) minmax(0,1fr);align-items:start}
+.dashboard-card-left{min-width:0;display:flex;flex-direction:column;gap:9px}
+.dashboard-wants .dashboard-card-left .dashboard-card-image{width:100%;max-height:none;aspect-ratio:.715}
+.dashboard-card-identity{display:flex;flex-direction:column;align-items:flex-start;gap:5px;min-width:0}
+.dashboard-card-identity>strong{color:#fff;font-size:1rem;line-height:1.25}
+.dashboard-card-identity .dashboard-card-set{font-size:.8rem;overflow-wrap:anywhere}
+.dashboard-card-identity .dashboard-card-badge{align-self:flex-start}
+.dashboard-wants .dashboard-card-info{padding-top:1px}
+.dashboard-wants .dashboard-card-form{margin-top:0}
+@media(max-width:600px){
+ .dashboard-wants .dashboard-card{grid-template-columns:clamp(98px,29%,145px) minmax(0,1fr);gap:12px}
+ .dashboard-card-identity>strong{font-size:.91rem}
+ .dashboard-card-identity .dashboard-card-set{font-size:.72rem}
+}
