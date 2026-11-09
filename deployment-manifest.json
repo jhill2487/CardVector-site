@@ -1,8 +1,8 @@
 {
   "source_repository": "jhill2487/CardVector",
   "source_path": "Docs/",
-  "source_commit": "bcecc2181318879c75dfb17edda581846f82c042",
-  "generated_at": "2026-11-09T15:55:29+00:00",
+  "source_commit": "fefbaf43b14f2ab137bc23454f52ee1e024cde41",
+  "generated_at": "2026-11-09T16:35:52+00:00",
   "public_files": [
     "index.html",
     "404.html",
@@ -22,6 +22,9 @@
     "wanted/search.js",
     "my-wants/index.html",
     "my-wants/app.js",
+    "marketplace/index.html",
+    "marketplace/style.css",
+    "marketplace/app.js",
     "dashboard/index.html",
     "dashboard/style.css",
     "dashboard/app.js",
