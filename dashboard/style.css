@@ -33,3 +33,30 @@
 .dashboard-card-controls button:disabled{opacity:.53;cursor:not-allowed}
 .dashboard-card-feedback{font-size:.78rem;color:#a7e9c9}
 @media(max-width:540px){.dashboard-card-form{grid-template-columns:1fr}.dashboard-card-controls{flex-direction:column}}
+
+/* Compact editable wanted cards: image and controls side by side, never a tall 2-up tile. */
+.dashboard-wants #wanted-list{grid-template-columns:repeat(auto-fit,minmax(min(100%,440px),1fr));gap:14px;align-items:start}
+.dashboard-wants .dashboard-card{display:grid;grid-template-columns:clamp(96px,23%,142px) minmax(0,1fr);align-items:start;gap:16px;padding:15px}
+.dashboard-wants .dashboard-card-image{aspect-ratio:0.715;max-height:210px;align-self:start}
+.dashboard-wants .dashboard-card-info{gap:5px;width:100%}
+.dashboard-wants .dashboard-card-info>strong:first-child{font-size:1.08rem}
+.dashboard-wants .dashboard-card-form{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:8px}
+.dashboard-wants .dashboard-card-form>label{font-size:.75rem;line-height:1.25}
+.dashboard-wants .dashboard-card-form input[type=number],.dashboard-wants .dashboard-card-form select{min-height:40px;padding:7px 8px;font-size:.85rem}
+.dashboard-wants .dashboard-card-form .dashboard-card-check{font-size:.78rem;line-height:1.3}
+.dashboard-wants .dashboard-card-alternatives{padding:7px 9px}
+.dashboard-wants .dashboard-card-alternatives summary{font-size:.78rem}
+.dashboard-wants .dashboard-card-controls{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.dashboard-wants .dashboard-card-controls button{width:100%;min-height:38px;margin:0;padding:6px 7px;font-size:.78rem}
+@media(max-width:600px){
+ .dashboard-wants #wanted-list{grid-template-columns:minmax(0,1fr)}
+ .dashboard-wants .dashboard-card{grid-template-columns:clamp(94px,26%,125px) minmax(0,1fr);gap:12px;padding:12px}
+ .dashboard-wants .dashboard-card-image{max-height:180px}
+ .dashboard-wants .dashboard-card-form{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ .dashboard-wants .dashboard-card-controls{display:grid;grid-template-columns:1fr 1fr}
+}
+@media(max-width:370px){
+ .dashboard-wants .dashboard-card{grid-template-columns:82px minmax(0,1fr);gap:9px}
+ .dashboard-wants .dashboard-card-form>label{font-size:.7rem}
+ .dashboard-wants .dashboard-card-form input[type=number],.dashboard-wants .dashboard-card-form select{padding:6px 4px}
+}
