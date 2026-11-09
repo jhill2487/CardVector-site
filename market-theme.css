@@ -1,0 +1,20 @@
+/* CardVector Market Insights theme — applies to generated market brief pages. */
+:root{--navy:#081524;--blue:#ff891c;--sky:#00dbea;--ink:#edf7ff;--muted:#b8cad9;--line:#34536d}
+html{background:#081524}body{background:#081524!important;color:#edf7ff!important}
+.site-header{background:#071321!important;border-bottom:1px solid #34536d!important}
+.site-header .brand,.site-header .brand-text{color:#f4f9fc!important}
+.site-header .nav-links a{color:#ecf7ff!important;background:transparent!important}
+.site-header .nav-links a:hover{color:#ffae64!important}
+.site-header .nav-links a.nav-cta{background:#ff891c!important;color:#101c2b!important;border-radius:9px!important;padding:10px 14px!important}
+.site-header .brand-logo{display:block!important;max-width:210px;width:210px;height:auto}
+.blog-shell,.blog-hero,.brief-post,.brief-card,.brief-seo-summary article,.brief-post-section,.qr-card,.brief-affiliate-panel{color:#eaf4ff}
+.blog-hero,.brief-card,.brief-seo-summary article,.brief-post,.brief-post-section,.brief-affiliate-panel{background:#10263a!important;border-color:#35536b!important}
+.blog-hero h1,.brief-card h2,.brief-post h1,.brief-post h2,.brief-seo-summary h2,.brief-post-section h2{color:#fff!important}
+.blog-hero p,.brief-card p,.brief-post p,.brief-post-section p,.brief-seo-summary p{color:#c2d5e4!important}
+.eyebrow,.brief-kicker{color:#00dbea!important}
+.button.primary,.button.secondary:hover{background:#ff891c!important;color:#101a24!important;border-color:#ff891c!important}
+.button.secondary{border-color:#7695a9!important;color:#eef8ff!important;background:#172f45!important}
+.footer{background:#06111d!important;color:#d7e7f1!important;border-top:1px solid #34536d!important}
+.footer a{color:#bceef7!important}
+a{accent-color:#ff891c}
+@media(max-width:720px){.site-header .nav-links{gap:10px!important;flex-wrap:wrap!important}.site-header .nav{align-items:center!important}.site-header .brand-logo{width:min(190px,52vw)}.blog-shell{padding-inline:16px!important}}

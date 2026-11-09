@@ -1,0 +1,23 @@
+/* Shared collector UI refinements — dark navy, orange, cyan. */
+:root{--cv-bg:#081524;--cv-panel:#12263b;--cv-border:#39576f;--cv-orange:#ff891c;--cv-cyan:#00dbea;--cv-text:#f1f7fc;--cv-muted:#c0d0dd;accent-color:#ff891c}
+body{color:var(--cv-text);background:radial-gradient(circle at 84% 0%,#0c3e4c55,transparent 45%),var(--cv-bg)!important}
+.top{background:#071321!important;border-bottom:1px solid var(--cv-border)!important;gap:12px}
+.top .brand img,.top img{max-width:min(210px,50vw);height:auto}
+.app-nav{display:flex;align-items:center;gap:clamp(8px,2.5vw,20px);flex-wrap:wrap}
+.app-nav a{color:#d8e8f3!important;text-decoration:none;font-weight:700;font-size:.9rem}
+.app-nav a[aria-current=page],.app-nav a:hover{color:#ffa145!important}
+.panel,.stat-strip>div,.stat-strip>a,.wanted-edit,.wants-toolbar{background:var(--cv-panel)!important;border-color:var(--cv-border)!important;color:var(--cv-text)}
+h1,h2,h3,.wanted-item strong{color:#fff}
+.hint,.wanted-item p,.stat-strip small{color:var(--cv-muted)!important}
+a{color:#90e7f1}
+.primary,.action,button.primary{background:var(--cv-orange)!important;color:#081524!important;border-color:var(--cv-orange)!important;font-weight:750}
+.secondary,button.secondary{color:#eef7ff!important;background:#20384d!important;border:1px solid #6d8da3!important}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #00dbea!important;outline-offset:2px}
+input,select{color:#f6fbff!important;background:#081a2b!important;border:1px solid #7190a5!important}
+input[type=checkbox]{accent-color:var(--cv-orange)}
+.wanted-item{border-top-color:#34566f!important}
+.wanted-item .inline-fields{background:#10283c!important;border-color:#3a5b72!important}
+.wanted-item .inline-fields label{color:#e1eef6!important}
+.wanted-item .inline-fields .request-actions{position:sticky;bottom:0;padding:10px 0;background:#10283c}
+.wants-toolbar{background:#0d2032!important}
+@media(max-width:660px){.top{height:auto!important;min-height:74px;padding:12px 18px!important;flex-wrap:wrap}.app-nav{width:100%;gap:13px}.app-nav a{font-size:.83rem}.dashboard-shell{padding:0 16px}.wanted-item .inline-fields{gap:11px}.dash-heading{margin-top:18px}}
