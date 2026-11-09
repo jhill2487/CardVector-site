@@ -186,14 +186,6 @@
     if (!cards.length) { const empty = document.createElement("p"); empty.className = "empty"; empty.textContent = "No cards found. Check spelling or try a shorter name."; results.append(empty); return; }
     renderNext();
   }
-  function rank(cards, query) {
-    if (!query) return cards.slice().sort((a,b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
-    const q = query.toLocaleLowerCase();
-    return cards.slice().sort((a, b) => {
-      const score = (c) => { const n = c.name.toLocaleLowerCase(); return n === q ? 0 : n.startsWith(q) ? 1 : n.includes(q) ? 2 : 3; };
-      return score(a) - score(b) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
-    });
-  }
   async function search(query) {
     const id = ++requestId;
     if (controller) controller.abort();
@@ -216,6 +208,10 @@
         if (target.length !== 1) { feedback(target.length ? "Select the exact set from the dropdown." : "No matching set. Select a set from the dropdown."); render([]); return; }
         params.set("set", target[0]);
       }
+      // TCGdex sorts card search results by the set's release date.
+      // Request ascending chronology explicitly; do not re-rank by name afterward.
+      params.set("sort:field", "releaseDate");
+      params.set("sort:order", "ASC");
       // The full set endpoint exposes its cards directly; browse by set with no text.
       const browseSet = Boolean(chosenSet && !query);
       const endpoint = browseSet
@@ -228,7 +224,7 @@
       if (!Array.isArray(cards)) throw new Error("Unexpected search response");
       if (id !== requestId) return;
       const validCards = cards.filter(c => c && typeof c.id === "string" && typeof c.name === "string" && isPhysicalCard(c));
-      const sorted = browseSet ? validCards.sort(cardNumberCompare) : rank(validCards, query);
+      const sorted = browseSet ? validCards.sort(cardNumberCompare) : validCards;
       cache.set(cacheKey, sorted);
       if (cache.size > 30) cache.delete(cache.keys().next().value);
       render(sorted); feedback(sorted.length ? "Select a card to confirm its exact printing." : "No matching cards found.");
