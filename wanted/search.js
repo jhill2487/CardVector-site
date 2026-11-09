@@ -7,6 +7,7 @@
   const cache = new Map();
   const PAGE_SIZE = 24;
   const setNames = new Map();
+  const releaseDates = new Map();
   const setLabels = new Map();
   const pocketSetIds = new Set();
   const pocketCatalog = fetch("https://api.tcgdex.net/v2/en/series/tcgp").then(async response => {
@@ -27,7 +28,7 @@
       const sets = await response.json();
       await pocketCatalog;
       if (!Array.isArray(sets)) return;
-      for (const set of sets) if (set.id && set.name && !pocketSetIds.has(String(set.id).toLowerCase())) setNames.set(set.id, set.name);
+      for (const set of sets) if (set.id && set.name && !pocketSetIds.has(String(set.id).toLowerCase())) { setNames.set(set.id, set.name); if (/^\\d{4}-\\d{2}-\\d{2}$/.test(String(set.releaseDate || ""))) releaseDates.set(set.id, set.releaseDate); }
       for (const set of [...sets].filter(s => s.id && s.name && !pocketSetIds.has(String(s.id).toLowerCase())).sort((a,b) => a.name.localeCompare(b.name))) setFilter.add(new Option(set.name, set.id));
       for (const [label, id] of setLabels) label.textContent = setNames.get(id) || "Set details on selection";
     } catch (_) { /* Search continues without set names if unavailable. */ }
@@ -71,10 +72,49 @@
     img.onerror = () => { if (++index < urls.length) img.src = urls[index]; else img.replaceWith(fallback()); };
     return img;
   }
+  function setIdFor(card) {
+    const id = String(card.id || "");
+    return id.slice(0, id.lastIndexOf("-"));
+  }
   function cardNumberCompare(a, b) {
-    const parts = value => { const text = String(value || ""); const match = text.match(/^(\\d+)(.*)$/); return match ? [Number(match[1]), match[2]] : [Number.POSITIVE_INFINITY, text]; };
+    const parts = value => {
+      const text = String(value || "");
+      const match = text.match(/^(\d+)(.*)$/);
+      return match ? [Number(match[1]), match[2]] : [Number.POSITIVE_INFINITY, text];
+    };
     const [an, as] = parts(a.localId), [bn, bs] = parts(b.localId);
     return an - bn || as.localeCompare(bs, undefined, {numeric:true}) || a.id.localeCompare(b.id);
+  }
+  function compareByReleaseDate(a, b) {
+    const dateA = releaseDates.get(setIdFor(a)) || "9999-12-31";
+    const dateB = releaseDates.get(setIdFor(b)) || "9999-12-31";
+    return dateA.localeCompare(dateB) || cardNumberCompare(a, b);
+  }
+  // Card brief search responses do not carry set release dates. Resolve them
+  // from the set endpoint, with a bounded parallel queue and per-session cache.
+  async function resolveReleaseDates(cards, signal, searchId) {
+    const ids = [...new Set(cards.map(setIdFor))].filter(Boolean);
+    const pending = ids.filter(id => !releaseDates.has(id));
+    let cursor = 0;
+    let unavailable = 0;
+    async function worker() {
+      while (cursor < pending.length && searchId === requestId) {
+        const setId = pending[cursor++];
+        try {
+          const response = await fetch("https://api.tcgdex.net/v2/en/sets/" + encodeURIComponent(setId), {signal});
+          if (!response.ok) throw new Error("Set details unavailable");
+          const details = await response.json();
+          if (typeof details.releaseDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(details.releaseDate)) throw new Error("No release date");
+          releaseDates.set(setId, details.releaseDate);
+          if (details.name) setNames.set(setId, details.name);
+        } catch (error) {
+          if (error.name === "AbortError") throw error;
+          unavailable++;
+        }
+      }
+    }
+    await Promise.all(Array.from({length: Math.min(8, pending.length)}, () => worker()));
+    return unavailable || ids.some(id => !releaseDates.has(id));
   }
   const variantCache = new Map();
   const finishNames = {normal:"Non-holo",holo:"Holo",reverse:"Reverse holo",firstEdition:"1st Edition",wPromo:"Promo"};
@@ -192,7 +232,7 @@
     const field = mode.value, chosenSet = setFilter.value;
     if (query.length < 2 && !chosenSet) { render([]); results.replaceChildren(); feedback("Enter at least 2 characters, or choose a set."); return; }
     const cacheKey = [field, query, chosenSet].join("|");
-    if (cache.has(cacheKey)) { render(cache.get(cacheKey)); feedback("Results ready."); return; }
+    if (cache.has(cacheKey)) { const saved = cache.get(cacheKey); render(saved.cards); feedback(saved.datesIncomplete ? "Oldest known printings first; sets with unavailable dates appear last." : "Oldest printing first by set release date."); return; }
     controller = new AbortController();
     feedback("Searching Pokémon cards…");
     try {
@@ -208,10 +248,7 @@
         if (target.length !== 1) { feedback(target.length ? "Select the exact set from the dropdown." : "No matching set. Select a set from the dropdown."); render([]); return; }
         params.set("set", target[0]);
       }
-      // TCGdex sorts card search results by the set's release date.
-      // Request ascending chronology explicitly; do not re-rank by name afterward.
-      params.set("sort:field", "releaseDate");
-      params.set("sort:order", "ASC");
+      // Sort after resolving actual set release dates below; card briefs lack them.
       // The full set endpoint exposes its cards directly; browse by set with no text.
       const browseSet = Boolean(chosenSet && !query);
       const endpoint = browseSet
@@ -224,10 +261,19 @@
       if (!Array.isArray(cards)) throw new Error("Unexpected search response");
       if (id !== requestId) return;
       const validCards = cards.filter(c => c && typeof c.id === "string" && typeof c.name === "string" && isPhysicalCard(c));
-      const sorted = browseSet ? validCards.sort(cardNumberCompare) : validCards;
-      cache.set(cacheKey, sorted);
+      let datesIncomplete = false;
+      if (!browseSet && validCards.length) {
+        feedback("Checking release dates for " + validCards.length + " matching cards…");
+        datesIncomplete = await resolveReleaseDates(validCards, controller.signal, id);
+        if (id !== requestId) return;
+      }
+      const sorted = browseSet ? validCards.sort(cardNumberCompare) : validCards.sort(compareByReleaseDate);
+      cache.set(cacheKey, {cards: sorted, datesIncomplete});
       if (cache.size > 30) cache.delete(cache.keys().next().value);
-      render(sorted); feedback(sorted.length ? "Select a card to confirm its exact printing." : "No matching cards found.");
+      render(sorted);
+      feedback(sorted.length ? (datesIncomplete
+        ? "Oldest known printings first; sets with unavailable release dates appear last."
+        : "Oldest printing first by set release date.") : "No matching cards found.");
     } catch (error) {
       if (error.name === "AbortError" || id !== requestId) return;
       results.replaceChildren(); $("result-count").textContent = "";
