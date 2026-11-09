@@ -289,10 +289,7 @@
       key !== "updated" && key !== "unit" && value && typeof value === "object" &&
       Number.isFinite(value.marketPrice) && value.marketPrice > 0) : [];
     const summary = document.createElement("summary");
-    const price = pricing?.unit === "USD" && variants.length
-      ? " · " + new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format(variants[0][1].marketPrice)
-      : "";
-    summary.textContent = "TCGplayer market reference" + price + " · details";
+    summary.textContent = "TCGplayer market prices by finish · details";
     section.append(summary);
     if (pricing?.unit === "USD" && variants.length) {
       for (const [variant, data] of variants) {
