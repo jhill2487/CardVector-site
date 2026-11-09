@@ -78,10 +78,57 @@
   }
   const variantCache = new Map();
   const finishNames = {normal:"Non-holo",holo:"Holo",reverse:"Reverse holo",firstEdition:"1st Edition",wPromo:"Promo"};
+  function availableFinishKeys(details) {
+    const keys = Object.keys(finishNames);
+    const raw = details?.variants;
+    const available = new Set(keys.filter(key => raw && !Array.isArray(raw) && raw[key] === true));
+    const detailed = Array.isArray(details?.variants_detailed) ? details.variants_detailed : (Array.isArray(raw) ? raw : []);
+    for (const variant of detailed) {
+      if (variant?.type === "normal" || variant?.type === "holo" || variant?.type === "reverse") available.add(variant.type);
+    }
+    return keys.filter(key => available.has(key));
+  }
+  function populateFinishOptions(keys) {
+    const preferred = $("preferred-finish"), fieldset = $("accepted-finish-fieldset"), choices = $("accepted-finish-options");
+    preferred.replaceChildren();
+    choices.replaceChildren();
+    preferred.disabled = !keys.length;
+    fieldset.disabled = !keys.length;
+    if (!keys.length) {
+      preferred.add(new Option("Finish data unavailable", ""));
+      $("finish-status").textContent = "Card finish availability is not confirmed. Please try another card or retry later; this request cannot be saved with an unverified finish.";
+      return;
+    }
+    if (keys.length > 1) preferred.add(new Option("Select a finish", ""));
+    for (const key of keys) {
+      preferred.add(new Option(finishNames[key], key));
+      if (keys.length > 1) {
+        const label = document.createElement("label");
+        label.className = "finish-check";
+        const check = document.createElement("input");
+        check.type = "checkbox";
+        check.value = key;
+        label.append(check, document.createTextNode(" " + finishNames[key]));
+        choices.append(label);
+      }
+    }
+    function sync() {
+      for (const check of choices.querySelectorAll('input[type="checkbox"]')) {
+        check.disabled = check.value === preferred.value;
+        if (check.disabled) check.checked = false;
+      }
+    }
+    preferred.onchange = sync;
+    sync();
+    fieldset.hidden = keys.length === 1;
+    $("finish-status").textContent = keys.length === 1
+      ? "This card is available as " + finishNames[keys[0]] + " only."
+      : "Only finishes documented for this exact card can be selected.";
+  }
   const pendingVariants = [];
   let activeVariantLoads = 0;
   function variantLabel(variants) {
-    const available = Object.entries(finishNames).filter(([key]) => variants?.[key] === true).map(([,name]) => name);
+    const available = availableFinishKeys({variants}).map(key => finishNames[key]);
     return available.length ? available.join(" · ") : "Finish information not available";
   }
   function enqueueVariant(card, label) {
@@ -228,7 +275,7 @@
     if (selectedController) selectedController.abort();
     selectedController = new AbortController();
     const panel = $("selected"), body = $("selected-content");
-    panel.hidden = false; selectedCard = null; body.textContent = "Loading exact card details…";
+    panel.hidden = false; selectedCard = null; populateFinishOptions([]); body.textContent = "Loading exact card details…";
     panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
     try {
       const response = await fetch(API + "/" + encodeURIComponent(card.id), {signal: selectedController.signal});
@@ -242,11 +289,13 @@
       const set = document.createElement("p"); set.textContent = "Set: " + (details.set?.name || "Unknown");
       const number = document.createElement("p"); number.textContent = "Card #: " + (details.localId || card.localId || "Unknown");
       const reference = document.createElement("p"); reference.textContent = "TCGdex ID: " + card.id;
-      const finishes = Object.entries({normal:"Non-holo",holo:"Holo",reverse:"Reverse holo",firstEdition:"1st Edition",wPromo:"Promo"}).filter(([key]) => details.variants?.[key] === true).map(([, label]) => label);
+      const finishKeys = availableFinishKeys(details);
+      const finishes = finishKeys.map(key => finishNames[key]);
+      populateFinishOptions(finishKeys);
       const finishLabel = document.createElement("p");
       finishLabel.textContent = "Available finishes: " + (finishes.length ? finishes.join(", ") : "Not specified by TCGdex");
       text.append(heading, set, number, finishLabel); addMarketReference(text, details); box.append(img, text); body.replaceChildren(box);
-      selectedCard = { card_id: card.id, card_name: details.name || card.name, set_name: details.set?.name || "Unknown", card_number: details.localId || card.localId || "Unknown", image_url: details.image || card.image || null };
+      selectedCard = { card_id: card.id, card_name: details.name || card.name, set_name: details.set?.name || "Unknown", card_number: details.localId || card.localId || "Unknown", image_url: details.image || card.image || null, allowedFinishes: finishKeys };
     } catch (error) {
       if (error.name !== "AbortError") body.textContent = "Could not load card details. Select the card again to retry.";
     }
@@ -257,6 +306,12 @@
     if (!selectedCard) { message.textContent = "Select a card and wait for its details to load."; return; }
     try { await pocketCatalog; } catch (_) { message.textContent = "Physical-card verification unavailable."; return; }
     if (!isPhysicalCard({id:selectedCard.card_id, image:selectedCard.image_url})) { message.textContent = "Digital-only cards cannot be requested."; return; }
+    const preferred = $("preferred-finish").value;
+    const accepted = [preferred, ...[...$("accepted-finish-options").querySelectorAll('input[type="checkbox"]:checked')].map(input => input.value)];
+    if (!preferred || !selectedCard.allowedFinishes?.includes(preferred) || accepted.some(key => !selectedCard.allowedFinishes.includes(key))) {
+      message.textContent = "Choose a verified available finish for this card.";
+      return;
+    }
     if (!supabaseClient) { message.textContent = "Account service unavailable. Reload the page."; return; }
     button.disabled = true;
     message.textContent = "Saving request…";
@@ -268,11 +323,14 @@
         minimum_condition: $("minimum-condition").value,
         max_price_usd: Number($("max-price").value),
         quantity: Number($("want-quantity").value),
-        consider_lower_condition: $("consider-lower-condition").checked
+        consider_lower_condition: $("consider-lower-condition").checked,
+        preferred_finish: preferred,
+        accepted_finishes: accepted
       });
       if (error) throw error;
       message.textContent = "Added to your wanted list. View it in your account dashboard.";
       $("want-form").reset();
+      populateFinishOptions(selectedCard.allowedFinishes);
     } catch (error) { message.textContent = error.message || "Could not save request."; }
     finally { button.disabled = false; }
   });
