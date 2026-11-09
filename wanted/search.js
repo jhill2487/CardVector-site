@@ -24,28 +24,30 @@
   let debounce, controller, requestId = 0, matches = [], visible = 0, selectedController, selectedCard = null;
   const supabaseClient = window.supabase?.createClient("https://iqdpfgpkagjxzedfxrvn.supabase.co", "sb_publishable_76aiLaAm5Z4Kv67GkuTo-g_Psx5HINH");
   function feedback(text) { status.textContent = text; }
-  function imageUrl(card) { return card.image ? card.image + "/low.webp" : ""; }
+  // Explicit crosswalk: TCGdex set IDs -> Limitless English set codes.
+  // Never infer a set code from the card name; wrong artwork is worse than none.
+  const LIMITLESS_SETS = Object.freeze({
+    me06:"DLR", swsh7:"EVS", "sv3.5":"MEW", sv01:"SVI", "swsh12.5":"CRZ"
+  });
   function imageCandidates(card) {
-    const base = card.image || (() => {
-      const cut = card.id?.lastIndexOf("-") ?? -1;
-      if (cut <= 0 || !card.localId) return "";
-      const setId = card.id.slice(0, cut);
-      const seriesId = setId.replace(/[0-9].*$/, "");
-      if (!seriesId || !/^[a-z0-9-]+$/i.test(setId) || !/^[a-z0-9-]+$/i.test(card.localId)) return "";
-      return "https://assets.tcgdex.net/en/" + seriesId + "/" + setId + "/" + encodeURIComponent(card.localId);
-    })();
-    const urls = base ? ["/low.webp", "/low.png", "/high.png", "/high.jpg"].map(ext => base + ext) : [];
-    // Delta Reign (TCGdex me06) launched with incomplete TCGdex artwork.
-    // Use only the exact same English set + numbered printing on independent CDNs.
-    const setId = String(card.id || "").slice(0, String(card.id || "").lastIndexOf("-")).toLowerCase();
-    if (setId === "me06" && /^\\d{1,3}$/.test(String(card.localId || ""))) {
-      const number = Number(card.localId);
-      if (number >= 1 && number <= 141) {
-        const padded = String(number).padStart(3, "0");
-        urls.push("https://images.pokemontcg.io/me6/" + number + ".png");
-        urls.push("https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/tpci/DLR/DLR_" + padded + "_R_EN_XS.png");
-      }
+    const rawId = String(card.id || "");
+    const cut = rawId.lastIndexOf("-");
+    const setId = cut > 0 ? rawId.slice(0, cut).toLowerCase() : "";
+    const localId = String(card.localId || "");
+    const urls = [];
+    const code = LIMITLESS_SETS[setId];
+    if (code && /^[0-9]{1,3}$/.test(localId)) {
+      const number = String(Number(localId)).padStart(3, "0");
+      urls.push("https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/tpci/" + code + "/" + code + "_" + number + "_R_EN.png");
     }
+    // Keep TCGdex for artwork when a verified Limitless mapping is unavailable
+    // or when Limitless has no image for this specific printing.
+    const base = card.image || (() => {
+      if (!setId || !localId || !/^[a-z0-9.-]+$/i.test(setId) || !/^[a-z0-9-]+$/i.test(localId)) return "";
+      const seriesId = setId.replace(/[0-9].*$/, "");
+      return seriesId ? "https://assets.tcgdex.net/en/" + seriesId + "/" + setId + "/" + encodeURIComponent(localId) : "";
+    })();
+    if (base) urls.push(...["/low.webp", "/low.png", "/high.png", "/high.jpg"].map(ext => base + ext));
     return urls;
   }
   function picture(card, eager = false) {
