@@ -25,12 +25,30 @@
   const supabaseClient = window.supabase?.createClient("https://iqdpfgpkagjxzedfxrvn.supabase.co", "sb_publishable_76aiLaAm5Z4Kv67GkuTo-g_Psx5HINH");
   function feedback(text) { status.textContent = text; }
   function imageUrl(card) { return card.image ? card.image + "/low.webp" : ""; }
+  function imageCandidates(card) {
+    const base = card.image || (() => {
+      const cut = card.id?.lastIndexOf("-") ?? -1;
+      if (cut <= 0 || !card.localId) return "";
+      const setId = card.id.slice(0, cut);
+      const seriesId = setId.replace(/[0-9].*$/, "");
+      if (!seriesId || !/^[a-z0-9-]+$/i.test(setId) || !/^[a-z0-9-]+$/i.test(card.localId)) return "";
+      return "https://assets.tcgdex.net/en/" + seriesId + "/" + setId + "/" + encodeURIComponent(card.localId);
+    })();
+    return base ? ["/low.webp", "/low.png", "/high.png", "/high.jpg"].map(ext => base + ext) : [];
+  }
   function picture(card, eager = false) {
-    const url = imageUrl(card);
-    if (!url) { const span = document.createElement("span"); span.className = "placeholder"; span.textContent = "Image unavailable"; return span; }
-    const img = document.createElement("img"); img.src = url; img.alt = card.name + " card artwork"; img.loading = eager ? "eager" : "lazy"; img.decoding = "async";
-    img.onerror = () => { const placeholder = document.createElement("span"); placeholder.className = "placeholder"; placeholder.textContent = "Image unavailable"; img.replaceWith(placeholder); };
+    const urls = imageCandidates(card);
+    const fallback = () => { const span = document.createElement("span"); span.className = "placeholder"; span.textContent = "Image unavailable"; return span; };
+    if (!urls.length) return fallback();
+    const img = document.createElement("img"); let index = 0;
+    img.src = urls[index]; img.alt = card.name + " card artwork"; img.loading = eager ? "eager" : "lazy"; img.decoding = "async";
+    img.onerror = () => { if (++index < urls.length) img.src = urls[index]; else img.replaceWith(fallback()); };
     return img;
+  }
+  function cardNumberCompare(a, b) {
+    const parts = value => { const text = String(value || ""); const match = text.match(/^(\\d+)(.*)$/); return match ? [Number(match[1]), match[2]] : [Number.POSITIVE_INFINITY, text]; };
+    const [an, as] = parts(a.localId), [bn, bs] = parts(b.localId);
+    return an - bn || as.localeCompare(bs, undefined, {numeric:true}) || a.id.localeCompare(b.id);
   }
   function renderNext() {
     const end = Math.min(visible + PAGE_SIZE, matches.length);
@@ -73,7 +91,7 @@
     const id = ++requestId;
     if (controller) controller.abort();
     const field = mode.value, chosenSet = setFilter.value;
-    if (query.length < 2 && !(field === "set" && chosenSet)) { render([]); results.replaceChildren(); feedback("Enter at least 2 characters, or choose a set."); return; }
+    if (query.length < 2 && !chosenSet) { render([]); results.replaceChildren(); feedback("Enter at least 2 characters, or choose a set."); return; }
     const cacheKey = [field, query, chosenSet].join("|");
     if (cache.has(cacheKey)) { render(cache.get(cacheKey)); feedback("Results ready."); return; }
     controller = new AbortController();
@@ -82,19 +100,26 @@
       const params = new URLSearchParams();
       if (field === "name" && query) params.set("name", query);
       if (field === "illustrator" && query) params.set("illustrator", query);
-      if (chosenSet) params.set("set.id", chosenSet);
+      if (chosenSet) params.set("set", chosenSet);
       // Set-name searches resolve the official set ID before retrieving cards.
       if (field === "set" && !chosenSet) {
         const target = [...setNames.entries()].filter(([,name]) => name.toLowerCase().includes(query.toLowerCase())).map(([id]) => id);
         if (target.length !== 1) { feedback(target.length ? "Select the exact set from the dropdown." : "No matching set. Select a set from the dropdown."); render([]); return; }
-        params.set("set.id", target[0]);
+        params.set("set", target[0]);
       }
-      const response = await fetch(API + "?" + params.toString(), { signal: controller.signal });
+      // The full set endpoint exposes its cards directly; browse by set with no text.
+      const browseSet = Boolean(chosenSet && !query);
+      const endpoint = browseSet
+        ? "https://api.tcgdex.net/v2/en/sets/" + encodeURIComponent(chosenSet)
+        : API + "?" + params.toString();
+      const response = await fetch(endpoint, { signal: controller.signal });
       if (!response.ok) throw new Error("TCGdex returned " + response.status);
       const data = await response.json();
-      if (!Array.isArray(data)) throw new Error("Unexpected search response");
+      const cards = browseSet ? data.cards : data;
+      if (!Array.isArray(cards)) throw new Error("Unexpected search response");
       if (id !== requestId) return;
-      const sorted = rank(data.filter(c => c && typeof c.id === "string" && typeof c.name === "string"), query);
+      const validCards = cards.filter(c => c && typeof c.id === "string" && typeof c.name === "string");
+      const sorted = browseSet ? validCards.sort(cardNumberCompare) : rank(validCards, query);
       cache.set(cacheKey, sorted);
       if (cache.size > 30) cache.delete(cache.keys().next().value);
       render(sorted); feedback(sorted.length ? "Select a card to confirm its exact printing." : "No matching cards found.");
@@ -200,7 +225,7 @@
     $("clear-search").hidden = !query;
     clearTimeout(debounce);
     if (controller) controller.abort();
-    if (query.length < 2 && !(mode.value === "set" && setFilter.value)) { ++requestId; results.replaceChildren(); $("result-count").textContent = ""; $("more-results").hidden = true; feedback("Enter at least 2 characters, or select a set."); return; }
+    if (query.length < 2 && !setFilter.value) { ++requestId; results.replaceChildren(); $("result-count").textContent = ""; $("more-results").hidden = true; feedback("Enter at least 2 characters, or select a set."); return; }
     if (cache.has([mode.value,query.toLocaleLowerCase(),setFilter.value].join("|"))) { search(query.toLocaleLowerCase()); return; }
     feedback("Searching…");
     debounce = setTimeout(() => search(query.toLocaleLowerCase()), 220);
