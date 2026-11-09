@@ -234,6 +234,7 @@
     const cacheKey = [field, query, chosenSet].join("|");
     if (cache.has(cacheKey)) { const saved = cache.get(cacheKey); render(saved.cards); feedback(saved.datesIncomplete ? "Oldest known printings first; sets with unavailable dates appear last." : "Oldest printing first by set release date."); return; }
     controller = new AbortController();
+    const searchController = controller;
     feedback("Searching Pokémon cards…");
     try {
       await pocketCatalog;
@@ -254,7 +255,7 @@
       const endpoint = browseSet
         ? "https://api.tcgdex.net/v2/en/sets/" + encodeURIComponent(chosenSet)
         : API + "?" + params.toString();
-      const response = await fetch(endpoint, { signal: controller.signal });
+      const response = await fetch(endpoint, { signal: searchController.signal });
       if (!response.ok) throw new Error("TCGdex returned " + response.status);
       const data = await response.json();
       const cards = browseSet ? data.cards : data;
@@ -264,7 +265,7 @@
       let datesIncomplete = false;
       if (!browseSet && validCards.length) {
         feedback("Checking release dates for " + validCards.length + " matching cards…");
-        datesIncomplete = await resolveReleaseDates(validCards, controller.signal, id);
+        datesIncomplete = await resolveReleaseDates(validCards, searchController.signal, id);
         if (id !== requestId) return;
       }
       const sorted = browseSet ? validCards.sort(cardNumberCompare) : validCards.sort(compareByReleaseDate);
@@ -282,19 +283,22 @@
   }
   function addMarketReference(container, details) {
     const pricing = details.pricing?.tcgplayer;
-    const section = document.createElement("div");
+    const section = document.createElement("details");
     section.className = "market-reference";
-    const label = document.createElement("strong");
-    label.textContent = "TCGplayer market reference";
-    section.append(label);
     const variants = pricing ? Object.entries(pricing).filter(([key, value]) =>
       key !== "updated" && key !== "unit" && value && typeof value === "object" &&
       Number.isFinite(value.marketPrice) && value.marketPrice > 0) : [];
+    const summary = document.createElement("summary");
+    const price = pricing?.unit === "USD" && variants.length
+      ? " · " + new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format(variants[0][1].marketPrice)
+      : "";
+    summary.textContent = "TCGplayer market reference" + price + " · details";
+    section.append(summary);
     if (pricing?.unit === "USD" && variants.length) {
       for (const [variant, data] of variants) {
         const line = document.createElement("p");
         const variantLabel = variant.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[-_]/g, " ");
-        line.textContent = variantLabel + ": " + new Intl.NumberFormat("en-US", {style:"currency", currency:"USD"}).format(data.marketPrice);
+        line.textContent = variantLabel + ": " + new Intl.NumberFormat("en-US", {style:"currency",currency:"USD"}).format(data.marketPrice);
         section.append(line);
       }
       const updated = pricing.updated ? new Date(pricing.updated) : null;
@@ -309,7 +313,7 @@
       section.append(unavailable);
     }
     const note = document.createElement("small");
-    note.textContent = "Informational only. Check the correct printing and finish. Your maximum offer is entirely your choice; this does not set it automatically.";
+    note.textContent = "Informational only. Verify the printing and finish; set your own maximum.";
     section.append(note);
     container.append(section);
   }
