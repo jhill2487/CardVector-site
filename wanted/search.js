@@ -76,9 +76,40 @@
     const [an, as] = parts(a.localId), [bn, bs] = parts(b.localId);
     return an - bn || as.localeCompare(bs, undefined, {numeric:true}) || a.id.localeCompare(b.id);
   }
+  const variantCache = new Map();
+  const finishNames = {normal:"Non-holo",holo:"Holo",reverse:"Reverse holo",firstEdition:"1st Edition",wPromo:"Promo"};
+  const pendingVariants = [];
+  let activeVariantLoads = 0;
+  function variantLabel(variants) {
+    const available = Object.entries(finishNames).filter(([key]) => variants?.[key] === true).map(([,name]) => name);
+    return available.length ? available.join(" · ") : "Finish information not available";
+  }
+  function enqueueVariant(card, label) {
+    if (variantCache.has(card.id)) { label.textContent = variantCache.get(card.id); return; }
+    pendingVariants.push({card,label});
+    runVariantQueue();
+  }
+  function runVariantQueue() {
+    while (activeVariantLoads < 3 && pendingVariants.length) {
+      const task = pendingVariants.shift();
+      if (!task.label.isConnected) continue;
+      activeVariantLoads++;
+      fetch(API + "/" + encodeURIComponent(task.card.id)).then(r => {
+        if (!r.ok) throw Error("No card details");
+        return r.json();
+      }).then(details => {
+        const label = variantLabel(details.variants);
+        variantCache.set(task.card.id,label);
+        if (variantCache.size > 1500) variantCache.delete(variantCache.keys().next().value);
+        if (task.label.isConnected) task.label.textContent = label;
+      }).catch(() => { if (task.label.isConnected) task.label.textContent = "Finishes unavailable"; })
+        .finally(() => { activeVariantLoads--; runVariantQueue(); });
+    }
+  }
   function renderNext() {
     const end = Math.min(visible + PAGE_SIZE, matches.length);
     const fragment = document.createDocumentFragment();
+    const variantLabels = [];
     for (; visible < end; visible++) {
       const card = matches[visible];
       const button = document.createElement("button"); button.type = "button"; button.className = "card";
@@ -91,12 +122,15 @@
       const number = document.createElement("small");
       number.textContent = "Card #" + (card.localId || "—");
       const finish = document.createElement("small");
-      finish.textContent = "Select to see available finishes";
+      finish.textContent = "Checking finishes…";
       button.append(name, info, number, finish);
       button.addEventListener("click", () => selectCard(card));
       fragment.append(button);
+      // Fetch finishes only for the visible page of results.
+      variantLabels.push({card,finish});
     }
     results.append(fragment);
+    for (const {card,finish} of variantLabels) enqueueVariant(card,finish);
     $("result-count").textContent = matches.length + " matching cards";
     $("more-results").hidden = visible >= matches.length;
   }
