@@ -167,8 +167,8 @@
   }
   const pendingVariants = [];
   let activeVariantLoads = 0;
-  function variantLabel(variants) {
-    const available = availableFinishKeys({variants}).map(key => finishNames[key]);
+  function variantLabel(details) {
+    const available = availableFinishKeys(details).map(key => finishNames[key]);
     return available.length ? available.join(" · ") : "Finish information not available";
   }
   function enqueueVariant(card, label) {
@@ -185,7 +185,7 @@
         if (!r.ok) throw Error("No card details");
         return r.json();
       }).then(details => {
-        const label = variantLabel(details.variants);
+        const label = variantLabel(details);
         variantCache.set(task.card.id,label);
         if (variantCache.size > 1500) variantCache.delete(variantCache.keys().next().value);
         if (task.label.isConnected) task.label.textContent = label;
