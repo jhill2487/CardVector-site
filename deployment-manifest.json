@@ -1,10 +1,11 @@
 {
   "source_repository": "jhill2487/CardVector",
   "source_path": "Docs/",
-  "source_commit": "9549ee385e620821da440c8121b299b5494dadf5",
-  "generated_at": "2026-11-10T17:24:59+00:00",
+  "source_commit": "ce62add1f5e5a5bef13f3903cfb0219581139416",
+  "generated_at": "2026-11-10T17:43:01.839Z",
   "public_files": [
     "index.html",
+    "home-account.js",
     "404.html",
     "app.js",
     "style.css",
@@ -35,7 +36,8 @@
     "robots.txt",
     "tools/carduploader/index.html",
     "CNAME",
-    "_config.yml"
+    "_config.yml",
+    "tools/variant-diagnostic/index.html"
   ],
   "public_assets": [
     "assets/putnam-profile.png",
