@@ -1,4 +1,18 @@
-(()=>{"use strict";const $=id=>document.getElementById(id);const client=window.supabase?.createClient("https://iqdpfgpkagjxzedfxrvn.supabase.co","sb_publishable_76aiLaAm5Z4Kv67GkuTo-g_Psx5HINH");let currentUser=null;let allRequests=[];const finishNames={normal:"Non-holo",holo:"Holo",reverse:"Reverse holo",firstEdition:"1st edition",wPromo:"Promo"};const finishCache=new Map();async function finishesForCard(id){if(!finishCache.has(id)){const p=fetch("https://api.tcgdex.net/v2/en/cards/"+encodeURIComponent(id)).then(async r=>{if(!r.ok)throw Error("Card finish lookup failed");const d=await r.json();const available=new Set(Object.keys(finishNames).filter(k=>d.variants&&!Array.isArray(d.variants)&&d.variants[k]===true));const detailed=Array.isArray(d.variants_detailed)?d.variants_detailed:(Array.isArray(d.variants)?d.variants:[]);for(const v of detailed)if(["normal","holo","reverse"].includes(v?.type))available.add(v.type);return Object.keys(finishNames).filter(k=>available.has(k))}).catch(error=>{finishCache.delete(id);throw error});finishCache.set(id,p)}return finishCache.get(id)}async function preferredSourceFinishes(item) {
+(()=>{"use strict";const $=id=>document.getElementById(id);const client=window.supabase?.createClient("https://iqdpfgpkagjxzedfxrvn.supabase.co","sb_publishable_76aiLaAm5Z4Kv67GkuTo-g_Psx5HINH");let currentUser=null;let allRequests=[];const finishNames={normal:"Non-holo",holo:"Holo",reverse:"Reverse holo",firstEdition:"1st edition",wPromo:"Promo"};const finishCache=new Map();async function finishesForCard(id){
+  if(!finishCache.has(id)){
+    const task=fetch("https://api.tcgdex.net/v2/en/cards/"+encodeURIComponent(id)).then(async response=>{
+      if(!response.ok)throw Error("Card finish lookup failed");
+      const details=await response.json();
+      return window.CardVectorCardFinishes?.resolve(details)?.keys||[];
+    }).catch(error=>{finishCache.delete(id);throw error});
+    finishCache.set(id,task);
+  }
+  return finishCache.get(id);
+}
+async function preferredSourceFinishes(item) {
+  // Reviewed printing corrections take precedence over price-based evidence.
+  const reviewed=window.CardVectorCardFinishes?.resolve({id:item.card_id});
+  if(reviewed?.source==="reviewed")return reviewed.keys;
   if(window.CardVectorPokeWallet && client) {
     try {
       const result=await window.CardVectorPokeWallet.inspect({
