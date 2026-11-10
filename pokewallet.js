@@ -33,13 +33,15 @@
         const matchingSet=resolvedSetId
           ? String(info.set_id||"")===resolvedSetId
           : normalize(info.set_name)===normalize(card.set);
-        const productName=normalize(info.clean_name||info.name);
         const wantedName=normalize(card.name);
+        // PokéWallet can provide a decorated clean_name and a shorter display name.
+        // Accept either only when the exact set and collector number also match.
+        const names=[info.name,info.clean_name].map(normalize).filter(Boolean);
+        const matchingName=!!wantedName && names.some(name=>
+          name===wantedName || name.startsWith(wantedName+" ") ||
+          wantedName.startsWith(name+" "));
         return info.product_type!=="sealed" && matchingSet &&
-          number(info.card_number)===number(card.number) &&
-          !!wantedName && !!productName &&
-          (productName===wantedName || productName.startsWith(wantedName+" ") ||
-           wantedName.startsWith(productName+" "));
+          number(info.card_number)===number(card.number) && matchingName;
       });
       if(exact.length!==1)return {status:exact.length?"ambiguous":"not-found",count:exact.length,variants:[],prices:[],provider:"PokéWallet"};
       const entry=exact[0];
