@@ -93,6 +93,28 @@
       if(currentNode.isConnected)currentNode.replaceWith(image);
     }catch {if(currentNode.isConnected)currentNode.replaceWith(fallback());}
   }
+  async function addHistoricalOrSecondary(card,node,fallback) {
+    let urls=[];
+    try { urls=await (window.CardVectorHistoricalImages?.forCard(card)||[]); }
+    catch { /* An unavailable historical record is not an error for search. */ }
+    if(!node.isConnected)return;
+    if(!urls.length) {addSecondaryArtwork(card,node,fallback);return;}
+    let offset=0;
+    function tryNext() {
+      if(!node.isConnected)return;
+      if(offset>=urls.length) {addSecondaryArtwork(card,node,fallback);return;}
+      const alt=document.createElement("img");
+      alt.alt=card.name+" card artwork (historical source)";
+      alt.loading="lazy";
+      alt.decoding="async";
+      alt.onload=()=>{
+        if(node.isConnected){alt.dataset.imageSource="historical";node.replaceWith(alt);}
+      };
+      alt.onerror=tryNext;
+      alt.src=urls[offset++];
+    }
+    tryNext();
+  }
   function picture(card, eager = false) {
     const urls = imageCandidates(card);
     const fallback = () => {
@@ -108,14 +130,14 @@
     img.decoding="async";
     img.onerror=()=>{
       if(++index<urls.length)img.src=urls[index];
-      else addSecondaryArtwork(card,img,fallback);
+      else addHistoricalOrSecondary(card,img,fallback);
     };
     if(urls.length)img.src=urls[0];
     else {
       // Defer until the card is mounted and set metadata is resolved.
       img.removeAttribute("src");
       img.onload=null;
-      setTimeout(()=>addSecondaryArtwork(card,img,fallback),0);
+      setTimeout(()=>addHistoricalOrSecondary(card,img,fallback),0);
     }
     return img;
   }
