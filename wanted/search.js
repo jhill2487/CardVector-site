@@ -118,16 +118,11 @@
   }
   const variantCache = new Map();
   const finishNames = {normal:"Non-holo",holo:"Holo",reverse:"Reverse holo",firstEdition:"1st Edition",wPromo:"Promo"};
-  function availableFinishKeys(details) {
-    const keys = Object.keys(finishNames);
-    const raw = details?.variants;
-    const available = new Set(keys.filter(key => raw && !Array.isArray(raw) && raw[key] === true));
-    const detailed = Array.isArray(details?.variants_detailed) ? details.variants_detailed : (Array.isArray(raw) ? raw : []);
-    for (const variant of detailed) {
-      if (variant?.type === "normal" || variant?.type === "holo" || variant?.type === "reverse") available.add(variant.type);
-    }
-    return keys.filter(key => available.has(key));
+  function finishInfo(details) {
+    return window.CardVectorCardFinishes?.resolve(details) ||
+      {keys:[],source:"unavailable",verified:false,warning:"Finish resolver unavailable."};
   }
+  function availableFinishKeys(details) { return finishInfo(details).keys; }
   function populateFinishOptions(keys) {
     const preferred = $("preferred-finish"), fieldset = $("accepted-finish-fieldset"), choices = $("accepted-finish-options");
     preferred.replaceChildren();
@@ -168,8 +163,10 @@
   const pendingVariants = [];
   let activeVariantLoads = 0;
   function variantLabel(details) {
-    const available = availableFinishKeys(details).map(key => finishNames[key]);
-    return available.length ? available.join(" · ") : "Finish information not available";
+    const info=finishInfo(details);
+    const available=info.keys.map(key=>finishNames[key]);
+    const label=available.length?available.join(" · "):"Finish information not available";
+    return info.source==="reviewed"?label+" · Reviewed":label+(info.warning?" · Needs verification":"");
   }
   function enqueueVariant(card, label) {
     if (variantCache.has(card.id)) { label.textContent = variantCache.get(card.id); return; }
@@ -332,11 +329,12 @@
       const set = document.createElement("p"); set.textContent = "Set: " + (details.set?.name || "Unknown");
       const number = document.createElement("p"); number.textContent = "Card #: " + (details.localId || card.localId || "Unknown");
       const reference = document.createElement("p"); reference.textContent = "TCGdex ID: " + card.id;
-      const finishKeys = availableFinishKeys(details);
+      const initialFinishInfo=finishInfo(details);
+      const finishKeys = initialFinishInfo.keys;
       const finishes = finishKeys.map(key => finishNames[key]);
       populateFinishOptions(finishKeys);
       const finishLabel = document.createElement("p");
-      finishLabel.textContent = "Available finishes: " + (finishes.length ? finishes.join(", ") : "Not specified by TCGdex");
+      finishLabel.textContent = "Available finishes: " + (finishes.length ? finishes.join(", ") : "Not verified") + (initialFinishInfo.source==="reviewed"?" (reviewed)":initialFinishInfo.warning?" (catalog data requires review)":"");
       text.append(heading, set, number, finishLabel); addMarketReference(text, details); box.append(img, text); body.replaceChildren(box);
       selectedCard = { card_id: card.id, card_name: details.name || card.name, set_name: details.set?.name || "Unknown", card_number: details.localId || card.localId || "Unknown", image_url: details.image || card.image || null, allowedFinishes: finishKeys };
     } catch (error) {
