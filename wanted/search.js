@@ -105,7 +105,8 @@
       if(offset>=urls.length) {addSecondaryArtwork(card,node,fallback);return;}
       const alt=document.createElement("img");
       alt.alt=card.name+" card artwork (historical source)";
-      alt.loading="lazy";
+      // Detached fallback images must load eagerly; lazy images may never fire load/error off-DOM.
+      alt.loading="eager";
       alt.decoding="async";
       alt.onload=()=>{
         if(node.isConnected){alt.dataset.imageSource="historical";node.replaceWith(alt);}
