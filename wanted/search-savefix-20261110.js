@@ -339,6 +339,46 @@
       finishLabel.textContent = "Available finishes: " + (finishes.length ? finishes.join(", ") : "Not specified by TCGdex");
       text.append(heading, set, number, finishLabel); addMarketReference(text, details); box.append(img, text); body.replaceChildren(box);
       selectedCard = { card_id: card.id, card_name: details.name || card.name, set_name: details.set?.name || "Unknown", card_number: details.localId || card.localId || "Unknown", image_url: details.image || card.image || null, allowedFinishes: finishKeys };
+      // Live PokéWallet enrichment is optional; TCGdex remains a working fallback.
+      const walletNote = document.createElement("p");
+      walletNote.className = "hint";
+      walletNote.textContent = "Checking PokéWallet for exact printing and finish data…";
+      text.append(walletNote);
+      if (window.CardVectorPokeWallet && supabaseClient) {
+        const selectedId = card.id;
+        window.CardVectorPokeWallet.inspect({
+          id: selectedId,
+          name: details.name || card.name,
+          set: details.set?.name || "",
+          number: details.localId || card.localId || ""
+        }, supabaseClient).then(result => {
+          if (selectedCard?.card_id !== selectedId || !walletNote.isConnected) return;
+          if (result.status !== "matched") {
+            walletNote.textContent = result.status === "ambiguous"
+              ? "PokéWallet returned multiple exact candidates. Keeping TCGdex finishes to avoid a mismatched printing."
+              : "PokéWallet exact printing not verified. Keeping TCGdex finishes.";
+            return;
+          }
+          // Market categories can be incomplete. Display evidence but only replace the
+          // picker when PokéWallet recognizes a unique card and known finishes.
+          const verified = result.variants;
+          const previous = $("preferred-finish").value;
+          selectedCard.allowedFinishes = verified;
+          populateFinishOptions(verified);
+          if (verified.includes(previous)) $("preferred-finish").value = previous;
+          walletNote.textContent = "PokéWallet: " + verified.map(k => finishNames[k]).join(", ") +
+            ". Exact set and card number matched. Source: TCGplayer pricing categories.";
+          if (result.prices.length) {
+            const prices = document.createElement("small");
+            prices.textContent = "Market references: " + result.prices.map(p =>
+              p.label + (p.market == null ? "" : " $" + p.market.toFixed(2))).join(" · ");
+            walletNote.append(document.createElement("br"), prices);
+          }
+        }).catch(err => {
+          if (selectedCard?.card_id === selectedId && walletNote.isConnected)
+            walletNote.textContent = "PokéWallet unavailable (" + err.message + "). TCGdex finishes remain selectable.";
+        });
+      } else walletNote.textContent = "PokéWallet comparison unavailable. Using TCGdex.";
     } catch (error) {
       if (error.name !== "AbortError") body.textContent = "Could not load card details. Select the card again to retry.";
     }
