@@ -1,8 +1,8 @@
 {
   "source_repository": "jhill2487/CardVector",
   "source_path": "Docs/",
-  "source_commit": "ddab12f3cf4149fdf1e8ecc757cbdca0067ebed9",
-  "generated_at": "2026-11-10T18:39:13.545Z",
+  "source_commit": "581b24a282d3ce753a930c1daea1f8771626b4a2",
+  "generated_at": "2026-11-10T18:52:35.398Z",
   "public_files": [
     "index.html",
     "pokewallet.js",
@@ -40,7 +40,8 @@
     "tools/carduploader/index.html",
     "CNAME",
     "_config.yml",
-    "tools/variant-diagnostic/index.html"
+    "tools/variant-diagnostic/index.html",
+    "historical-card-images.js"
   ],
   "public_assets": [
     "assets/putnam-profile.png",
