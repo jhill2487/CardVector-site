@@ -63,13 +63,60 @@
     if (base) urls.push(...["/low.webp", "/low.png", "/high.png", "/high.jpg"].map(ext => base + ext));
     return urls;
   }
+  // Globally applied to all name, illustrator, and set search results.
+  // Limit PokéWallet image calls in each browser session to protect the free quota.
+  const IMAGE_FALLBACK_BUDGET = 10;
+  let imageFallbackCalls = 0;
+  async function addSecondaryArtwork(card, currentNode, fallback) {
+    if(!window.CardVectorPokeWallet?.imageForCard || !supabaseClient ||
+       imageFallbackCalls>=IMAGE_FALLBACK_BUDGET) {
+      currentNode.replaceWith(fallback()); return;
+    }
+    const setId=String(card.id||"").slice(0,String(card.id||"").lastIndexOf("-"));
+    const set=card.set?.name || setNames.get(setId);
+    if(!set || !card.localId || !card.name) {
+      currentNode.replaceWith(fallback()); return;
+    }
+    imageFallbackCalls++;
+    try {
+      const url=await window.CardVectorPokeWallet.imageForCard({
+        id:card.id,name:card.name,set,number:card.localId
+      },supabaseClient);
+      if(!url)throw Error("No exact-match artwork");
+      // No guessed cross-printing images: the helper requires one exact set+number match.
+      const image=document.createElement("img");
+      image.alt=card.name+" card artwork (PokéWallet)";
+      image.loading="lazy";
+      image.decoding="async";
+      image.onerror=()=>image.replaceWith(fallback());
+      image.src=url;
+      if(currentNode.isConnected)currentNode.replaceWith(image);
+    }catch {if(currentNode.isConnected)currentNode.replaceWith(fallback());}
+  }
   function picture(card, eager = false) {
     const urls = imageCandidates(card);
-    const fallback = () => { const span = document.createElement("span"); span.className = "placeholder"; span.textContent = "Image unavailable"; return span; };
-    if (!urls.length) return fallback();
-    const img = document.createElement("img"); let index = 0;
-    img.src = urls[index]; img.alt = card.name + " card artwork"; img.loading = eager ? "eager" : "lazy"; img.decoding = "async";
-    img.onerror = () => { if (++index < urls.length) img.src = urls[index]; else img.replaceWith(fallback()); };
+    const fallback = () => {
+      const span = document.createElement("span");
+      span.className = "placeholder";
+      span.textContent = "Image unavailable";
+      return span;
+    };
+    const img = document.createElement("img");
+    let index=0;
+    img.alt=card.name+" card artwork";
+    img.loading=eager?"eager":"lazy";
+    img.decoding="async";
+    img.onerror=()=>{
+      if(++index<urls.length)img.src=urls[index];
+      else addSecondaryArtwork(card,img,fallback);
+    };
+    if(urls.length)img.src=urls[0];
+    else {
+      // Defer until the card is mounted and set metadata is resolved.
+      img.removeAttribute("src");
+      img.onload=null;
+      setTimeout(()=>addSecondaryArtwork(card,img,fallback),0);
+    }
     return img;
   }
   function setIdFor(card) {
@@ -182,6 +229,13 @@
         if (!r.ok) throw Error("No card details");
         return r.json();
       }).then(details => {
+        // Brief search records sometimes omit images; full details may supply them.
+        if(details.image && !task.card.image){
+          task.card.image=details.image;
+          const frame=task.label.parentElement;
+          const placeholder=frame?.querySelector(".placeholder");
+          if(placeholder)placeholder.replaceWith(picture(task.card));
+        }
         const label = variantLabel(details);
         variantCache.set(task.card.id,label);
         if (variantCache.size > 1500) variantCache.delete(variantCache.keys().next().value);
@@ -323,7 +377,7 @@
       const details = await response.json();
       if (!isPhysicalCard(details) || String(details.set?.serie?.id || details.set?.serie || "").toLowerCase() === "tcgp") { body.textContent = "Digital-only cards are not supported."; return; }
       const box = document.createElement("div"); box.className = "selected-detail";
-      const img = picture(details, true);
+      const img = picture({...card,...details,image:details.image||card.image||null}, true);
       const text = document.createElement("div");
       const heading = document.createElement("h3"); heading.textContent = details.name || card.name;
       const set = document.createElement("p"); set.textContent = "Set: " + (details.set?.name || "Unknown");
