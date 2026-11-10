@@ -1,11 +1,12 @@
 {
   "source_repository": "jhill2487/CardVector",
   "source_path": "Docs/",
-  "source_commit": "3fcbb35fc56e9b282c401095d8e3a0d5f9d6432b",
-  "generated_at": "2026-11-10T18:16:58.194Z",
+  "source_commit": "f239fc11d007b5104ee3383c571fd0ac3288766c",
+  "generated_at": "2026-11-10T18:24:12.597Z",
   "public_files": [
     "index.html",
     "pokewallet.js",
+    "card-finishes.js",
     "home-account.js",
     "404.html",
     "app.js",
