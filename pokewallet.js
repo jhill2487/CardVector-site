@@ -21,17 +21,25 @@
     const key=[card.id,card.name,card.set,card.number].join("|");
     if(cache.has(key))return cache.get(key);
     const promise=(async()=>{
-      const response=await fetch(EDGE,{method:"POST",headers:{Authorization:"Bearer "+session.access_token,apikey:KEY,"Content-Type":"application/json"},body:JSON.stringify({q:card.name})});
+      const response=await fetch(EDGE,{method:"POST",headers:{Authorization:"Bearer "+session.access_token,apikey:KEY,"Content-Type":"application/json"},body:JSON.stringify({q:card.name,setName:card.set,number:card.number})});
       const raw=await response.json();
       if(!response.ok)throw Error(raw.error||"PokéWallet lookup unavailable");
       const list=Array.isArray(raw.results)?raw.results:[];
+      // A uniquely resolved numeric PokéWallet set ID supersedes display-name differences.
+      // Otherwise require the same normalized set label; never guess between sets.
+      const resolvedSetId=String(raw._cardvector_set_id||"");
       const exact=list.filter(entry=>{
         const info=entry?.card_info||{};
-        return info.product_type!=="sealed" &&
-          normalize(info.set_name)===normalize(card.set) &&
+        const matchingSet=resolvedSetId
+          ? String(info.set_id||"")===resolvedSetId
+          : normalize(info.set_name)===normalize(card.set);
+        const productName=normalize(info.clean_name||info.name);
+        const wantedName=normalize(card.name);
+        return info.product_type!=="sealed" && matchingSet &&
           number(info.card_number)===number(card.number) &&
-          (normalize(info.clean_name||info.name).startsWith(normalize(card.name)) ||
-           normalize(card.name).startsWith(normalize(info.clean_name||info.name)));
+          !!wantedName && !!productName &&
+          (productName===wantedName || productName.startsWith(wantedName+" ") ||
+           wantedName.startsWith(productName+" "));
       });
       if(exact.length!==1)return {status:exact.length?"ambiguous":"not-found",count:exact.length,variants:[],prices:[],provider:"PokéWallet"};
       const entry=exact[0];
