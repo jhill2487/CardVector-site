@@ -30,6 +30,8 @@
       const resolvedSetId=String(raw._cardvector_set_id||"");
       const exact=list.filter(entry=>{
         const info=entry?.card_info||{};
+        // Numeric IDs are authoritative once the server resolves one set.
+        // For a name-only result retain exact normalized set equality.
         const matchingSet=resolvedSetId
           ? String(info.set_id||"")===resolvedSetId
           : normalize(info.set_name)===normalize(card.set);
@@ -43,7 +45,12 @@
         return info.product_type!=="sealed" && matchingSet &&
           number(info.card_number)===number(card.number) && matchingName;
       });
-      if(exact.length!==1)return {status:exact.length?"ambiguous":"not-found",count:exact.length,variants:[],prices:[],provider:"PokéWallet"};
+      if(exact.length!==1){
+        // Local diagnostics are private to the creator's browser session; no card IDs logged.
+        if(raw._cardvector_lookup==="set_number")
+          console.info("CardVector PokéWallet exact candidate count",exact.length);
+        return {status:exact.length?"ambiguous":"not-found",count:exact.length,variants:[],prices:[],provider:"PokéWallet"};
+      }
       const entry=exact[0];
       const prices=Array.isArray(entry?.tcgplayer?.prices)?entry.tcgplayer.prices:[];
       const variants=[...new Set(prices.map(p=>finish(p.sub_type_name)).filter(Boolean))];
