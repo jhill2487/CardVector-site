@@ -362,7 +362,12 @@
       const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
       if (authError || !user) { message.textContent = "Sign in to save your wanted card. Open My account, then return here."; return; }
       const { error } = await supabaseClient.from("cv_wanted_requests").insert({
-        user_id: user.id, source: "tcgdex", ...selectedCard,
+        user_id: user.id, source: "tcgdex",
+        card_id: selectedCard.card_id,
+        card_name: selectedCard.card_name,
+        set_name: selectedCard.set_name,
+        card_number: selectedCard.card_number,
+        image_url: selectedCard.image_url,
         minimum_condition: $("minimum-condition").value,
         max_price_usd: Number($("max-price").value),
         quantity: Number($("want-quantity").value),
