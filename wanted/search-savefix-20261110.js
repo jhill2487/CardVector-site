@@ -267,6 +267,41 @@
         .finally(() => { activeVariantLoads--; runVariantQueue(); });
     }
   }
+  // Kaggle previews are discovered independently of TCGdex. They are read-only
+  // until the exact printing and available finish can be verified for a want.
+  const kagglePanel = $("kaggle-search-results");
+  async function renderKagglePreviews(query, field, searchId, chosenSet) {
+    if (!kagglePanel) return;
+    kagglePanel.replaceChildren();
+    kagglePanel.hidden = true;
+    if (chosenSet || !["name","set"].includes(field) || query.length < 2) return;
+    try {
+      const candidates = await window.CardVectorKaggleCatalog?.search(query,field,36);
+      if (searchId !== requestId || !candidates?.length) return;
+      kagglePanel.hidden = false;
+      const heading = document.createElement("h3");
+      heading.textContent = "Kaggle image catalog — " + candidates.length + " previews";
+      const note = document.createElement("p");
+      note.className = "muted";
+      note.textContent = "Image-index results. Printing identities and finishes must be verified before they can be requested.";
+      const grid = document.createElement("div"); grid.className = "results";
+      for (const card of candidates) {
+        const link = document.createElement("a");
+        link.href = card.url; link.target = "_blank"; link.rel = "noopener noreferrer";
+        link.className = "card";
+        const img = document.createElement("img");
+        img.src = card.url; img.loading = "lazy"; img.alt = (card.name || "Card") + " image preview";
+        const title = document.createElement("strong");
+        title.textContent = card.name || "Name awaiting verification";
+        const set = document.createElement("small"); set.textContent = card.setSlug.replace(/-/g," ");
+        const number = document.createElement("small"); number.textContent = "Card #" + (card.number || "unresolved");
+        link.append(img,title,set,number); grid.append(link);
+      }
+      kagglePanel.append(heading,note,grid);
+    } catch (_) {
+      // Existing TCGdex search remains usable if the R2 index/CORS is unavailable.
+    }
+  }
   function renderNext() {
     const end = Math.min(visible + PAGE_SIZE, matches.length);
     const fragment = document.createDocumentFragment();
@@ -304,6 +339,7 @@
     const id = ++requestId;
     if (controller) controller.abort();
     const field = mode.value, chosenSet = setFilter.value;
+    renderKagglePreviews(query, field, id, chosenSet);
     if (query.length < 2 && !chosenSet) { render([]); results.replaceChildren(); feedback("Enter at least 2 characters, or choose a set."); return; }
     const cacheKey = [field, query, chosenSet].join("|");
     if (cache.has(cacheKey)) { const saved = cache.get(cacheKey); render(saved.cards); feedback(saved.datesIncomplete ? "Oldest known printings first; sets with unavailable dates appear last." : "Oldest printing first by set release date."); return; }
@@ -507,7 +543,7 @@
     const selected = mode.value;
     $("query-label").textContent = selected === "illustrator" ? "Illustrator name" : selected === "set" ? "Set name (or select a set)" : "Card name";
     input.placeholder = selected === "illustrator" ? "Try Mitsuhiro Arita" : selected === "set" ? "Try Evolving Skies" : "Try Umbreon VMAX or Charizard";
-    input.value = ""; results.replaceChildren(); $("result-count").textContent = ""; $("more-results").hidden = true;
+    input.value = ""; results.replaceChildren(); $("result-count").textContent = ""; $("more-results").hidden = true; if (kagglePanel) { kagglePanel.hidden = true; kagglePanel.replaceChildren(); }
     feedback(selected === "set" ? "Choose a set or enter its name." : "Enter at least 2 characters to search.");
   }
   mode.addEventListener("change", updateSearchMode);
@@ -517,6 +553,7 @@
     $("clear-search").hidden = !query;
     clearTimeout(debounce);
     if (controller) controller.abort();
+    if (kagglePanel) { kagglePanel.hidden = true; kagglePanel.replaceChildren(); }
     if (query.length < 2 && !setFilter.value) { ++requestId; results.replaceChildren(); $("result-count").textContent = ""; $("more-results").hidden = true; feedback("Enter at least 2 characters, or select a set."); return; }
     if (cache.has([mode.value,query.toLocaleLowerCase(),setFilter.value].join("|"))) { search(query.toLocaleLowerCase()); return; }
     feedback("Searching…");

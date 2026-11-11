@@ -1,15 +1,18 @@
 {
   "source_repository": "jhill2487/CardVector",
   "source_path": "Docs/",
-  "source_commit": "006e1de68bf848d6296ce5b92528aba6e8c80ce1",
-  "generated_at": "2026-11-10T19:32:00Z",
+  "source_commit": "199bd9db2948ee56c7bba3afecba478ec240f98c",
+  "generated_at": "2026-11-11T14:16:12+00:00",
   "public_files": [
     "index.html",
-    "pokewallet.js",
-    "card-finishes.js",
-    "home-account.js",
     "404.html",
     "app.js",
+    "home-account.js",
+    "card-finishes.js",
+    "card-finish-corrections.js",
+    "historical-card-images.js",
+    "pokewallet.js",
+    "kaggle-catalog.js",
     "style.css",
     "partners.css",
     "brand-site.css",
@@ -39,9 +42,7 @@
     "robots.txt",
     "tools/carduploader/index.html",
     "CNAME",
-    "_config.yml",
-    "tools/variant-diagnostic/index.html",
-    "historical-card-images.js"
+    "_config.yml"
   ],
   "public_assets": [
     "assets/putnam-profile.png",
