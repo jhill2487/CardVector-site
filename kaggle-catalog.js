@@ -80,17 +80,32 @@
       a.number.localeCompare(b.number,undefined,{numeric:true}) || a.path.localeCompare(b.path)).slice(0,limit);
   }
 
-  // Exact-name, number and set matching only. Ambiguous finish candidates are skipped.
-  const aliases = {swshp:["swsh black star promos","sword shield promos","sword and shield promos"],smp:["sm black star promos","sun moon promos"],svp:["sv black star promos","scarlet violet promos"],xyp:["xy black star promos","xy promos"]};
+  // Exact set + collector number identifies the printing; a provided name
+  // must agree. Numeric-only filenames are accepted only for one unique match.
+  // This lookup never changes the card's catalog identity or supported finishes.
+  const aliases = {
+    swshp:["swsh black star promos","sword shield promos","sword and shield promos"],
+    smp:["sm black star promos","sun moon promos"],
+    svp:["sv black star promos","scarlet violet promos"],
+    xyp:["xy black star promos","xy promos"]
+  };
+  const cardNumber = value => {
+    const raw=String(value||"").trim().toLowerCase().split("/")[0];
+    return raw.replace(/^0+(?=\d)/,"");
+  };
   async function forCard(card,setName="") {
     const id=String(card?.id||""), cut=id.lastIndexOf("-");
     const setId=cut>0?id.slice(0,cut).toLowerCase():"";
-    const name=normalize(card?.name), number=normalize(card?.localId).replace(/ /g,"");
+    const name=normalize(card?.name), number=cardNumber(card?.localId);
     if(!setId||!name||!number)return null;
     const sets=new Set([setName,card?.set?.name,...(aliases[setId]||[])].map(normalize).filter(Boolean));
     if(!sets.size)return null;
-    const found=(await load()).filter(row=>row.name&&row.number&&normalize(row.name)===name&&normalize(row.number).replace(/ /g,"")===number&&sets.has(normalize(row.setSlug)));
-    return found.length===1?found[0].url:null;
+    const matches=(await load()).filter(row=>
+      row.number && cardNumber(row.number)===number &&
+      sets.has(normalize(row.setSlug)) &&
+      (!row.name || normalize(row.name)===name)
+    );
+    return matches.length===1?matches[0].url:null;
   }
   window.CardVectorKaggleCatalog = Object.freeze({load,listSets,search,forCard,parseCSV,fromRow});
 })();
