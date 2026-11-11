@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?cv=e6897091b8e2">
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?cv=deefc030f2e7">
 <title>Development Dashboard | CardVector</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#091320;color:#f2f6fa}
@@ -37,7 +37,7 @@ dt{color:#acbdca}dd{margin:0;overflow-wrap:anywhere}
 </style>
 </head>
 <body>
-<header><a href="/" aria-label="CardVector home"><img src="/assets/cardvector-twin-arrow.svg?cv=e6897091b8e2" alt="CardVector"></a><a href="/dashboard/">Collector dashboard</a></header>
+<header><a href="/" aria-label="CardVector home"><img src="/assets/cardvector-twin-arrow.svg?cv=deefc030f2e7" alt="CardVector"></a><a href="/dashboard/">Collector dashboard</a></header>
 <main>
 <section id="access" class="panel" aria-labelledby="access-heading"><h1 id="access-heading">Development dashboard</h1><p id="access-text" role="status" aria-live="polite">Checking administrator access…</p><form id="admin-login" hidden><label for="admin-email">Administrator email</label><input id="admin-email" type="email" value="jhill2487@gmail.com" autocomplete="username" required><label for="admin-password">Password</label><input id="admin-password" type="password" autocomplete="current-password" required><button id="admin-submit" type="submit">Sign in to development dashboard</button></form><p><a href="/account/">Collector account</a></p></section>
 <div id="private">
@@ -61,6 +61,12 @@ dt{color:#acbdca}dd{margin:0;overflow-wrap:anywhere}
 <div class="head"><span class="muted">Import completion</span><strong id="import-percent">Not available</strong></div><div class="progress" role="progressbar" aria-label="PokéWallet sets imported" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="import-progress"><div id="import-bar" class="bar"></div></div>
 <p class="note">Counts are read from a private Supabase checkpoint, available only to the approved administrator. Import progress remains unreported until an importer batch actually publishes it; image match counts appear after reconciliation runs.</p>
 <p><a href="https://github.com/jhill2487/CardVector/blob/main/Docs/Architecture/Pokewallet_Kaggle_Reconciliation.md" target="_blank" rel="noopener noreferrer">Importer documentation</a> · <a href="https://github.com/jhill2487/CardVector/pull/113" target="_blank" rel="noopener noreferrer">Importer implementation</a></p>
+</section>
+<section class="panel wide">
+<div class="head"><h2>Image coverage by set</h2><span id="set-coverage-badge" class="status">Checking</span></div>
+<p id="set-coverage-summary" class="muted">Loading verified set-level image coverage…</p>
+<ul id="set-coverage-list" class="list" aria-live="polite"><li>Checking set coverage…</li></ul>
+<p class="note"><strong>Confirmed absent</strong> means Kaggle is known to lack this set. <strong>Unmatched — verify</strong> means no exact image matches so far; the folder name or filename parsing may differ. Counts cover imported records only, not necessarily the complete set. Alternative artwork must be verified before publishing.</p>
 </section>
 <section class="panel"><h2>Latest development changes</h2><ul id="recent-prs" class="list"><li class="muted">Loading recent pull requests…</li></ul><p class="note"><a href="https://github.com/jhill2487/CardVector/pulls" target="_blank" rel="noopener noreferrer">All pull requests</a></p></section>
 <section class="panel"><h2>Open development issues</h2><p id="issues-summary" class="muted">Checking open issues…</p><ul id="open-issues" class="list"></ul><p class="note"><a href="https://github.com/jhill2487/CardVector/issues/31" target="_blank" rel="noopener noreferrer">Master development roadmap</a> · <a href="https://github.com/jhill2487/CardVector/issues" target="_blank" rel="noopener noreferrer">All issues</a></p></section>
@@ -167,10 +173,42 @@ async function getImportProgress(){
   $("import-summary").textContent="Could not read secure progress data. Check administrator session or Supabase connection.";
  }
 }
+async function getSetCoverage(){
+ const badge=$("set-coverage-badge"),summary=$("set-coverage-summary"),list=$("set-coverage-list");
+ try{
+  const {data,error}=await client.from("cv_admin_set_coverage")
+   .select("set_id,set_name,imported_cards,matched_cards,review_cards,unmatched_cards,coverage_status,alternate_source_status")
+   .order("unmatched_cards",{ascending:false}).limit(1000);
+  if(error)throw error;
+  list.replaceChildren();
+  const rows=data||[];
+  const flagged=rows.filter(r=>r.coverage_status==="confirmed_absent");
+  badge.textContent=flagged.length?flagged.length+" confirmed set gap"+(flagged.length===1?"":"s"):"Coverage available";
+  badge.className="status "+(flagged.length?"working":"good");
+  summary.textContent=rows.length+" imported sets displayed (up to 1,000, ordered by unmatched count). Reviewed set-level gaps are separated from unmatched cards needing verification.";
+  if(!rows.length){const li=document.createElement("li");li.textContent="No sets imported yet.";list.append(li);return;}
+  const ordered=[...rows].sort((a,b)=>Number(b.coverage_status==="confirmed_absent")-Number(a.coverage_status==="confirmed_absent")||b.unmatched_cards-a.unmatched_cards);
+  for(const item of ordered){
+   const li=document.createElement("li"),info=document.createElement("div");info.className="detail";
+   const title=document.createElement("strong");title.textContent=item.set_name;
+   const details=document.createElement("small");
+   details.textContent="Imported "+item.imported_cards+" · Exact matches "+item.matched_cards+" · Unmatched "+item.unmatched_cards+" · Review "+item.review_cards;
+   const label=document.createElement("span");
+   label.className="status "+(item.coverage_status==="confirmed_absent"?"working":"");
+   const names={confirmed_absent:"Confirmed Kaggle gap",unmatched_unverified:"Unmatched — verify",partial_coverage:"Partial coverage",matched_so_far:"Matched so far"};
+   label.textContent=names[item.coverage_status]||"Coverage unknown";
+   info.append(title,details);li.append(info,label);list.append(li);
+  }
+ }catch(error){
+  badge.textContent="Unavailable";badge.className="status working";
+  summary.textContent="Set-level coverage could not be loaded. Confirm your administrator session.";
+  list.replaceChildren();
+ }
+}
 async function check(){
  if(!ready||active)return;
  active=true;$("refresh").disabled=true;$("refresh").textContent="Refreshing…";
- try{await Promise.allSettled([getDeploy(),getDevelopment(),getImportProgress()]);}
+ try{await Promise.allSettled([getDeploy(),getDevelopment(),getImportProgress(),getSetCoverage()]);}
  finally{active=false;$("refresh").disabled=false;$("refresh").textContent="Refresh all status";$("checked").textContent="Checked "+new Date().toLocaleTimeString();}
 }
 async function verifyAdministrator(){
