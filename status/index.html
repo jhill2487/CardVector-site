@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?cv=4421d4152792">
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?cv=93d7194d1f14">
 <title>Development Dashboard | CardVector</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#091320;color:#f2f6fa}
@@ -16,7 +16,7 @@ h2{font-size:1.15rem;margin:0 0 14px}h3{font-size:1rem;margin:0 0 8px}
 p{line-height:1.55}small,.muted{color:#b5c3ce}
 .eyebrow{color:#ff983c;font-size:.77rem;font-weight:750;letter-spacing:.13em}
 .toolbar{display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap;margin:22px 0}
-button{border:0;border-radius:9px;background:#ff902d;color:#15202b;padding:11px 16px;font:inherit;font-weight:750;cursor:pointer}
+input{display:block;width:100%;max-width:390px;background:#1c3044;border:1px solid #52667b;border-radius:8px;padding:11px 13px;color:#fff;font:inherit;margin:5px 0 16px}label{display:block;font-size:.9rem;color:#b5c3ce}form[hidden]{display:none}button{border:0;border-radius:9px;background:#ff902d;color:#15202b;padding:11px 16px;font:inherit;font-weight:750;cursor:pointer}
 button:disabled{opacity:.6;cursor:wait}button:focus-visible,a:focus-visible{outline:3px solid #fbd18d;outline-offset:3px}
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
 .panel{background:#132438;border:1px solid #3c4c5e;border-radius:15px;padding:20px;min-width:0}
@@ -37,9 +37,9 @@ dt{color:#acbdca}dd{margin:0;overflow-wrap:anywhere}
 </style>
 </head>
 <body>
-<header><a href="/" aria-label="CardVector home"><img src="/assets/cardvector-twin-arrow.svg?cv=4421d4152792" alt="CardVector"></a><a href="/dashboard/">Collector dashboard</a></header>
+<header><a href="/" aria-label="CardVector home"><img src="/assets/cardvector-twin-arrow.svg?cv=93d7194d1f14" alt="CardVector"></a><a href="/dashboard/">Collector dashboard</a></header>
 <main>
-<section id="access" class="panel" role="status" aria-live="polite"><h1>Development dashboard</h1><p id="access-text">Checking administrator access…</p><p><a href="/account/?next=status">Sign in</a></p></section>
+<section id="access" class="panel" aria-labelledby="access-heading"><h1 id="access-heading">Development dashboard</h1><p id="access-text" role="status" aria-live="polite">Checking administrator access…</p><form id="admin-login" hidden><label for="admin-email">Administrator email</label><input id="admin-email" type="email" value="jhill2487@gmail.com" autocomplete="username" required><label for="admin-password">Password</label><input id="admin-password" type="password" autocomplete="current-password" required><button id="admin-submit" type="submit">Sign in to development dashboard</button></form><p><a href="/account/">Collector account</a></p></section>
 <div id="private">
 <div class="eyebrow">CARDVECTOR · ADMINISTRATION</div>
 <h1>Development dashboard</h1>
@@ -75,7 +75,7 @@ const $=id=>document.getElementById(id);
 const adminEmail="jhill2487@gmail.com";
 const API="https://api.github.com/repos/";
 const baseHeaders={"Accept":"application/vnd.github+json"};
-let active=false,ready=false;
+let active=false,ready=false,client=null;
 const safeDate=v=>v?new Date(v).toLocaleString():"—";
 function state(prefix,run){
  const badge=$(prefix+"-badge");
@@ -146,17 +146,50 @@ async function check(){
  try{await Promise.allSettled([getDeploy(),getDevelopment()]);}
  finally{active=false;$("refresh").disabled=false;$("refresh").textContent="Refresh all status";$("checked").textContent="Checked "+new Date().toLocaleTimeString();}
 }
+async function verifyAdministrator(){
+ const {data:{user},error}=await client.auth.getUser();
+ if(error||!user){
+  $("access-text").textContent="Sign in with the approved administrator account.";
+  $("admin-login").hidden=false;
+  return;
+ }
+ if(String(user.email||"").trim().toLowerCase()!==adminEmail || !user.email_confirmed_at){
+  $("access-text").textContent="Access restricted to the verified CardVector administrator. Sign out of the other account to continue.";
+  $("admin-login").hidden=true;
+  return;
+ }
+ $("admin-login").hidden=true;
+ $("access").hidden=true;
+ $("private").style.display="block";
+ $("admin-account").textContent="Signed in: "+user.email;
+ if(!ready){
+  ready=true;
+  $("refresh").addEventListener("click",check);
+  setInterval(()=>{if(!document.hidden)check()},60000);
+ }
+ await check();
+}
 async function init(){
  try{
   if(!window.supabase?.createClient)throw new Error("Account service unavailable");
-  const client=window.supabase.createClient("https://iqdpfgpkagjxzedfxrvn.supabase.co","sb_publishable_76aiLaAm5Z4Kv67GkuTo-g_Psx5HINH");
-  const {data:{user},error}=await client.auth.getUser();
-  if(error||!user){$("access-text").textContent="Sign in with your administrator account to view development status.";return}
-  if(String(user.email||"").trim().toLowerCase()!==adminEmail || !user.email_confirmed_at){$("access-text").textContent="Access restricted to CardVector administrators.";return}
-  $("access").hidden=true;$("private").style.display="block";$("admin-account").textContent="Signed in: "+(user.email||"Administrator");ready=true;
-  $("refresh").addEventListener("click",check);
-  await check();setInterval(()=>{if(!document.hidden)check()},60000);
- }catch(e){$("access-text").textContent="Cannot verify administrator access. Try again after signing in.";}
+  client=window.supabase.createClient("https://iqdpfgpkagjxzedfxrvn.supabase.co","sb_publishable_76aiLaAm5Z4Kv67GkuTo-g_Psx5HINH");
+  $("admin-login").addEventListener("submit",async event=>{
+   event.preventDefault();
+   const email=$("admin-email").value.trim().toLowerCase();
+   if(email!==adminEmail){$("access-text").textContent="This email is not approved for administrator access.";return}
+   const button=$("admin-submit");
+   button.disabled=true;
+   $("access-text").textContent="Signing in…";
+   try{
+    const {error}=await client.auth.signInWithPassword({email,password:$("admin-password").value});
+    if(error)throw error;
+    $("admin-password").value="";
+    await verifyAdministrator();
+   }catch(error){$("access-text").textContent="Sign in failed: "+(error.message||"Please retry.");}
+   finally{button.disabled=false;}
+  });
+  await verifyAdministrator();
+ }catch(error){$("access-text").textContent="Cannot verify administrator access. Try reloading.";}
 }
 init();
 })();
