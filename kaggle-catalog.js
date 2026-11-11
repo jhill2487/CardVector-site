@@ -32,7 +32,7 @@
     const folder = segments[segments.length-2] || "";
     const stem = file.replace(/\.[^.]+$/,"");
     let number = "", name = "";
-    const old = stem.match(/^en_US-[A-Za-z0-9]+-([A-Za-z]*\d+)-(.+)$/i);
+    const old = stem.match(/^en_US-[^/]+?-([A-Za-z]*\d+)-(.+)$/i);
     if (old) { number = old[1]; name = old[2].replace(/[_-]+/g," "); }
     else {
       const modern = stem.match(/^[a-z0-9-]+_en_([a-z0-9]+)_(?:std|rev|holo)$/i);
@@ -79,5 +79,18 @@
     return found.sort((a,b) => a.setSlug.localeCompare(b.setSlug) ||
       a.number.localeCompare(b.number,undefined,{numeric:true}) || a.path.localeCompare(b.path)).slice(0,limit);
   }
-  window.CardVectorKaggleCatalog = Object.freeze({load,listSets,search,parseCSV,fromRow});
+
+  // Exact-name, number and set matching only. Ambiguous finish candidates are skipped.
+  const aliases = {swshp:["swsh black star promos","sword shield promos","sword and shield promos"],smp:["sm black star promos","sun moon promos"],svp:["sv black star promos","scarlet violet promos"],xyp:["xy black star promos","xy promos"]};
+  async function forCard(card,setName="") {
+    const id=String(card?.id||""), cut=id.lastIndexOf("-");
+    const setId=cut>0?id.slice(0,cut).toLowerCase():"";
+    const name=normalize(card?.name), number=normalize(card?.localId).replace(/ /g,"");
+    if(!setId||!name||!number)return null;
+    const sets=new Set([setName,card?.set?.name,...(aliases[setId]||[])].map(normalize).filter(Boolean));
+    if(!sets.size)return null;
+    const found=(await load()).filter(row=>row.name&&row.number&&normalize(row.name)===name&&normalize(row.number).replace(/ /g,"")===number&&sets.has(normalize(row.setSlug)));
+    return found.length===1?found[0].url:null;
+  }
+  window.CardVectorKaggleCatalog = Object.freeze({load,listSets,search,forCard,parseCSV,fromRow});
 })();

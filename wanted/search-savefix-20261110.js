@@ -30,26 +30,10 @@
       if (!Array.isArray(sets)) return;
       for (const set of sets) if (set.id && set.name && !pocketSetIds.has(String(set.id).toLowerCase())) { setNames.set(set.id, set.name); if (/^\\d{4}-\\d{2}-\\d{2}$/.test(String(set.releaseDate || ""))) releaseDates.set(set.id, set.releaseDate); }
       for (const set of [...sets].filter(s => s.id && s.name && !pocketSetIds.has(String(s.id).toLowerCase())).sort((a,b) => a.name.localeCompare(b.name))) setFilter.add(new Option(set.name, set.id));
-      for (const [label, id] of setLabels) label.textContent = setNames.get(id) || "Set details on selection";
+      for (const [label,id] of setLabels) label.textContent=label.dataset.cardName+" - "+label.dataset.cardNumber+" - "+(setNames.get(id)||"Set details pending");
     } catch (_) { /* Search continues without set names if unavailable. */ }
   }
   loadSetNames();
-  // Kaggle folder names are first-class set browsing options even where TCGdex
-  // has no equivalent set or incomplete card records.
-  async function loadKaggleSets() {
-    try {
-      const sets = await window.CardVectorKaggleCatalog?.listSets();
-      if (!sets?.length) return;
-      const group = document.createElement("optgroup");
-      group.label = "Kaggle image sets";
-      for (const slug of sets) {
-        const label = slug.replace(/-/g, " ").replace(/\\b\\w/g, ch => ch.toUpperCase());
-        group.append(new Option(label, "kaggle:" + slug));
-      }
-      setFilter.append(group);
-    } catch (_) { /* Existing TCGdex set discovery remains available. */ }
-  }
-  loadKaggleSets();
 
   let debounce, controller, requestId = 0, matches = [], visible = 0, selectedController, selectedCard = null;
   const supabaseClient = window.supabase?.createClient("https://iqdpfgpkagjxzedfxrvn.supabase.co", "sb_publishable_76aiLaAm5Z4Kv67GkuTo-g_Psx5HINH");
@@ -150,13 +134,17 @@
       if(++index<urls.length)img.src=urls[index];
       else addHistoricalOrSecondary(card,img,fallback);
     };
-    if(urls.length)img.src=urls[0];
-    else {
-      // Defer until the card is mounted and set metadata is resolved.
-      img.removeAttribute("src");
-      img.onload=null;
-      setTimeout(()=>addHistoricalOrSecondary(card,img,fallback),0);
-    }
+    // Kaggle artwork is only used after identifying the exact card.
+    (async()=>{
+      let kaggleUrl=null;
+      try {
+        kaggleUrl=await window.CardVectorKaggleCatalog?.forCard(card,card.set?.name||setNames.get(setIdFor(card))||"");
+      } catch (_) { /* Existing artwork providers remain available. */ }
+      if (!img.isConnected)return;
+      if (kaggleUrl)urls.unshift(kaggleUrl);
+      if (urls.length)img.src=urls[0];
+      else addHistoricalOrSecondary(card,img,fallback);
+    })();
     return img;
   }
   function setIdFor(card) {
@@ -297,79 +285,6 @@
         .finally(() => { activeVariantLoads--; runVariantQueue(); });
     }
   }
-  // Kaggle previews are discovered independently of TCGdex. They are read-only
-  // until the exact printing and available finish can be verified for a want.
-  const kagglePanel = $("kaggle-search-results");
-  async function renderKagglePreviews(query, field, searchId, chosenSet) {
-    if (!kagglePanel) return;
-    kagglePanel.replaceChildren();
-    kagglePanel.hidden = true;
-    const kaggleSlug = chosenSet.startsWith("kaggle:") ? chosenSet.slice(7) : "";
-    if (!kaggleSlug && (!["name","set"].includes(field) || query.length < 2)) return;
-    try {
-      // Retrieve all matching entries once and paginate in the UI. A set with
-      // hundreds of images must not silently stop at the first 36.
-      const filterQuery = kaggleSlug && field === "set" ? "" : query;
-      const candidates = await window.CardVectorKaggleCatalog?.search(filterQuery,field,22000,kaggleSlug);
-      if (searchId !== requestId || !candidates) return;
-      kagglePanel.hidden = false;
-      const heading = document.createElement("h3");
-      heading.textContent = "Kaggle image catalog — " + candidates.length + " images";
-      const note = document.createElement("p");
-      note.className = "muted";
-      note.textContent = "Browse Kaggle artwork independently of TCGdex. Printing identities and finishes must be verified before a wanted request can be saved.";
-      const refineLabel = document.createElement("label");
-      refineLabel.textContent = "Refine Kaggle images by name or set";
-      const refine = document.createElement("input");
-      refine.type = "search";
-      refine.placeholder = "e.g. Libre, promo, Trainer Kit";
-      refine.setAttribute("aria-label", "Refine Kaggle image results");
-      refineLabel.append(refine);
-      const shownCount = document.createElement("p");
-      shownCount.className = "muted";
-      const grid = document.createElement("div"); grid.className = "results";
-      let filtered = candidates;
-      function renderAll() {
-        grid.replaceChildren();
-        const fragment = document.createDocumentFragment();
-        for (const card of filtered) {
-          const link = document.createElement("a");
-          link.href = card.url; link.target = "_blank"; link.rel = "noopener noreferrer";
-          link.className = "card";
-          const img = document.createElement("img");
-          img.src = card.url; img.loading = "lazy"; img.decoding = "async";
-          img.alt = (card.name || "Card") + " image preview";
-          const title = document.createElement("strong");
-          title.textContent = card.name || ("Filename: " + card.filename.replace(/\\.[^.]+$/, "").replace(/[+_-]+/g, " "));
-          const set = document.createElement("small");
-          set.textContent = card.setSlug.replace(/-/g," ");
-          const number = document.createElement("small");
-          number.textContent = "Card #" + (card.number || "unresolved");
-          link.append(img,title,set,number); fragment.append(link);
-        }
-        grid.append(fragment);
-        shownCount.textContent = filtered.length + " matching Kaggle images";
-        if (!filtered.length) {
-          const empty = document.createElement("p");
-          empty.textContent = "No matching Kaggle images.";
-          grid.append(empty);
-        }
-      }
-      refine.addEventListener("input", () => {
-        const words = refine.value.toLowerCase().replace(/[^a-z0-9]+/g," ").trim().split(" ").filter(Boolean);
-        filtered = words.length ? candidates.filter(card => {
-          const haystack = [card.filename,card.setSlug,card.name,card.number].join(" ").toLowerCase().replace(/[^a-z0-9]+/g," ");
-          return words.every(word => haystack.includes(word));
-        }) : candidates;
-        renderAll();
-      });
-      kagglePanel.append(heading,note,refineLabel,shownCount,grid);
-      renderAll();
-    } catch (_) {
-      // Existing TCGdex results remain usable if the R2 index is unavailable.
-      if (searchId === requestId) feedback("Kaggle catalog temporarily unavailable; use existing card search.");
-    }
-  }
   function renderNext() {
     const end = matches.length;
     const fragment = document.createDocumentFragment();
@@ -378,13 +293,16 @@
       const card = matches[visible];
       const button = document.createElement("button"); button.type = "button"; button.className = "card";
       button.append(picture(card));
-      const name = document.createElement("strong"); name.textContent = card.name;
       const setId = card.id.slice(0, card.id.lastIndexOf("-"));
+      const name = document.createElement("strong");
+      name.textContent = card.name+" - "+(card.localId||"—")+" - "+(setNames.get(setId)||card.set?.name||"Set details pending");
+      if (!setNames.has(setId)) {
+        name.dataset.cardName=card.name;
+        name.dataset.cardNumber=card.localId||"—";
+        setLabels.set(name,setId);
+      }
       const info = document.createElement("small");
-      info.textContent = setNames.get(setId) || "Set details on selection";
-      if (!setNames.size) setLabels.set(info, setId);
       const number = document.createElement("small");
-      number.textContent = "Card #" + (card.localId || "—");
       const finish = document.createElement("small");
       finish.textContent = "Checking finishes…";
       button.append(name, info, number, finish);
@@ -416,14 +334,6 @@
     const id = ++requestId;
     if (controller) controller.abort();
     const field = mode.value, chosenSet = setFilter.value;
-    const kaggleOnly = chosenSet.startsWith("kaggle:");
-    const matchSection = results.closest('section[aria-label="Matching cards"]');
-    if (matchSection) matchSection.hidden = kaggleOnly;
-    renderKagglePreviews(query, field, id, chosenSet);
-    if (kaggleOnly) {
-      feedback("Browsing the Kaggle image catalog. Exact printing verification is required to create a want.");
-      return;
-    }
     if (query.length < 2 && !chosenSet) { render([]); results.replaceChildren(); feedback("Enter at least 2 characters, or choose a set."); return; }
     const cacheKey = [field, query, chosenSet].join("|");
     if (cache.has(cacheKey)) { const saved = cache.get(cacheKey); render(saved.cards); feedback(saved.datesIncomplete ? "Oldest known printings first; sets with unavailable dates appear last." : "Oldest printing first by set release date."); return; }
