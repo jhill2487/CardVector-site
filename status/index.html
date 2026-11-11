@@ -1,1 +1,164 @@
-<!doctype html><html lang="en"><head><link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?cv=d18b55fb8c9c"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Deployment Status | CardVector</title><style>:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#081524;color:#f0f7fc}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 80% 0,#0d4b553f,transparent 50%),#081524;min-height:100vh}header{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:14px max(20px,calc((100% - 900px)/2));border-bottom:1px solid #34506a}header img{max-width:min(200px,55vw);height:auto}a{color:#89dcf4}main{max-width:720px;margin:55px auto;padding:0 20px}.eyebrow{font-size:.75rem;letter-spacing:.13em;color:#57cde5;font-weight:800}h1{font-size:clamp(1.9rem,5vw,2.8rem)}.panel{background:#12263d;border:1px solid #345b74;border-radius:16px;padding:25px}.badge{display:inline-block;background:#26425a;border-radius:50px;padding:10px 16px;font-weight:800;font-size:1.15rem}.success{background:#164e42;color:#c0ffde}.failure{background:#58282d;color:#ffd4d7}.active{background:#54411d;color:#ffe4a8}.muted{color:#b6cbd7}dl{display:grid;grid-template-columns:auto 1fr;gap:12px}dt{color:#b6cbd7}dd{margin:0;overflow-wrap:anywhere}button{border:0;background:#ff891c;color:#111b28;border-radius:8px;padding:11px 16px;font-weight:750;cursor:pointer}.footer{margin-top:19px;font-size:.88rem;color:#b6cbd7}@media(max-width:480px){dl{grid-template-columns:1fr;gap:3px}dd{margin-bottom:12px}}</style></head><body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=d18b55fb8c9c" alt="CardVector"></a><a href="/dashboard/">Dashboard</a></header><main><p class="eyebrow">CARDVECTOR · SITE OPERATIONS</p><h1>Latest website deployment</h1><div class="panel"><p id="run-status" class="badge" role="status" aria-live="polite">Checking…</p><p id="description" class="muted">Reading GitHub Pages deployment status.</p><dl><dt>Workflow</dt><dd id="workflow">—</dd><dt>Run</dt><dd id="run-number">—</dd><dt>Started</dt><dd id="started">—</dd><dt>Workflow last update</dt><dd id="updated">—</dd><dt>Status last checked</dt><dd id="checked" aria-live="polite">—</dd></dl><p><a id="run-link" href="https://github.com/jhill2487/CardVector-site/actions" target="_blank" rel="noopener noreferrer">View GitHub Actions →</a></p><button id="refresh" type="button">Refresh status</button><p class="footer">Automatically checks every 30 seconds. GitHub may show a completed run before the live website finishes updating. This page displays the latest workflow run, not live-site verification.</p></div></main><script>(()=>{"use strict";const $=id=>document.getElementById(id);let active=false;function display(value){return value?new Date(value).toLocaleString():"—"}async function check(){if(active)return;active=true;$("refresh").disabled=true;$("refresh").textContent="Checking…";$("checked").textContent="Checking now…";try{const response=await fetch("https://api.github.com/repos/jhill2487/CardVector-site/actions/runs?per_page=30&refresh="+Date.now(),{headers:{"Accept":"application/vnd.github+json"},cache:"no-store"});if(!response.ok)throw Error("GitHub returned HTTP "+response.status);const data=await response.json();const run=data.workflow_runs?.find(r=>/pages build and deployment/i.test(r.name));if(!run)throw Error("No deployment runs available.");const status=run.status==="completed"?(run.conclusion==="success"?"Succeeded":run.conclusion==="failure"?"Failed":run.conclusion==="cancelled"?"Cancelled":"Completed: "+(run.conclusion||"unknown")):run.status==="queued"?"Queued":"Running";const badge=$("run-status");badge.textContent=status;badge.className="badge "+(status==="Succeeded"?"success":status==="Failed"||status==="Cancelled"?"failure":"active");$("description").textContent=status==="Succeeded"?"GitHub Pages reports this deployment completed.":status==="Failed"?"The latest deployment failed. Open GitHub Actions for details.":"This deployment has not finished yet.";$("workflow").textContent=run.name;$("run-number").textContent="#"+run.run_number;$("started").textContent=display(run.created_at);$("updated").textContent=display(run.updated_at);$("run-link").href=run.html_url;}catch(err){$("run-status").textContent="Run status unavailable";$("run-status").className="badge active";$("description").textContent="Cannot read GitHub Actions ("+err.message+"). Checking published release files instead…";try{const release=await fetch("/deployment-manifest.json?ts="+Date.now(),{cache:"no-store"});if(!release.ok)throw Error("Manifest unavailable");const manifest=await release.json();if(!manifest.source_commit)throw Error("No commit recorded");$("run-status").textContent="Published files available";$("run-status").className="badge success";$("description").textContent="Published repository version found. GitHub Actions status is unavailable; this does NOT confirm that the latest Pages run succeeded or that the live domain is current.";$("workflow").textContent="GitHub Actions unavailable";$("run-number").textContent="Commit "+manifest.source_commit.slice(0,12);$("started").textContent="—";$("updated").textContent=display(manifest.generated_at)}catch(_){$("run-status").textContent="Status unavailable";$("run-status").className="badge failure";$("description").textContent="GitHub Actions and the published release manifest could not be read. Open GitHub Actions for details."}}finally{active=false;$("refresh").disabled=false;$("refresh").textContent="Refresh status";$("checked").textContent=new Date().toLocaleString()}}$("refresh").addEventListener("click",check);check();setInterval(()=>{if(!document.hidden)check()},30000)})();</script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?cv=bcaa3872fc3e">
+<title>Development Dashboard | CardVector</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#091320;color:#f2f6fa}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 95% 0%,#b5581922,transparent 35%),#091320}
+header{padding:14px max(20px,calc((100% - 1120px)/2));display:flex;align-items:center;justify-content:space-between;gap:20px;border-bottom:1px solid #334556}
+header img{width:min(200px,55vw);height:auto}a{color:#ffb46c}a:hover{text-decoration:none}
+main{max-width:1120px;margin:28px auto;padding:0 20px 65px}
+h1{font-size:clamp(1.8rem,4.8vw,2.6rem);margin:.2rem 0 10px}
+h2{font-size:1.15rem;margin:0 0 14px}h3{font-size:1rem;margin:0 0 8px}
+p{line-height:1.55}small,.muted{color:#b5c3ce}
+.eyebrow{color:#ff983c;font-size:.77rem;font-weight:750;letter-spacing:.13em}
+.toolbar{display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap;margin:22px 0}
+button{border:0;border-radius:9px;background:#ff902d;color:#15202b;padding:11px 16px;font:inherit;font-weight:750;cursor:pointer}
+button:disabled{opacity:.6;cursor:wait}button:focus-visible,a:focus-visible{outline:3px solid #fbd18d;outline-offset:3px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.panel{background:#132438;border:1px solid #3c4c5e;border-radius:15px;padding:20px;min-width:0}
+.wide{grid-column:1/-1}.head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.status{display:inline-block;padding:6px 12px;border-radius:50px;font-size:.82rem;font-weight:750;background:#31475a}
+.good{background:#174f3c;color:#d2ffe3}.bad{background:#5b2730;color:#ffdadf}.working{background:#574323;color:#ffe4b0}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px 0}
+.metric{border-radius:10px;background:#1c3044;padding:15px;min-width:0}.metric b{font-size:1.6rem;display:block;margin-top:4px}.metric small{font-size:.77rem}
+.progress{background:#354656;border-radius:100px;height:11px;overflow:hidden;margin:9px 0}.bar{height:100%;width:0;background:#ff912c;transition:width .3s}
+dl{display:grid;grid-template-columns:130px minmax(0,1fr);gap:8px 14px;margin:14px 0}
+dt{color:#acbdca}dd{margin:0;overflow-wrap:anywhere}
+.list{margin:0;padding:0;list-style:none}.list li{display:flex;justify-content:space-between;gap:14px;padding:11px 0;border-top:1px solid #324457}
+.list li:first-child{border-top:0}.list .detail{min-width:0;overflow-wrap:anywhere}
+.list small{display:block;margin-top:4px}.note{color:#b7c8d4;font-size:.87rem;margin:12px 0 0}
+#private{display:none}#access{margin-top:32px}
+@media(max-width:750px){.grid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.panel{padding:17px}}
+@media(max-width:440px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:8px}.stats{grid-template-columns:1fr 1fr}.metric b{font-size:1.35rem}}
+</style>
+</head>
+<body>
+<header><a href="/" aria-label="CardVector home"><img src="/assets/cardvector-twin-arrow.svg?cv=bcaa3872fc3e" alt="CardVector"></a><a href="/dashboard/">Collector dashboard</a></header>
+<main>
+<section id="access" class="panel" role="status" aria-live="polite"><h1>Development dashboard</h1><p id="access-text">Checking administrator access…</p><p><a href="/account/">Sign in</a></p></section>
+<div id="private">
+<div class="eyebrow">CARDVECTOR · ADMINISTRATION</div>
+<h1>Development dashboard</h1>
+<p class="muted">Deployment health, importer coverage and development activity in one place. Live data is labeled separately from planned or unreported work.</p>
+<div class="toolbar"><span id="admin-account" class="muted"></span><div><button id="refresh" type="button">Refresh all status</button> <small id="checked" aria-live="polite">Not checked yet</small></div></div>
+<div class="grid">
+<section class="panel"><div class="head"><h2>Source site deployment</h2><span id="source-badge" class="status">Checking</span></div>
+<p id="source-summary" class="muted">Checking GitHub Actions…</p>
+<dl><dt>Workflow</dt><dd id="source-workflow">—</dd><dt>Run</dt><dd id="source-run">—</dd><dt>Last update</dt><dd id="source-updated">—</dd><dt>Source commit</dt><dd id="source-sha">—</dd></dl>
+<a id="source-link" href="https://github.com/jhill2487/CardVector/actions" target="_blank" rel="noopener noreferrer">View source actions</a></section>
+<section class="panel"><div class="head"><h2>Published Pages status</h2><span id="pages-badge" class="status">Checking</span></div>
+<p id="pages-summary" class="muted">Checking GitHub Pages…</p>
+<dl><dt>Workflow</dt><dd id="pages-workflow">—</dd><dt>Run</dt><dd id="pages-run">—</dd><dt>Last update</dt><dd id="pages-updated">—</dd><dt>Live commit</dt><dd id="pages-sha">—</dd></dl>
+<a id="pages-link" href="https://github.com/jhill2487/CardVector-site/actions" target="_blank" rel="noopener noreferrer">View publishing actions</a></section>
+<section class="panel wide">
+<div class="head"><h2>PokéWallet → Kaggle image reconciliation</h2><span id="import-badge" class="status working">Not running / no report</span></div>
+<p id="import-summary" class="muted">The importer code is merged. No executed batch or verified importer checkpoint has been connected to this dashboard.</p>
+<div class="stats"><div class="metric"><small>Sets completed</small><b id="import-sets">—</b></div><div class="metric"><small>Card records imported</small><b id="import-cards">—</b></div><div class="metric"><small>Exact image matches</small><b id="import-matched">—</b></div><div class="metric"><small>Needs review / missing</small><b id="import-review">—</b></div></div>
+<div class="head"><span class="muted">Import completion</span><strong id="import-percent">Not available</strong></div><div class="progress" role="progressbar" aria-label="PokéWallet sets imported" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="import-progress"><div id="import-bar" class="bar"></div></div>
+<p class="note">No invented progress: the figures remain unavailable until an actual importer checkpoint is published by an authenticated backend. The existing importer saves local checkpoint files but does not yet publish them to CardVector. The matching report is likewise not generated until an import runs.</p>
+<p><a href="https://github.com/jhill2487/CardVector/blob/main/Docs/Architecture/Pokewallet_Kaggle_Reconciliation.md" target="_blank" rel="noopener noreferrer">Importer documentation</a> · <a href="https://github.com/jhill2487/CardVector/pull/113" target="_blank" rel="noopener noreferrer">Importer implementation</a></p>
+</section>
+<section class="panel"><h2>Latest development changes</h2><ul id="recent-prs" class="list"><li class="muted">Loading recent pull requests…</li></ul><p class="note"><a href="https://github.com/jhill2487/CardVector/pulls" target="_blank" rel="noopener noreferrer">All pull requests</a></p></section>
+<section class="panel"><h2>Open development issues</h2><p id="issues-summary" class="muted">Checking open issues…</p><ul id="open-issues" class="list"></ul><p class="note"><a href="https://github.com/jhill2487/CardVector/issues/31" target="_blank" rel="noopener noreferrer">Master development roadmap</a> · <a href="https://github.com/jhill2487/CardVector/issues" target="_blank" rel="noopener noreferrer">All issues</a></p></section>
+</div>
+<p class="note">The page is available only after an administrator account check. GitHub repository metadata is public; this page does not expose PokéWallet credentials, private import checkpoint files, or unreviewed card mappings.</p>
+</div>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script>
+(()=>{"use strict";
+const $=id=>document.getElementById(id);
+const owners=new Set(["bdf1d761-e1d3-415c-a32c-7f24c73a2919","91099cf9-8d7a-4578-8503-779c3ba62778"]);
+const API="https://api.github.com/repos/";
+const baseHeaders={"Accept":"application/vnd.github+json"};
+let active=false,ready=false;
+const safeDate=v=>v?new Date(v).toLocaleString():"—";
+function state(prefix,run){
+ const badge=$(prefix+"-badge");
+ const status=run.status==="completed"?(run.conclusion==="success"?"Succeeded":run.conclusion==="failure"?"Failed":run.conclusion==="cancelled"?"Cancelled":"Completed"):run.status==="queued"?"Queued":"Running";
+ badge.textContent=status;badge.className="status "+(status==="Succeeded"?"good":status==="Failed"||status==="Cancelled"?"bad":"working");
+ $(prefix+"-summary").textContent=status==="Succeeded"?"GitHub reports the workflow completed.":status==="Failed"?"Latest workflow failed; inspect the linked run.":"Latest workflow has not finished.";
+ $(prefix+"-workflow").textContent=run.name;
+ $(prefix+"-run").textContent="#"+run.run_number;
+ $(prefix+"-updated").textContent=safeDate(run.updated_at);
+ $(prefix+"-link").href=run.html_url;
+}
+async function gh(path) {
+ const response=await fetch(API+path+(path.includes("?")?"&":"?")+"cv-refresh="+Date.now(),{headers:baseHeaders,cache:"no-store"});
+ if(!response.ok)throw new Error("GitHub API HTTP "+response.status);
+ return response.json();
+}
+async function getDeploy(){
+ const [source,pages,manifest]=await Promise.allSettled([
+  gh("jhill2487/CardVector/actions/runs?per_page=12"),
+  gh("jhill2487/CardVector-site/actions/runs?per_page=20"),
+  fetch("/deployment-manifest.json?cv-refresh="+Date.now(),{cache:"no-store"}).then(r=>r.ok?r.json():Promise.reject(new Error("Manifest unavailable")))
+ ]);
+ if(source.status==="fulfilled"){
+  const run=source.value.workflow_runs?.find(x=>x.name==="Deploy CardVector Site");
+  if(run)state("source",run);
+  else throw new Error("No source deployment workflow found");
+ }else {
+  $("source-badge").textContent="Unavailable";$("source-summary").textContent="GitHub source status unavailable; refresh or open workflow.";
+ }
+ if(pages.status==="fulfilled"){
+  const run=pages.value.workflow_runs?.find(x=>/pages build and deployment/i.test(x.name));
+  if(run)state("pages",run);
+  else{$("pages-badge").textContent="Unavailable";$("pages-summary").textContent="No Pages deployment run found.";}
+ }else{$("pages-badge").textContent="Unavailable";$("pages-summary").textContent="Pages workflow status unavailable; open GitHub Actions.";}
+ if(manifest.status==="fulfilled"&&manifest.value.source_commit){
+  $("pages-sha").textContent=manifest.value.source_commit.slice(0,12);
+  if(manifest.value.generated_at)$("pages-summary").textContent+=" Published manifest: "+safeDate(manifest.value.generated_at)+".";
+ }else $("pages-sha").textContent="Manifest unavailable";
+ $("source-sha").textContent=source.status==="fulfilled"?(source.value.workflow_runs?.find(x=>x.name==="Deploy CardVector Site")?.head_sha||"").slice(0,12)||"—":"—";
+}
+function renderList(id,items,format,emptyMessage){
+ const list=$(id);list.replaceChildren();
+ if(!items?.length){const li=document.createElement("li");li.textContent=emptyMessage;list.append(li);return}
+ for(const item of items){
+  const li=document.createElement("li");
+  const detail=document.createElement("div");detail.className="detail";
+  const a=document.createElement("a");a.href=item.html_url;a.target="_blank";a.rel="noopener noreferrer";a.textContent="#"+item.number+" · "+item.title;
+  const small=document.createElement("small");small.textContent=format(item);
+  detail.append(a,small);li.append(detail);list.append(li);
+ }
+}
+async function getDevelopment(){
+ const results=await Promise.allSettled([
+  gh("jhill2487/CardVector/pulls?state=all&sort=updated&direction=desc&per_page=6"),
+  gh("jhill2487/CardVector/issues?state=open&sort=updated&direction=desc&per_page=25")
+ ]);
+ if(results[0].status==="fulfilled")renderList("recent-prs",results[0].value,p=>(p.merged_at?"Merged":p.state==="closed"?"Closed":"Open")+" · Updated "+safeDate(p.updated_at),"No recent pull requests");
+ else renderList("recent-prs",[],()=>{},"Unable to retrieve pull requests");
+ if(results[1].status==="fulfilled"){
+  const issues=results[1].value.filter(x=>!x.pull_request);
+  $("issues-summary").textContent=issues.length+" recently updated open issues shown (up to 25 per query).";
+  renderList("open-issues",issues.slice(0,5),x=>"Updated "+safeDate(x.updated_at),"No open issues found");
+ }else{$("issues-summary").textContent="Unable to retrieve issue status";renderList("open-issues",[],()=>{},"Check GitHub issues directly");}
+}
+async function check(){
+ if(!ready||active)return;
+ active=true;$("refresh").disabled=true;$("refresh").textContent="Refreshing…";
+ try{await Promise.allSettled([getDeploy(),getDevelopment()]);}
+ finally{active=false;$("refresh").disabled=false;$("refresh").textContent="Refresh all status";$("checked").textContent="Checked "+new Date().toLocaleTimeString();}
+}
+async function init(){
+ try{
+  if(!window.supabase?.createClient)throw new Error("Account service unavailable");
+  const client=window.supabase.createClient("https://iqdpfgpkagjxzedfxrvn.supabase.co","sb_publishable_76aiLaAm5Z4Kv67GkuTo-g_Psx5HINH");
+  const {data:{user},error}=await client.auth.getUser();
+  if(error||!user){$("access-text").textContent="Sign in with your administrator account to view development status.";return}
+  if(!owners.has(user.id)){$("access-text").textContent="Access restricted to CardVector administrators.";return}
+  $("access").hidden=true;$("private").style.display="block";$("admin-account").textContent="Signed in: "+(user.email||"Administrator");ready=true;
+  $("refresh").addEventListener("click",check);
+  await check();setInterval(()=>{if(!document.hidden)check()},60000);
+ }catch(e){$("access-text").textContent="Cannot verify administrator access. Try again after signing in.";}
+}
+init();
+})();
+</script>
+</body></html>
