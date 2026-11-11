@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?cv=c230ce0d8d2b">
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?cv=4347cf3cbc52">
 <title>Development Dashboard | CardVector</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#091320;color:#f2f6fa}
@@ -37,7 +37,7 @@ dt{color:#acbdca}dd{margin:0;overflow-wrap:anywhere}
 </style>
 </head>
 <body>
-<header><a href="/" aria-label="CardVector home"><img src="/assets/cardvector-twin-arrow.svg?cv=c230ce0d8d2b" alt="CardVector"></a><a href="/dashboard/">Collector dashboard</a></header>
+<header><a href="/" aria-label="CardVector home"><img src="/assets/cardvector-twin-arrow.svg?cv=4347cf3cbc52" alt="CardVector"></a><a href="/dashboard/">Collector dashboard</a></header>
 <main>
 <section id="access" class="panel" aria-labelledby="access-heading"><h1 id="access-heading">Development dashboard</h1><p id="access-text" role="status" aria-live="polite">Checking administrator access…</p><form id="admin-login" hidden><label for="admin-email">Administrator email</label><input id="admin-email" type="email" value="jhill2487@gmail.com" autocomplete="username" required><label for="admin-password">Password</label><input id="admin-password" type="password" autocomplete="current-password" required><button id="admin-submit" type="submit">Sign in to development dashboard</button></form><p><a href="/account/">Collector account</a></p></section>
 <div id="private">
@@ -56,10 +56,10 @@ dt{color:#acbdca}dd{margin:0;overflow-wrap:anywhere}
 <a id="pages-link" href="https://github.com/jhill2487/CardVector-site/actions" target="_blank" rel="noopener noreferrer">View publishing actions</a></section>
 <section class="panel wide">
 <div class="head"><h2>PokéWallet → Kaggle image reconciliation</h2><span id="import-badge" class="status working">Not running / no report</span></div>
-<p id="import-summary" class="muted">The importer code is merged. No executed batch or verified importer checkpoint has been connected to this dashboard.</p>
+<p id="import-summary" class="muted">Checking secure importer progress…</p>
 <div class="stats"><div class="metric"><small>Sets completed</small><b id="import-sets">—</b></div><div class="metric"><small>Card records imported</small><b id="import-cards">—</b></div><div class="metric"><small>Exact image matches</small><b id="import-matched">—</b></div><div class="metric"><small>Needs review / missing</small><b id="import-review">—</b></div></div>
 <div class="head"><span class="muted">Import completion</span><strong id="import-percent">Not available</strong></div><div class="progress" role="progressbar" aria-label="PokéWallet sets imported" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="import-progress"><div id="import-bar" class="bar"></div></div>
-<p class="note">No invented progress: the figures remain unavailable until an actual importer checkpoint is published by an authenticated backend. The existing importer saves local checkpoint files but does not yet publish them to CardVector. The matching report is likewise not generated until an import runs.</p>
+<p class="note">Counts are read from a private Supabase checkpoint, available only to the approved administrator. Import progress remains unreported until an importer batch actually publishes it; image match counts appear after reconciliation runs.</p>
 <p><a href="https://github.com/jhill2487/CardVector/blob/main/Docs/Architecture/Pokewallet_Kaggle_Reconciliation.md" target="_blank" rel="noopener noreferrer">Importer documentation</a> · <a href="https://github.com/jhill2487/CardVector/pull/113" target="_blank" rel="noopener noreferrer">Importer implementation</a></p>
 </section>
 <section class="panel"><h2>Latest development changes</h2><ul id="recent-prs" class="list"><li class="muted">Loading recent pull requests…</li></ul><p class="note"><a href="https://github.com/jhill2487/CardVector/pulls" target="_blank" rel="noopener noreferrer">All pull requests</a></p></section>
@@ -140,10 +140,37 @@ async function getDevelopment(){
   renderList("open-issues",issues.slice(0,5),x=>"Updated "+safeDate(x.updated_at),"No open issues found");
  }else{$("issues-summary").textContent="Unable to retrieve issue status";renderList("open-issues",[],()=>{},"Check GitHub issues directly");}
 }
+async function getImportProgress(){
+ try{
+  const {data,error}=await client.from("cv_admin_job_progress")
+   .select("status,sets_total,sets_complete,cards_imported,images_matched,images_review,images_missing,updated_at")
+   .eq("job_key","pokewallet-kaggle").maybeSingle();
+  if(error)throw error;
+  if(!data){
+   $("import-badge").textContent="Not started";
+   $("import-summary").textContent="Progress storage is connected. No importer checkpoint has been published yet.";
+   return;
+  }
+  const total=Number(data.sets_total)||0,done=Number(data.sets_complete)||0;
+  const percent=total?Math.min(100,Math.round(done/total*100)):0;
+  $("import-sets").textContent=done.toLocaleString()+(total?" / "+total.toLocaleString():"");
+  $("import-cards").textContent=Number(data.cards_imported).toLocaleString();
+  $("import-matched").textContent=data.images_matched==null?"Not reconciled":Number(data.images_matched).toLocaleString();
+  $("import-review").textContent=data.images_review==null||data.images_missing==null?"Not reconciled":Number(data.images_review).toLocaleString()+" / "+Number(data.images_missing).toLocaleString();
+  $("import-percent").textContent=total?percent+"%":"Awaiting set directory";
+  $("import-bar").style.width=percent+"%";
+  $("import-progress").setAttribute("aria-valuenow",String(percent));
+  $("import-badge").textContent=data.status.replace(/_/g," ");
+  $("import-summary").textContent="Last reported: "+safeDate(data.updated_at)+". Import data is recorded by the authenticated backend, not estimated from GitHub workflows.";
+ }catch(error){
+  $("import-badge").textContent="Progress unavailable";
+  $("import-summary").textContent="Could not read secure progress data. Check administrator session or Supabase connection.";
+ }
+}
 async function check(){
  if(!ready||active)return;
  active=true;$("refresh").disabled=true;$("refresh").textContent="Refreshing…";
- try{await Promise.allSettled([getDeploy(),getDevelopment()]);}
+ try{await Promise.allSettled([getDeploy(),getDevelopment(),getImportProgress()]);}
  finally{active=false;$("refresh").disabled=false;$("refresh").textContent="Refresh all status";$("checked").textContent="Checked "+new Date().toLocaleTimeString();}
 }
 async function verifyAdministrator(){
