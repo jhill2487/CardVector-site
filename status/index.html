@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?cv=bcaa3872fc3e">
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?cv=4421d4152792">
 <title>Development Dashboard | CardVector</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#091320;color:#f2f6fa}
@@ -37,9 +37,9 @@ dt{color:#acbdca}dd{margin:0;overflow-wrap:anywhere}
 </style>
 </head>
 <body>
-<header><a href="/" aria-label="CardVector home"><img src="/assets/cardvector-twin-arrow.svg?cv=bcaa3872fc3e" alt="CardVector"></a><a href="/dashboard/">Collector dashboard</a></header>
+<header><a href="/" aria-label="CardVector home"><img src="/assets/cardvector-twin-arrow.svg?cv=4421d4152792" alt="CardVector"></a><a href="/dashboard/">Collector dashboard</a></header>
 <main>
-<section id="access" class="panel" role="status" aria-live="polite"><h1>Development dashboard</h1><p id="access-text">Checking administrator access…</p><p><a href="/account/">Sign in</a></p></section>
+<section id="access" class="panel" role="status" aria-live="polite"><h1>Development dashboard</h1><p id="access-text">Checking administrator access…</p><p><a href="/account/?next=status">Sign in</a></p></section>
 <div id="private">
 <div class="eyebrow">CARDVECTOR · ADMINISTRATION</div>
 <h1>Development dashboard</h1>
@@ -72,7 +72,7 @@ dt{color:#acbdca}dd{margin:0;overflow-wrap:anywhere}
 <script>
 (()=>{"use strict";
 const $=id=>document.getElementById(id);
-const owners=new Set(["bdf1d761-e1d3-415c-a32c-7f24c73a2919","91099cf9-8d7a-4578-8503-779c3ba62778"]);
+const adminEmail="jhill2487@gmail.com";
 const API="https://api.github.com/repos/";
 const baseHeaders={"Accept":"application/vnd.github+json"};
 let active=false,ready=false;
@@ -152,7 +152,7 @@ async function init(){
   const client=window.supabase.createClient("https://iqdpfgpkagjxzedfxrvn.supabase.co","sb_publishable_76aiLaAm5Z4Kv67GkuTo-g_Psx5HINH");
   const {data:{user},error}=await client.auth.getUser();
   if(error||!user){$("access-text").textContent="Sign in with your administrator account to view development status.";return}
-  if(!owners.has(user.id)){$("access-text").textContent="Access restricted to CardVector administrators.";return}
+  if(String(user.email||"").trim().toLowerCase()!==adminEmail || !user.email_confirmed_at){$("access-text").textContent="Access restricted to CardVector administrators.";return}
   $("access").hidden=true;$("private").style.display="block";$("admin-account").textContent="Signed in: "+(user.email||"Administrator");ready=true;
   $("refresh").addEventListener("click",check);
   await check();setInterval(()=>{if(!document.hidden)check()},60000);

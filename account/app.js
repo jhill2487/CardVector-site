@@ -28,7 +28,8 @@
   }
   async function loadAccount(user) {
     const next = new URLSearchParams(location.search).get("next");
-    location.replace(next === "settings" ? "/settings/" : "/dashboard/");
+    const destinations = {settings:"/settings/",status:"/status/",dashboard:"/dashboard/"};
+    location.replace(destinations[next] || "/dashboard/");
   }
   async function loadWantedRequests(userId) {
     const target = $("wanted-list");
