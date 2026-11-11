@@ -11,11 +11,11 @@
   const setLabels = new Map();
   const pocketSetIds = new Set();
   const pocketCatalog = fetch("https://api.tcgdex.net/v2/en/series/tcgp").then(async response => {
-    if (!response.ok) throw new Error("Pocket series unavailable");
+    if (!response.ok) return;
     const series = await response.json();
-    if (!Array.isArray(series.sets)) throw new Error("Pocket series unavailable");
+    if (!Array.isArray(series.sets)) return;
     for (const set of series.sets) if (set.id) pocketSetIds.add(String(set.id).toLowerCase());
-  });
+  }).catch(() => { /* Pocket exclusion must never prevent physical card searches. */ });
   function isPhysicalCard(card) {
     const id = String(card?.id || ""), setId = id.slice(0,id.lastIndexOf("-")).toLowerCase();
     return !pocketSetIds.has(setId) && !String(card?.image || "").toLowerCase().includes("/tcgp/");
@@ -362,8 +362,21 @@
       const response = await fetch(endpoint, { signal: searchController.signal });
       if (!response.ok) throw new Error("TCGdex returned " + response.status);
       const data = await response.json();
-      const cards = browseSet ? data.cards : data;
+      let cards = browseSet ? data.cards : data;
       if (!Array.isArray(cards)) throw new Error("Unexpected search response");
+      // If upstream filtering yields zero cards, verify against its complete
+      // catalog before telling the collector that no printing exists.
+      if (!browseSet && !cards.length && field === "name" && query.length >= 2) {
+        const allResponse = await fetch(API, {signal: searchController.signal});
+        if (allResponse.ok) {
+          const all = await allResponse.json();
+          if (Array.isArray(all)) {
+            const needle = query.toLowerCase().trim();
+            cards = all.filter(c => String(c.name || "").toLowerCase().includes(needle) &&
+              (!chosenSet || String(c.id || "").toLowerCase().startsWith(chosenSet.toLowerCase() + "-")));
+          }
+        }
+      }
       if (id !== requestId) return;
       const validCards = cards.filter(c => c && typeof c.id === "string" && typeof c.name === "string" && isPhysicalCard(c));
       let datesIncomplete = false;
