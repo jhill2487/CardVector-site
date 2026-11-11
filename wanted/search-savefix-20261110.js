@@ -322,7 +322,7 @@
           img.src = card.url; img.loading = "lazy";
           img.alt = (card.name || "Card") + " image preview";
           const title = document.createElement("strong");
-          title.textContent = card.name || "Name awaiting verification";
+          title.textContent = card.name || ("Filename: " + card.filename.replace(/\.[^.]+$/, "").replace(/[+_-]+/g, " "));
           const set = document.createElement("small");
           set.textContent = card.setSlug.replace(/-/g," ");
           const number = document.createElement("small");

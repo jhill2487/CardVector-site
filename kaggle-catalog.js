@@ -42,7 +42,9 @@
       path: "archive/" + raw,
       url: IMAGE_ROOT + segments.map(encodeURIComponent).join("/"),
       setSlug: folder, number, name,
-      searchable: normalize([name, folder, number].join(" ")),
+      // Search all filename formats without asserting an unverified card identity.
+      filename: file,
+      searchable: normalize(stem),
       nameVerified: false, finishVerified: false
     };
   }
@@ -70,8 +72,9 @@
       if (setSlug && card.setSlug !== setSlug) return false;
       if (!needle) return Boolean(setSlug);
       if (mode === "set" && !setSlug) return normalize(card.setSlug).includes(needle);
-      // Do not invent card names for filenames containing numeric IDs only.
-      return Boolean(card.name && normalize(card.name).includes(needle));
+      // A filename is searchable evidence even if its naming convention is unknown.
+      // Matching never turns its inferred name or finish into a verified identity.
+      return card.searchable.includes(needle);
     });
     return found.sort((a,b) => a.setSlug.localeCompare(b.setSlug) ||
       a.number.localeCompare(b.number,undefined,{numeric:true}) || a.path.localeCompare(b.path)).slice(0,limit);
