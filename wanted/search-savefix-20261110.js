@@ -552,7 +552,7 @@
     input.placeholder = selected === "illustrator" ? "Try Mitsuhiro Arita" : selected === "set" ? "Try Evolving Skies" : "Try Umbreon VMAX or Charizard";
     const matchSection = results.closest('section[aria-label="Matching cards"]');
     if (matchSection) matchSection.hidden = false;
-    input.value = ""; results.replaceChildren(); $("result-count").textContent = ""; $("more-results").hidden = true; if (kagglePanel) { kagglePanel.hidden = true; kagglePanel.replaceChildren(); }
+    input.value = ""; results.replaceChildren(); $("result-count").textContent = ""; $("more-results").hidden = true;
     feedback(selected === "set" ? "Choose a set or enter its name." : "Enter at least 2 characters to search.");
   }
   mode.addEventListener("change", updateSearchMode);
@@ -562,7 +562,7 @@
     $("clear-search").hidden = !query;
     clearTimeout(debounce);
     if (controller) controller.abort();
-    if (kagglePanel) { kagglePanel.hidden = true; kagglePanel.replaceChildren(); }
+   
     if (query.length < 2 && !setFilter.value) { ++requestId; results.replaceChildren(); $("result-count").textContent = ""; $("more-results").hidden = true; feedback("Enter at least 2 characters, or select a set."); return; }
     if (cache.has([mode.value,query.toLocaleLowerCase(),setFilter.value].join("|"))) { search(query.toLocaleLowerCase()); return; }
     feedback("Searching…");
