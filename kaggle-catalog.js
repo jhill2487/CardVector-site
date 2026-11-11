@@ -56,15 +56,25 @@
     }).catch(error => { pending = null; throw error; });
     return pending;
   }
-  async function search(query, mode = "name", limit = 36) {
+  // Browse every Kaggle folder, including cards whose image filenames lack names.
+  async function listSets() {
+    const cards = await load();
+    return [...new Set(cards.map(card => card.setSlug))].filter(Boolean)
+      .sort((a,b) => a.localeCompare(b));
+  }
+  async function search(query, mode = "name", limit = 36, setSlug = "") {
     const cards = await load();
     const needle = normalize(query);
-    if (needle.length < 2) return [];
-    return cards.filter(card => mode === "set"
-      ? normalize(card.setSlug).includes(needle)
-      : mode === "name" && card.name && normalize(card.name).includes(needle))
-      .sort((a,b) => a.setSlug.localeCompare(b.setSlug) || a.number.localeCompare(b.number,undefined,{numeric:true}))
-      .slice(0,limit);
+    if (!setSlug && needle.length < 2) return [];
+    const found = cards.filter(card => {
+      if (setSlug && card.setSlug !== setSlug) return false;
+      if (!needle) return Boolean(setSlug);
+      if (mode === "set" && !setSlug) return normalize(card.setSlug).includes(needle);
+      // Do not invent card names for filenames containing numeric IDs only.
+      return Boolean(card.name && normalize(card.name).includes(needle));
+    });
+    return found.sort((a,b) => a.setSlug.localeCompare(b.setSlug) ||
+      a.number.localeCompare(b.number,undefined,{numeric:true}) || a.path.localeCompare(b.path)).slice(0,limit);
   }
-  window.CardVectorKaggleCatalog = Object.freeze({load,search,parseCSV,fromRow});
+  window.CardVectorKaggleCatalog = Object.freeze({load,listSets,search,parseCSV,fromRow});
 })();
