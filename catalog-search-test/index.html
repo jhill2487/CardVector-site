@@ -1,19 +1,19 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=6fe5e8d68a10" type="image/svg+xml">
+<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=a8cb24419b49" type="image/svg+xml">
 <title>PokéWallet Catalog Search Test | CardVector</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#091320;color:#edf4fc}
 *{box-sizing:border-box}body{margin:0;background:#091320}header{border-bottom:1px solid #314356;padding:16px max(18px,calc((100% - 1050px)/2));display:flex;align-items:center;justify-content:space-between;gap:12px}header img{width:160px;max-width:45vw}a{color:#ffb86c}
 main{max-width:1050px;margin:24px auto;padding:0 18px 90px}h1{font-size:1.8rem}small,.muted{color:#b8c9d7}.panel{background:#14253a;border:1px solid #395065;border-radius:12px;padding:18px;margin:16px 0}
 form.search{display:flex;gap:10px;flex-wrap:wrap;align-items:end}label{display:block;font-size:.87rem;margin-bottom:5px;color:#c0ceda}input{background:#1d344e;border:1px solid #5c7183;border-radius:8px;padding:11px;color:#fff;font:inherit;max-width:100%}
-.search input{flex:1;min-width:170px}button{background:#f18b2b;color:#101820;border:0;border-radius:8px;font:inherit;font-weight:700;padding:11px 17px;cursor:pointer}button:disabled{opacity:.45;cursor:default}button.alt{background:#2b4965;color:#fff}
+.search input{flex:1;min-width:170px}button{background:#f18b2b;color:#101820;border:0;border-radius:8px;font:inherit;font-weight:700;padding:11px 17px;cursor:pointer}button:disabled{opacity:.45;cursor:default}button.alt{background:#2b4965;color:#fff}.card button{margin-top:10px;padding:8px 12px;font-size:.84rem}.card .catalog-image{display:block;margin:10px auto 6px;width:125px;max-width:100%;height:auto;border-radius:6px}
 .preview-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px}.preview-card{background:#14263b;border:1px solid #395065;border-radius:10px;padding:14px;text-align:center}.preview-card img{display:block;width:150px;max-width:100%;height:auto;aspect-ratio:255/361;object-fit:contain;margin:10px auto;background:#24374c;border-radius:6px}.preview-card .muted{font-size:.82rem}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}.card{background:#14263b;border:1px solid #395065;border-radius:10px;padding:15px;min-width:0}.card strong{display:block;font-size:1.08rem;overflow-wrap:anywhere}.card details{margin-top:8px;max-width:100%}.card summary{cursor:pointer;color:#b9cadd;font-size:.8rem}.card code{display:block;margin-top:6px;white-space:normal;overflow-wrap:anywhere;word-break:break-all;font-size:.7rem;color:#b9cadd}.meta{font-size:.85rem;color:#b9cadd;margin:7px 0}.finishes{margin-top:10px;font-size:.88rem}.tag{display:inline-block;background:#30516c;color:#fff;border-radius:20px;padding:5px 8px;margin:4px 4px 0 0;font-size:.78rem}.pager{display:flex;align-items:center;gap:12px;justify-content:flex-end;margin-top:18px}#private{display:none}#login[hidden]{display:none}#msg{min-height:1.5em}
 @media(max-width:540px){.grid{grid-template-columns:1fr}.search button{width:100%}}
 </style></head><body>
-<header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=6fe5e8d68a10" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
+<header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=a8cb24419b49" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
 <main><small>CARDVECTOR · PRIVATE TEST</small><h1>Unified catalog search test</h1>
-<p class="muted">Search the imported English PokéWallet card records in Supabase. Only the three image previews below call the protected PokéWallet image endpoint; no image matching. This does not create wanted requests or affect the public marketplace.</p>
+<p class="muted">Search the imported English PokéWallet card records in Supabase. Images can be previewed on demand for any imported English card. The three reference images load automatically; other cards use a preview button. No image matching. This does not create wanted requests or affect the public marketplace.</p>
 <section id="access" class="panel"><h2>Administrator sign-in</h2><p id="access-message">Checking session…</p>
 <form id="login" hidden><label for="email">Email</label><input type="email" id="email" required autocomplete="username">
 <label for="password">Password</label><input type="password" id="password" required autocomplete="current-password"><button type="submit">Sign in</button></form></section>
@@ -32,7 +32,10 @@ const key='sb_publishable_76aiLaAm5Z4Kv67GkuTo-g_Psx5HINH';
 const admin='jhill2487@gmail.com';
 const PAGE=24;let db,offset=0,lastTerm='',lastSet='',request=0;
 const node=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n;};
+let resultObjectUrls=[];
 function draw(rows,count){
+ for(const url of resultObjectUrls)URL.revokeObjectURL(url);
+ resultObjectUrls=[];
  const root=$('results');root.replaceChildren();
  for(const r of rows){
   const card=node('article','card');
@@ -41,7 +44,26 @@ function draw(rows,count){
   const finishes=node('div','finishes');finishes.append(node('div','muted','Available finishes:'));
   if(Array.isArray(r.variants)&&r.variants.length){for(const finish of r.variants)finishes.append(node('span','tag',String(finish)));}
   else finishes.append(node('span','muted','Not supplied by provider'));
-  card.append(finishes);root.append(card);
+  card.append(finishes);
+  const previewButton=node('button','alt','Preview image');
+  previewButton.type='button';
+  const status=node('div','muted','');status.setAttribute('role','status');
+  previewButton.addEventListener('click',async()=>{
+   previewButton.disabled=true;status.textContent='Loading image…';
+   try{
+    const blob=await fetchProviderImage(r.provider_id);
+    if(!card.isConnected)return;
+    const url=URL.createObjectURL(blob);resultObjectUrls.push(url);
+    const image=node('img','catalog-image');image.src=url;
+    image.alt=r.card_name+' '+r.card_number+' image';image.loading='lazy';
+    image.onerror=()=>{status.textContent='Image could not be displayed';};
+    previewButton.replaceWith(image);
+    status.textContent='Image received · '+(blob.size/1024).toFixed(1)+' KB';
+   }catch(error){
+    if(card.isConnected){status.textContent='Image unavailable: '+(error?.message||'Request failed');previewButton.disabled=false;}
+   }
+  });
+  card.append(previewButton,status);root.append(card);
  }
  if(!rows.length)root.append(node('p','muted','No matching English cards currently imported.'));
  $('summary').textContent=count+' imported English results found. Only the current imported catalog is searchable; results are not yet complete.';
@@ -65,10 +87,27 @@ async function search(){
  draw(data||[],count||0);
 }
 const previewCards=[
- {key:'heracross',name:'Heracross',number:'001/103'},
- {key:'steelix',name:'Steelix',number:'052/103'},
- {key:'rayquaza',name:'Mega Rayquaza ex',number:'141/103'}
+ {providerId:'pk_82d00c11b3458867cbc585fe20a5f75de34edf3271244713db31ced8ec8f9d3bd94baf2b65bca37b87615a45f58a',name:'Heracross',number:'001/103'},
+ {providerId:'pk_90de54fb9cf724d43772b6c2b2c68c5452019ab32015f4fab4c6a264a470fdc563b0263e89680d7bbe0a4141224efa',name:'Steelix',number:'052/103'},
+ {providerId:'pk_520c7aa5698ed70f1c6b4186f59eaf94e9c2c5c4a54cd80c3e9898493579428bca79862a44270246fcaa957350d6e44b',name:'Mega Rayquaza ex',number:'141/103'}
 ];
+async function fetchProviderImage(providerId){
+ const {data:{session},error:sessionError}=await db.auth.getSession();
+ if(sessionError||!session?.access_token)throw Error('Administrator session unavailable');
+ const response=await fetch(endpoint+'/functions/v1/cardvector-pokewallet-image-test',{
+  method:'POST',
+  headers:{'Authorization':'Bearer '+session.access_token,'apikey':key,'Content-Type':'application/json'},
+  body:JSON.stringify({providerId}),cache:'no-store'
+ });
+ if(!response.ok){
+  const detail=await response.json().catch(()=>null);
+  throw Error(detail?.error||'Image request failed (HTTP '+response.status+')');
+ }
+ if(!response.headers.get('content-type')?.startsWith('image/png'))throw Error('Unexpected image content type');
+ const blob=await response.blob();
+ if(!blob.size)throw Error('Empty image response');
+ return blob;
+}
 let previewObjectUrls=[];
 async function loadImagePreviews(){
  for(const url of previewObjectUrls)URL.revokeObjectURL(url);
@@ -83,23 +122,7 @@ async function loadImagePreviews(){
  });
  const results=await Promise.all(entries.map(async ({card,panel,status})=>{
   try{
-   // Supabase Functions invoke() handles JSON and octet-stream automatically,
-   // but may parse image/png as text. Read the binary response as a Blob.
-   const {data:{session},error:sessionError}=await db.auth.getSession();
-   if(sessionError||!session?.access_token)throw Error('Administrator session unavailable');
-   const response=await fetch(endpoint+'/functions/v1/cardvector-pokewallet-image-test',{
-    method:'POST',
-    headers:{'Authorization':'Bearer '+session.access_token,'apikey':key,'Content-Type':'application/json'},
-    body:JSON.stringify({card:card.key}),
-    cache:'no-store'
-   });
-   if(!response.ok){
-    const detail=await response.json().catch(()=>null);
-    throw Error(detail?.error||'Image request failed (HTTP '+response.status+')');
-   }
-   if(!response.headers.get('content-type')?.startsWith('image/png'))throw Error('Unexpected image content type');
-   const data=await response.blob();
-   if(!data.size)throw Error('Empty image response');
+   const data=await fetchProviderImage(card.providerId);
    const url=URL.createObjectURL(data);previewObjectUrls.push(url);
    const image=node('img');image.src=url;image.alt=card.name+' '+card.number+' card artwork';image.loading='eager';
    image.onerror=()=>{status.textContent='Unable to display image';};
