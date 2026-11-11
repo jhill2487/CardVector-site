@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=785e2df7453b" type="image/svg+xml">
+<title>PokéWallet Catalog Search Test | CardVector</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#091320;color:#edf4fc}
+*{box-sizing:border-box}body{margin:0;background:#091320}header{border-bottom:1px solid #314356;padding:16px max(18px,calc((100% - 1050px)/2));display:flex;align-items:center;justify-content:space-between;gap:12px}header img{width:160px;max-width:45vw}a{color:#ffb86c}
+main{max-width:1050px;margin:24px auto;padding:0 18px 90px}h1{font-size:1.8rem}small,.muted{color:#b8c9d7}.panel{background:#14253a;border:1px solid #395065;border-radius:12px;padding:18px;margin:16px 0}
+form.search{display:flex;gap:10px;flex-wrap:wrap;align-items:end}label{display:block;font-size:.87rem;margin-bottom:5px;color:#c0ceda}input{background:#1d344e;border:1px solid #5c7183;border-radius:8px;padding:11px;color:#fff;font:inherit;max-width:100%}
+.search input{flex:1;min-width:170px}button{background:#f18b2b;color:#101820;border:0;border-radius:8px;font:inherit;font-weight:700;padding:11px 17px;cursor:pointer}button:disabled{opacity:.45;cursor:default}button.alt{background:#2b4965;color:#fff}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}.card{background:#14263b;border:1px solid #395065;border-radius:10px;padding:15px;min-width:0}.card strong{display:block;font-size:1.08rem;overflow-wrap:anywhere}.meta{font-size:.85rem;color:#b9cadd;margin:7px 0}.finishes{margin-top:10px;font-size:.88rem}.tag{display:inline-block;background:#30516c;color:#fff;border-radius:20px;padding:5px 8px;margin:4px 4px 0 0;font-size:.78rem}.pager{display:flex;align-items:center;gap:12px;justify-content:flex-end;margin-top:18px}#private{display:none}#login[hidden]{display:none}#msg{min-height:1.5em}
+@media(max-width:540px){.grid{grid-template-columns:1fr}.search button{width:100%}}
+</style></head><body>
+<header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=785e2df7453b" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
+<main><small>CARDVECTOR · PRIVATE TEST</small><h1>Unified catalog search test</h1>
+<p class="muted">Search the imported English PokéWallet card records directly in Supabase. No external API requests or image matching. This does not create wanted requests or affect the public marketplace.</p>
+<section id="access" class="panel"><h2>Administrator sign-in</h2><p id="access-message">Checking session…</p>
+<form id="login" hidden><label for="email">Email</label><input type="email" id="email" required autocomplete="username">
+<label for="password">Password</label><input type="password" id="password" required autocomplete="current-password"><button type="submit">Sign in</button></form></section>
+<div id="private"><section class="panel"><form id="search" class="search"><div style="flex:2;min-width:190px"><label for="term">Card name</label><input id="term" type="search" placeholder="Pikachu, Heracross…" value="Pikachu" maxlength="80" style="width:100%"></div>
+<div style="flex:1;min-width:170px"><label for="set">Set (optional)</label><input id="set" placeholder="Delta Reign" maxlength="80" style="width:100%"></div>
+<button type="submit">Search</button></form><p class="muted" id="summary" role="status">Enter a card name to search.</p></section>
+<div id="results" class="grid"></div><div class="pager"><button id="prev" class="alt" disabled>Previous</button><span id="page">Page 1</span><button id="next" class="alt" disabled>Next</button></div></div>
+<p id="msg" role="status"></p>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(()=>{'use strict';
+const $=id=>document.getElementById(id);
+const endpoint='https://iqdpfgpkagjxzedfxrvn.supabase.co';
+const key='sb_publishable_76aiLaAm5Z4Kv67GkuTo-g_Psx5HINH';
+const admin='jhill2487@gmail.com';
+const PAGE=24;let db,offset=0,lastTerm='',lastSet='',request=0;
+const node=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n;};
+function draw(rows,count){
+ const root=$('results');root.replaceChildren();
+ for(const r of rows){
+  const card=node('article','card');
+  card.append(node('strong','',r.card_name),node('div','meta',r.set_name+' · '+r.card_number));
+  card.append(node('div','meta','PokéWallet ID: '+r.provider_id));
+  const finishes=node('div','finishes');finishes.append(node('div','muted','Available finishes:'));
+  if(Array.isArray(r.variants)&&r.variants.length){for(const finish of r.variants)finishes.append(node('span','tag',String(finish)));}
+  else finishes.append(node('span','muted','Not supplied by provider'));
+  card.append(finishes);root.append(card);
+ }
+ if(!rows.length)root.append(node('p','muted','No matching English cards currently imported.'));
+ $('summary').textContent=count+' imported English results found. Only the current imported catalog is searchable; results are not yet complete.';
+ $('page').textContent='Page '+(Math.floor(offset/PAGE)+1);
+ $('prev').disabled=offset===0;$('next').disabled=offset+PAGE>=count;
+}
+async function search(){
+ const current=++request;$('summary').textContent='Searching local Supabase catalog…';
+ const term=lastTerm.trim(),set=lastSet.trim();
+ let query=db.from('cv_admin_pokewallet_english_search')
+   .select('provider_id,set_name,card_name,card_number,variants',{count:'exact'})
+   .order('set_name',{ascending:true}).order('card_number',{ascending:true})
+   .range(offset,offset+PAGE-1);
+ // Escape ILIKE wildcards so user-entered names are treated literally.
+ const literal=s=>s.replace(/[\\%_]/g,'\\$&');
+ if(term)query=query.ilike('card_name','%'+literal(term)+'%');
+ if(set)query=query.ilike('set_name','%'+literal(set)+'%');
+ const {data,count,error}=await query;
+ if(current!==request)return;
+ if(error){$('summary').textContent='Search failed: '+error.message;return;}
+ draw(data||[],count||0);
+}
+async function authorized(){
+ const {data,error}=await db.auth.getUser();const user=data?.user;
+ if(error||!user||String(user.email||'').toLowerCase()!==admin||!user.email_confirmed_at){
+  $('access-message').textContent='Sign in with the verified administrator account to test local catalog search.';
+  $('login').hidden=false;return;
+ }
+ $('access').hidden=true;$('private').style.display='block';await search();
+}
+async function init(){
+ if(!window.supabase?.createClient){$('access-message').textContent='Authentication library unavailable.';return;}
+ db=window.supabase.createClient(endpoint,key);
+ $('login').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const {error}=await db.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});
+  if(error){$('access-message').textContent=error.message;return;}
+  $('password').value='';await authorized();
+ });
+ $('search').addEventListener('submit',e=>{
+  e.preventDefault();lastTerm=$('term').value;lastSet=$('set').value;offset=0;search();
+ });
+ $('prev').addEventListener('click',()=>{if(offset>=PAGE){offset-=PAGE;search();}});
+ $('next').addEventListener('click',()=>{if(!$('next').disabled){offset+=PAGE;search();}});
+ lastTerm=$('term').value;await authorized();
+}
+init();
+})();
+</script></body></html>
