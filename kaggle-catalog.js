@@ -36,7 +36,21 @@
     if (old) { number = old[1]; name = old[2].replace(/[_-]+/g," "); }
     else {
       const modern = stem.match(/^[a-z0-9-]+_en_([a-z0-9]+)_(?:std|rev|holo)$/i);
-      if (modern) number = modern[1]; // No name inferred from a modern numeric-only filename.
+      if (modern) number = modern[1];
+      else {
+        // Older image names repeat their containing set folder and end in a
+        // collector number, e.g. pikachu-base-set-bs-58.jpg.
+        const marker = "-" + folder + "-";
+        const at = folder ? stem.lastIndexOf(marker) : -1;
+        if (at > 0) {
+          const suffix = stem.slice(at + marker.length);
+          const parsed = suffix.match(/^(?:[a-z0-9]+-)?([a-z]*\d+)$/i);
+          if (parsed) {
+            name = stem.slice(0,at).replace(/[_-]+/g," ");
+            number = parsed[1];
+          }
+        }
+      }
     }
     return {
       path: "archive/" + raw,
