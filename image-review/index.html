@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=165f5feed3dc" type="image/svg+xml">
+<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=a5ce82aa191c" type="image/svg+xml">
 <title>Image Review | CardVector</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#091320;color:#edf4fc}
@@ -15,7 +15,7 @@ input,select,textarea{font:inherit;color:#f3f8fc;background:#1b3047;border:1px s
 input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible,a:focus-visible{outline:3px solid #ffac63;outline-offset:2px}
 button{border:0;border-radius:9px;background:#f18b2b;color:#091320;font:inherit;font-weight:750;padding:10px 16px;cursor:pointer}
 button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cursor:wait}
-#private{display:none}#admin-login[hidden]{display:none}.summary{margin:12px 0;color:#b7c9d7}
+#private{display:none}#admin-login[hidden],#folder-setup[hidden]{display:none}.summary{margin:12px 0;color:#b7c9d7}
 .review-card{display:grid;grid-template-columns:90px minmax(0,1fr);gap:16px;border-top:1px solid #35495c;padding:18px 0}
 .review-card:first-child{border-top:0}.image{width:85px;height:119px;border:1px solid #51647b;border-radius:8px;background:#1d3044;display:flex;align-items:center;justify-content:center;color:#aec0ce;font-size:.78rem;text-align:center;overflow:hidden}
 .image img{height:100%;width:100%;object-fit:contain}.cardname{font-size:1.1rem;font-weight:700}.metadata{font-size:.87rem;color:#b9c9d5;margin:4px 0 12px}
@@ -35,7 +35,7 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 .zoom-hint{font-size:.8rem;color:#b7c9d7;margin:8px 0 0}#pager{display:flex;gap:12px;align-items:center;justify-content:flex-end}
 @media(max-width:560px){.review-card{grid-template-columns:65px minmax(0,1fr);gap:10px}.image{width:63px;height:90px}.candidate{grid-template-columns:1fr}header img{width:130px}}
 </style></head>
-<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=165f5feed3dc" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
+<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=a5ce82aa191c" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
 <main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1>
 <p class="muted">Review English-language Pokémon card images by set. Suggested images require review. Approved images are saved in the private catalog; public search remains unchanged.</p>
 <section id="access" class="panel"><h2>Administrator sign-in</h2><p id="access-message" role="status">Checking administrator session…</p>
@@ -44,8 +44,9 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 <button type="submit" id="admin-submit">Sign in</button></form></section>
 <div id="private"><section class="panel">
 <div class="toolbar"><div class="control"><label for="set">English set</label><select id="set"><option value="">Loading sets…</option></select></div>
-<div class="control"><label for="filter">Review status</label><select id="filter"><option value="missing">Missing images</option><option value="needs_review">Ambiguous images</option><option value="matched">Existing exact matches</option><option value="resolved">Reviewed decisions</option><option value="all">All imported cards</option></select></div>
+<div class="control"><label for="filter">Review status</label><select id="filter"><option value="pending">Pending images</option><option value="missing">Missing images</option><option value="needs_review">Ambiguous images</option><option value="matched">Existing exact matches</option><option value="resolved">Reviewed decisions</option><option value="all">All imported cards</option></select></div>
 <button id="refresh" type="button" class="secondary">Refresh</button></div>
+<div id="folder-setup" class="panel" hidden><label for="r2-folder">R2 set folder for first review</label><select id="r2-folder"><option value="">Select a folder…</option></select><p class="note" id="folder-help">The correct set folder must be verified before approving its first card. Selecting a folder here does not save or approve anything.</p></div>
 <div class="actions"><button id="match-set" type="button" class="secondary">Match set using approved image</button></div><p class="note" id="match-set-note">Use an approved R2 card to identify unique numbered standard-finish images in the same set. No public search changes.</p>
 <p id="set-note" class="note"></p>
 <p id="counts" class="summary" role="status" aria-live="polite">Loading…</p>
@@ -62,8 +63,8 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 </dialog>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/kaggle-catalog.js?v=20261113-candidates&cv=165f5feed3dc"></script>
-<script src="/r2-set-mappings.js?v=20261113a&cv=165f5feed3dc"></script>
+<script src="/kaggle-catalog.js?v=20261113-candidates&cv=a5ce82aa191c"></script>
+<script src="/r2-set-mappings.js?v=20261113a&cv=a5ce82aa191c"></script>
 <script>
 (()=>{"use strict";
 const $=id=>document.getElementById(id);
@@ -72,7 +73,7 @@ const r2="https://images.cardvector.app/archive/";
 const referenceDelta="https://carduploader.com/dashboard/card-search?set_name=Delta+Reign";
 const pubKey="sb_publishable_76aiLaAm5Z4Kv67GkuTo-g_Psx5HINH";
 const endpoint="https://iqdpfgpkagjxzedfxrvn.supabase.co";
-let db=null,sets=[],records=[],decisions=new Map(),page=0,hasMore=false,archive=[],archiveError="",claims=new Map();
+let db=null,sets=[],records=[],decisions=new Map(),page=0,hasMore=false,archive=[],archiveError="",claims=new Map(),temporaryFolder=null;
 const normal=v=>String(v||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
 const head=v=>String(v||"").split("/")[0].toLowerCase().trim().replace(/^0+(?=\d)/,"");
 function claimedByDifferentSet(path,setId){
@@ -114,8 +115,35 @@ function verifiedFolderFor(setId){
  if(folders.size!==1)return null;
  return {folder:[...folders][0],code:null,denominator:null};
 }
+function currentFolderFor(setId){
+ const verified=verifiedFolderFor(setId);
+ if(verified)return verified;
+ if(temporaryFolder?.setId===String(setId))return {folder:temporaryFolder.folder,code:null,denominator:null,temporary:true};
+ return null;
+}
+function configureFolder(setId){
+ const verified=verifiedFolderFor(setId),wrapper=$("folder-setup"),select=$("r2-folder");
+ wrapper.hidden=Boolean(verified);
+ temporaryFolder=null;
+ if(verified)return;
+ const current=sets.find(x=>String(x.set_id)===String(setId));
+ const displayName=normal(String(current?.set_name||"").replace(/^[^:]{2,12}:\s*/,""));
+ const folders=[...new Set(archive.map(x=>x.setSlug))].filter(Boolean).sort();
+ // Exact normalized set names are presented first; all R2 folders remain selectable
+ // to handle abbreviated or historical folder labels without guessing a mapping.
+ const likely=folders.filter(x=>normal(x)===displayName);
+ select.replaceChildren();
+ const placeholder=element("option",null,"Choose R2 folder (verify set identity)");placeholder.value="";select.append(placeholder);
+ for(const folder of [...likely,...folders.filter(x=>!likely.includes(x))]){
+  const option=element("option",null,folder+(likely.includes(folder)?" · likely set name":""));
+  option.value=folder;select.append(option);
+ }
+ $("folder-help").textContent=folders.length?
+  "Choose the R2 folder for "+(current?.set_name||"this set")+". Check artwork, number and printing on the first card before approval; this folder is temporary until the first approval.":
+  "R2 index has no indexed folders available; cannot establish a first image match.";
+}
 function candidatesFor(card){
- const n=head(card.card_number),name=normal(card.card_name),mapping=verifiedFolderFor(card.set_id);
+ const n=head(card.card_number),name=normal(card.card_name),mapping=currentFolderFor(card.set_id);
  if(!n||!name||!mapping)return [];
  if(mapping.denominator&&String(card.card_number||"").split("/")[1]!==mapping.denominator)return [];
  return archive.filter(row=>head(row.number)===n&&!claimedByDifferentSet(row.path,card.set_id)).map(row=>{
@@ -209,6 +237,7 @@ function detail(card,review){
    const path=input.value.trim(),url=candidateUrl(path);
    if(value==="approved"&&(!url||selectedPath!==path||!previewLoaded)){notice("Select a candidate image and wait for its preview before approving.",true);return;}
    if(value==="approved"&&claimedByDifferentSet(path,card.set_id)){notice("This R2 image is already approved for a different set.",true);return;}
+   if(value==="approved"&&!found.some(x=>x.r.path.replace(/^archive\//,"")===path)){notice("Approval requires an indexed candidate from the selected set folder.",true);return;}
    if(value==="approved"&&!window.confirm("Save this approved image to the private catalog? Public search will not change."))return;
    for(const child of actions.querySelectorAll("button"))child.disabled=true;
    const session=await db.auth.getUser();
@@ -322,7 +351,7 @@ async function getSets(){
  if(error)throw error;
  sets=data||[];
  const select=$("set");select.replaceChildren();
- for(const s of sets){const o=document.createElement("option");o.value=s.set_id;o.textContent=s.set_name+" ("+s.unmatched_cards+" unmatched)";select.append(o);}
+ for(const s of sets){const o=document.createElement("option");o.value=s.set_id;o.textContent=s.set_name+" ("+s.matched_cards+" matched, "+s.unmatched_cards+" missing, "+Math.max(0,s.imported_cards-s.matched_cards-s.unmatched_cards-s.review_cards)+" pending)";select.append(o);}
  if(!sets.length){const o=document.createElement("option");o.textContent="No English sets imported yet";o.value="";select.append(o);}
 }
 async function refresh(){
@@ -334,7 +363,7 @@ async function refresh(){
  $("set-note").textContent=(verified?"Verified R2 folder: "+verified.folder+(verified.code?" · Code: "+verified.code:"")+" · ":"No verified R2 set folder yet · ")+(current.coverage_status==="confirmed_absent"?"Confirmed set-level Kaggle gap. Inspect alternative sources; individual cards still need identity and finish verification.":"Coverage status: "+current.coverage_status.replaceAll("_"," ")+". Unmatched does not necessarily mean absent from Kaggle.");
  $("counts").textContent="Loading cards…";
  let query=db.from("cv_admin_pokewallet_catalog").select("provider_id,set_id,set_name,card_name,card_number,image_status,image_path").eq("set_id",setId).order("card_number",{ascending:true}).range(page*PAGE,(page+1)*PAGE);
- if(["missing","needs_review","matched"].includes(filter))query=query.eq("image_status",filter);
+ if(["pending","missing","needs_review","matched"].includes(filter))query=query.eq("image_status",filter);
  const {data,error}=await query;
  if(error){$("counts").textContent="Unable to load cards: "+error.message;render();return;}
  const result=data||[];
@@ -355,7 +384,7 @@ async function authorized(){
   $("admin-login").hidden=false;return;
  }
  $("access").hidden=true;$("private").style.display="block";
- try{await Promise.all([getSets(),loadArchive(),loadClaims()]);await refresh();}catch(e){notice("Unable to load image review: "+e.message,true);}
+ try{await Promise.all([getSets(),loadArchive(),loadClaims()]);configureFolder($("set").value);if(!verifiedFolderFor($("set").value))$("filter").value="pending";await refresh();}catch(e){notice("Unable to load image review: "+e.message,true);}
 }
 async function init(){
  if(!window.supabase?.createClient){$("access-message").textContent="Authentication service unavailable.";return;}
@@ -367,7 +396,8 @@ async function init(){
   if(error){$("access-message").textContent="Sign-in failed: "+error.message;return;}
   $("admin-password").value="";await authorized();
  });
- $("set").addEventListener("change",()=>{page=0;refresh()});
+ $("set").addEventListener("change",()=>{page=0;configureFolder($("set").value);refresh()});
+ $("r2-folder").addEventListener("change",()=>{const folder=$("r2-folder").value;temporaryFolder=folder?{setId:String($("set").value),folder}:null;page=0;refresh();});
  $("filter").addEventListener("change",()=>{page=0;refresh()});
  $("refresh").addEventListener("click",()=>{page=0;refresh()});
  $("match-set").addEventListener("click",matchApprovedSet);
