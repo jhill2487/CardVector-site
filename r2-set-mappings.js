@@ -3,6 +3,14 @@
 (() => {
  "use strict";
  const entries = Object.freeze({
+  "24380": Object.freeze({
+   set:"ME01: Mega Evolution",
+   folder:"mega-evolution",
+   code:"me1",
+   denominator:"132",
+   pathPrefix:"Pokemon TCG/Pokemon TCG/mega-evolution/",
+   evidence:"Admin-approved Bulbasaur 001/132 and R2 HTTP 200 for me1_en_001_std.jpg, 002 and 003; index lacks this set"
+  }),
   "24587": Object.freeze({
    set:"ME03: Perfect Order",
    folder:"perfect-order",

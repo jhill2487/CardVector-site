@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=6678fa6876e4" type="image/svg+xml">
+<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=b2b8a6037910" type="image/svg+xml">
 <title>Image Review | CardVector</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#091320;color:#edf4fc}
@@ -35,7 +35,7 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 .zoom-hint{font-size:.8rem;color:#b7c9d7;margin:8px 0 0}#pager{display:flex;gap:12px;align-items:center;justify-content:flex-end}
 @media(max-width:560px){.review-card{grid-template-columns:65px minmax(0,1fr);gap:10px}.image{width:63px;height:90px}.candidate{grid-template-columns:1fr}header img{width:130px}}
 </style></head>
-<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=6678fa6876e4" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
+<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=b2b8a6037910" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
 <main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1>
 <p class="muted">Review English-language Pokémon card images by set. Suggested images require review. Approved images are saved in the private catalog; public search remains unchanged.</p>
 <section id="access" class="panel"><h2>Administrator sign-in</h2><p id="access-message" role="status">Checking administrator session…</p>
@@ -63,8 +63,8 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 </dialog>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/kaggle-catalog.js?v=20261113-candidates&cv=6678fa6876e4"></script>
-<script src="/r2-set-mappings.js?v=20261113a&cv=6678fa6876e4"></script>
+<script src="/kaggle-catalog.js?v=20261113-candidates&cv=b2b8a6037910"></script>
+<script src="/r2-set-mappings.js?v=20261113b&cv=b2b8a6037910"></script>
 <script>
 (()=>{"use strict";
 const $=id=>document.getElementById(id);
@@ -155,7 +155,20 @@ function configureFolder(setId){
 // When the index omits a numbered file, derive one review-only candidate from
 // an already approved standard-finish card in this exact set and R2 folder.
 // It is NOT considered verified until the image loads and the admin selects it.
+function mappedSeriesCandidate(card,mapping){
+ if(!mapping?.pathPrefix||!mapping.code||!mapping.denominator)return null;
+ const [number,total]=String(card.card_number||"").split("/");
+ if(!/^\d+$/.test(number)||total!==mapping.denominator)return null;
+ const n=String(Number(number)).padStart(3,"0");
+ const path=mapping.pathPrefix+mapping.code+"_en_"+n+"_std.jpg";
+ if(claimedByDifferentSet(path,card.set_id))return null;
+ const url=candidateUrl(path);
+ if(!url)return null;
+ return {r:{path:"archive/"+path,url,setSlug:mapping.folder,filename:path.split("/").pop(),number},score:50,inferred:true,evidence:"Verified R2 set series · image must load"};
+}
 function seriesCandidatesFor(card,mapping){
+ const mapped=mappedSeriesCandidate(card,mapping);
+ if(mapped)return [mapped];
  if(mapping.temporary||!folderAllowedForSet(card.set_id,mapping.folder))return [];
  const [number,total]=String(card.card_number||"").split("/");
  if(!/^\d+$/.test(number)||!/^\d+$/.test(total))return [];
@@ -368,8 +381,41 @@ async function matchApprovedSet(){
    }
    if(found.length>candidates.length)candidates=found;
   }
-  if(!candidates.length){$("match-set-note").textContent="No additional unique standard-finish R2 matches from an approved set anchor.";return}
-  if(!window.confirm("Privately approve "+candidates.length+" additional unique numbered standard-finish images from this verified set series? Existing decisions and public search are unchanged."))return;
+  // Mega Evolution objects exist in R2 but are absent from the CSV index.
+  // Preflight each same-set mapped filename before it can enter a bulk approval.
+  const mapping=verifiedFolderFor(setId);
+  if(!candidates.length&&mapping?.pathPrefix){
+   const counts=new Map();
+   for(const c of cards){const n=head(c.card_number);counts.set(n,(counts.get(n)||0)+1);}
+   const proposed=cards.filter(c=>!existing.has(c.provider_id)&&counts.get(head(c.card_number))===1)
+    .map(c=>({card:c,match:mappedSeriesCandidate(c,mapping)})).filter(x=>x.match);
+   if(!proposed.length){$("match-set-note").textContent="No additional uniquely numbered standard-finish paths to test.";return;}
+   $("match-set-note").textContent="Checking "+proposed.length+" image files in the verified R2 folder. No approvals have been saved.";
+   function imageExists(url){
+    return new Promise(resolve=>{
+     const img=new Image();
+     img.onload=()=>resolve(true);
+     img.onerror=()=>resolve(false);
+     img.src=url;
+    });
+   }
+   let checked=0,ok=[],cursor=0;
+   async function worker(){
+    while(cursor<proposed.length){
+     const task=proposed[cursor++];
+     const available=await imageExists(task.match.r.url);
+     if(available)ok.push({provider_id:task.card.provider_id,candidate_path:task.match.r.path.replace(/^archive\//,"")});
+     checked++;
+     if(checked%15===0||checked===proposed.length){
+      $("match-set-note").textContent="Verified "+checked+" / "+proposed.length+" R2 image files; "+ok.length+" accessible. Nothing saved yet.";
+     }
+    }
+   }
+   await Promise.all(Array.from({length:Math.min(5,proposed.length)},()=>worker()));
+   candidates=ok;
+  }
+  if(!candidates.length){$("match-set-note").textContent="No verified accessible standard-finish images found. Do not bulk approve this set.";return}
+  if(!window.confirm("Save "+candidates.length+" additional standard-finish image matches from this verified set folder? Every file was checked for availability when absent from the index, but artwork and printing still require your spot-check. Public search remains unchanged."))return;
   const auth=await db.auth.getUser();
   if(auth.error||!auth.data.user)throw Error("Administrator session expired");
   let saved=0;
