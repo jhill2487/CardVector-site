@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=506dd661c2c7" type="image/svg+xml">
+<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=cf01d27a5a9e" type="image/svg+xml">
 <title>Image Review | CardVector</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#091320;color:#edf4fc}
@@ -35,8 +35,8 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 .zoom-hint{font-size:.8rem;color:#b7c9d7;margin:8px 0 0}#pager{display:flex;gap:12px;align-items:center;justify-content:flex-end}
 @media(max-width:560px){.review-card{grid-template-columns:65px minmax(0,1fr);gap:10px}.image{width:63px;height:90px}.candidate{grid-template-columns:1fr}header img{width:130px}}
 </style></head>
-<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=506dd661c2c7" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
-<main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1><p class="note" id="build-version">Review build 163 · reusable approved image series</p>
+<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=cf01d27a5a9e" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
+<main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1><p class="note" id="build-version">Review build 164 · reusable approved image series</p>
 <p class="muted">Review English-language Pokémon card images by set. Suggested images require review. Approved images are saved in the private catalog; public search remains unchanged.</p>
 <section id="access" class="panel"><h2>Administrator sign-in</h2><p id="access-message" role="status">Checking administrator session…</p>
 <form id="admin-login" hidden><label for="admin-email">Email</label><input id="admin-email" type="email" required autocomplete="username" value="jhill2487@gmail.com">
@@ -63,8 +63,8 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 </dialog>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/kaggle-catalog.js?v=20261113-candidates&cv=506dd661c2c7"></script>
-<script src="/r2-set-mappings.js?v=20261113e-white-flare&cv=506dd661c2c7"></script>
+<script src="/kaggle-catalog.js?v=20261113-candidates&cv=cf01d27a5a9e"></script>
+<script src="/r2-set-mappings.js?v=20261113e-white-flare&cv=cf01d27a5a9e"></script>
 <script>
 (()=>{"use strict";
 const $=id=>document.getElementById(id);
@@ -357,6 +357,11 @@ async function loadArchive(){
  catch(e){archive=[];archiveError=e.message||"Failed loading R2 image index";}
 }
 
+// A visible stamp or exclusive marking changes the physical card image.
+// These variants must never inherit an unstamped image automatically.
+function requiresDistinctImage(card){
+ return /(?:\bStaff|Pokemon Center Exclusive|Pokémon Center Exclusive|\bWinner|\bStamped)\s*$/i.test(String(card.card_name||""));
+}
 // Use one approved image for the SAME set + full collector number only.
 // Each printing remains a separate provider_id and preserves its variants.
 async function shareApprovedArtwork(){
@@ -379,7 +384,7 @@ async function shareApprovedArtwork(){
    anchors.get(card.card_number).add(r.candidate_path);
   }
   const pending=cards.flatMap(card=>{
-   if(decisions.has(card.provider_id))return [];
+   if(decisions.has(card.provider_id)||requiresDistinctImage(card))return [];
    const paths=anchors.get(card.card_number);
    if(!paths||paths.size!==1)return [];
    const path=[...paths][0];
@@ -387,7 +392,7 @@ async function shareApprovedArtwork(){
    return [{provider_id:card.provider_id,candidate_path:path,review_status:"approved",
      notes:"Shared approved same-set artwork; individual printing/finish retained"}];
   });
-  if(!pending.length){$("match-set-note").textContent="No eligible same-number printing records. Approve one artwork image for a repeated card number first.";return;}
+  if(!pending.length){$("match-set-note").textContent="No eligible same-number standard-finish printings. Staff, Pokémon Center, Winner and other stamped images require their own verified artwork.";return;}
   if(!window.confirm("Reuse verified artwork for "+pending.length+" additional printing records in "+setId+"? Only identical set ID and collector number qualify. Poké Ball, Master Ball, and other finish identities stay separate. Public search unchanged."))return;
   const auth=await db.auth.getUser();
   if(auth.error||!auth.data.user)throw Error("Administrator session expired");
@@ -404,11 +409,12 @@ async function shareApprovedArtwork(){
  }catch(error){notice("Shared artwork matching failed: "+error.message,true);}
  finally{button.disabled=false;}
 }
+// Visibly stamped printings also stay out of first-pass inference.
 // Names explicitly labeled with a physical-printing pattern are excluded from
 // the first-pass base-artwork match. A card name containing "Ball" or "Team
 // Rocket" earlier in the title is not automatically a finish variant.
 function isFinishPrinting(card){
- return /(?: Poke Ball Pattern| Master Ball Pattern| Energy Symbol Pattern| Poke Ball| Friend Ball| Love Ball| Quick Ball| Dusk Ball| Team Rocket)$/i.test(String(card.card_name||""));
+ return requiresDistinctImage(card)||/(?: Poke Ball Pattern| Master Ball Pattern| Energy Symbol Pattern| Poke Ball| Friend Ball| Love Ball| Quick Ball| Dusk Ball| Team Rocket)$/i.test(String(card.card_name||""));
 }
 function baseArtworkCards(cards){
  const base=cards.filter(card=>!isFinishPrinting(card));
