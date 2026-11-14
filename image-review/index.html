@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=eb57c4fc9d73" type="image/svg+xml">
+<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=165f5feed3dc" type="image/svg+xml">
 <title>Image Review | CardVector</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#091320;color:#edf4fc}
@@ -22,10 +22,20 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 .actions{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.candidate{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end}
 .note{font-size:.86rem;line-height:1.5;color:#b5c8d8}.tag{font-size:.76rem;border-radius:30px;padding:4px 8px;background:#324b60;display:inline-block;margin-left:6px}
 .danger{background:#63363c;color:#fff}.success{background:#1e553f;color:#e0ffe8}
-#notice{margin:12px 0;min-height:1.4rem}#pager{display:flex;gap:12px;align-items:center;justify-content:flex-end}
+#notice{margin:12px 0;min-height:1.4rem}
+.image.has-image{cursor:zoom-in}
+.image.has-image:focus-visible{outline:3px solid #ffac63;outline-offset:2px}
+#image-zoom{border:1px solid #536b80;border-radius:14px;background:#0d1b2b;color:#f1f7fc;padding:12px;max-width:96vw;max-height:94dvh;width:min(560px,96vw)}
+#image-zoom::backdrop{background:rgba(0,0,0,.88)}
+.zoom-controls{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.zoom-area{max-height:76dvh;overflow:auto;overscroll-behavior:contain;text-align:center;background:#06101b;border-radius:8px}
+.zoom-area img{display:block;width:auto;max-width:100%;max-height:72dvh;height:auto;margin:auto;object-fit:contain}
+#image-zoom.zoomed .zoom-area img{max-width:none;max-height:none;width:950px;height:auto}
+#image-zoom.zoomed .zoom-area{max-height:76dvh;overflow:auto}
+.zoom-hint{font-size:.8rem;color:#b7c9d7;margin:8px 0 0}#pager{display:flex;gap:12px;align-items:center;justify-content:flex-end}
 @media(max-width:560px){.review-card{grid-template-columns:65px minmax(0,1fr);gap:10px}.image{width:63px;height:90px}.candidate{grid-template-columns:1fr}header img{width:130px}}
 </style></head>
-<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=eb57c4fc9d73" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
+<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=165f5feed3dc" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
 <main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1>
 <p class="muted">Review English-language Pokémon card images by set. Suggested images require review. Approved images are saved in the private catalog; public search remains unchanged.</p>
 <section id="access" class="panel"><h2>Administrator sign-in</h2><p id="access-message" role="status">Checking administrator session…</p>
@@ -44,10 +54,16 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 </section>
 <section class="panel"><h2>How approvals work</h2><p class="note">Enter or inspect a candidate path only when it points to a card image already in CardVector's Cloudflare R2 archive. Use Preview before approving. You can mark a card for later review, reject an incorrect candidate, or keep it missing. Approvals are recorded in the private review table and synchronized to the private catalog. No public search change occurs. For entire missing sets, use external sources to research artwork and licensing rather than approving cards without verifying identity and finish.</p></section>
 </div><p id="notice" role="status" aria-live="polite"></p>
+<dialog id="image-zoom" aria-label="Inspect card image">
+ <div class="zoom-controls"><strong id="zoom-title">Inspect card image</strong>
+ <div class="actions"><button type="button" class="secondary" id="zoom-toggle">Zoom in</button><button type="button" id="zoom-close">Close</button></div></div>
+ <div class="zoom-area"><img id="zoom-image" alt="Enlarged card artwork"></div>
+ <p class="zoom-hint">Zoom in to inspect the card number and printing. Scroll to examine details; close to return to review.</p>
+</dialog>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/kaggle-catalog.js?v=20261113-candidates&cv=eb57c4fc9d73"></script>
-<script src="/r2-set-mappings.js?v=20261113a&cv=eb57c4fc9d73"></script>
+<script src="/kaggle-catalog.js?v=20261113-candidates&cv=165f5feed3dc"></script>
+<script src="/r2-set-mappings.js?v=20261113a&cv=165f5feed3dc"></script>
 <script>
 (()=>{"use strict";
 const $=id=>document.getElementById(id);
@@ -116,6 +132,31 @@ function candidateUrl(path){
  return r2+path.split("/").map(encodeURIComponent).join("/");
 }
 function element(tag,cls,text){const node=document.createElement(tag);if(cls)node.className=cls;if(text!==undefined)node.textContent=text;return node;}
+function openImageZoom(url,label){
+ const dialog=$("image-zoom"),img=$("zoom-image");
+ if(!url)return;
+ dialog.classList.remove("zoomed");
+ $("zoom-toggle").textContent="Zoom in";
+ $("zoom-title").textContent=label||"Inspect card image";
+ img.src=url;
+ img.alt="Enlarged "+(label||"card image");
+ if(!dialog.open)dialog.showModal();
+}
+function showCardImage(visual,path,label){
+ const url=candidateUrl(path);
+ if(!url)return;
+ visual.replaceChildren();
+ const image=document.createElement("img");
+ image.src=url;
+ image.alt=label;
+ visual.append(image);
+ visual.classList.add("has-image");
+ visual.setAttribute("role","button");
+ visual.setAttribute("tabindex","0");
+ visual.setAttribute("aria-label","Enlarge "+label);
+ visual.onclick=()=>openImageZoom(url,label);
+ visual.onkeydown=event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();openImageZoom(url,label);}};
+}
 function detail(card,review){
  const box=element("article","review-card");
  const visual=element("div","image","No image");
@@ -125,10 +166,8 @@ function detail(card,review){
  heading.append(status);
  const meta=element("div","metadata",card.set_name+" · PokéWallet ID "+card.provider_id.slice(0,18)+"…");
  body.append(heading,meta);
- if(card.image_path){
-  const url=candidateUrl(card.image_path);
-  if(url){visual.replaceChildren();const img=document.createElement("img");img.src=url;img.alt="Existing Kaggle image candidate";img.loading="lazy";visual.append(img);}
- }
+ const savedImage=review?.review_status==="approved"?review.candidate_path:card.image_path;
+ if(savedImage)showCardImage(visual,savedImage,card.card_name+" "+card.card_number);
  const form=element("div");
  const label=element("label",null,"R2 image path (optional until approving)");
  let selectedPath="",previewLoaded=false;
@@ -141,8 +180,11 @@ function detail(card,review){
  preview.addEventListener("click",()=>{
   const url=candidateUrl(input.value.trim());
   if(!url){notice("Enter a valid relative R2 image path before previewing.",true);return;}
-  previewLoaded=false;visual.replaceChildren();const img=document.createElement("img");img.src=url;img.alt="Proposed R2 image (verify visually)";img.onload=()=>{previewLoaded=true;selectedLabel.textContent="Selected image loaded. Verify artwork and set before approving.";};img.onerror=()=>{previewLoaded=false;visual.textContent="Image not found";selectedLabel.textContent="Image failed to load — cannot approve.";notice("Candidate image did not load; do not approve.",true);};
-  visual.append(img);notice("Check that the card, set, number, and finish match.");
+  previewLoaded=false;
+  showCardImage(visual,input.value.trim(),card.card_name+" "+card.card_number);
+  const img=visual.querySelector("img");
+  img.onload=()=>{previewLoaded=true;selectedLabel.textContent="Selected image loaded. Tap the main image to inspect it larger before approving.";};
+  img.onerror=()=>{previewLoaded=false;visual.textContent="Image not found";visual.classList.remove("has-image");selectedLabel.textContent="Image failed to load — cannot approve.";notice("Candidate image did not load; do not approve.",true);};notice("Check that the card, set, number, and finish match.");
  });
  pathWrap.append(preview);
  const suggestions=element("div","suggestions");
@@ -154,7 +196,7 @@ function detail(card,review){
   thumb.style.cssText="display:block;width:70px;height:96px;object-fit:contain;margin:auto";
   choice.style.cssText="width:135px;overflow-wrap:anywhere;text-align:center;padding:8px";
   choice.append(thumb,element("small",null,match.evidence),element("small",null,match.r.filename));
-  choice.addEventListener("click",()=>{for(const other of suggestions.querySelectorAll("button")){other.setAttribute("aria-pressed","false");other.style.border="2px solid transparent";}choice.setAttribute("aria-pressed","true");choice.style.border="3px solid #ffb86c";selectedPath=match.r.path.replace(/^archive\//,"");input.value=selectedPath;selectedLabel.textContent="Selected: "+match.r.filename+" — preview loading.";preview.click();});
+  choice.addEventListener("click",()=>{for(const other of suggestions.querySelectorAll("button")){other.setAttribute("aria-pressed","false");other.style.border="2px solid transparent";}choice.setAttribute("aria-pressed","true");choice.style.border="3px solid #ffb86c";selectedPath=match.r.path.replace(/^archive\//,"");input.value=selectedPath;selectedLabel.textContent="Selected: "+match.r.filename+" — preview loading.";preview.click();openImageZoom(match.r.url,card.card_name+" "+card.card_number);});
   suggestions.append(choice);
  }
  suggestions.style.cssText="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0";
@@ -186,10 +228,15 @@ function detail(card,review){
     }
     card.image_status="matched";
     card.image_path=path;
+    showCardImage(visual,path,card.card_name+" "+card.card_number);
+    selectedLabel.textContent="Approved image saved. Tap the main image to inspect it larger.";
+    previewLoaded=true;
    }
    await loadClaims();
    status.textContent=value==="approved"?"approved · catalog matched":value.replace("_"," ");
-   await refresh();
+   // Keep the approved card visible and its image displayed immediately;
+   // the missing-images filter will update on the next explicit refresh.
+   if(value!=="approved")await refresh();
    notice(value==="approved"?"Approved image saved to private catalog for "+card.card_name+". Find it under Reviewed decisions. Public search unchanged.":"Review decision saved for "+card.card_name+". Public search unchanged.");
   });actions.append(button);
  }
@@ -324,6 +371,15 @@ async function init(){
  $("filter").addEventListener("change",()=>{page=0;refresh()});
  $("refresh").addEventListener("click",()=>{page=0;refresh()});
  $("match-set").addEventListener("click",matchApprovedSet);
+ $("zoom-close").addEventListener("click",()=>{$("image-zoom").close();});
+ $("zoom-toggle").addEventListener("click",()=>{
+  const modal=$("image-zoom");
+  const zoomed=modal.classList.toggle("zoomed");
+  $("zoom-toggle").textContent=zoomed?"Fit image":"Zoom in";
+ });
+ $("image-zoom").addEventListener("click",event=>{
+  if(event.target===$("image-zoom"))$("image-zoom").close();
+ });
  $("previous").addEventListener("click",()=>{if(page>0){page--;refresh()}});
  $("next").addEventListener("click",()=>{if(hasMore){page++;refresh()}});
  await authorized();
