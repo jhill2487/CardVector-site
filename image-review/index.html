@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=f600089912f1" type="image/svg+xml">
+<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=adf069bfdfcd" type="image/svg+xml">
 <title>Image Review | CardVector</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#091320;color:#edf4fc}
@@ -35,8 +35,8 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 .zoom-hint{font-size:.8rem;color:#b7c9d7;margin:8px 0 0}#pager{display:flex;gap:12px;align-items:center;justify-content:flex-end}
 @media(max-width:560px){.review-card{grid-template-columns:65px minmax(0,1fr);gap:10px}.image{width:63px;height:90px}.candidate{grid-template-columns:1fr}header img{width:130px}}
 </style></head>
-<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=f600089912f1" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
-<main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1><p class="note" id="build-version">Review build 165 · reusable approved image series</p>
+<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=adf069bfdfcd" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
+<main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1><p class="note" id="build-version">Review build 166 · reusable approved image series</p>
 <p class="muted">Review English-language Pokémon card images by set. Suggested images require review. Approved images are saved in the private catalog; public search remains unchanged.</p>
 <section id="access" class="panel"><h2>Administrator sign-in</h2><p id="access-message" role="status">Checking administrator session…</p>
 <form id="admin-login" hidden><label for="admin-email">Email</label><input id="admin-email" type="email" required autocomplete="username" value="jhill2487@gmail.com">
@@ -63,8 +63,8 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 </dialog>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/kaggle-catalog.js?v=20261113-candidates&cv=f600089912f1"></script>
-<script src="/r2-set-mappings.js?v=20261113e-white-flare&cv=f600089912f1"></script>
+<script src="/kaggle-catalog.js?v=20261113-candidates&cv=adf069bfdfcd"></script>
+<script src="/r2-set-mappings.js?v=20261113e-white-flare&cv=adf069bfdfcd"></script>
 <script>
 (()=>{"use strict";
 const $=id=>document.getElementById(id);
@@ -73,7 +73,7 @@ const r2="https://images.cardvector.app/archive/";
 const referenceDelta="https://carduploader.com/dashboard/card-search?set_name=Delta+Reign";
 const pubKey="sb_publishable_76aiLaAm5Z4Kv67GkuTo-g_Psx5HINH";
 const endpoint="https://iqdpfgpkagjxzedfxrvn.supabase.co";
-let db=null,sets=[],records=[],decisions=new Map(),page=0,hasMore=false,archive=[],archiveError="",claims=new Map(),temporaryFolder=null;
+let db=null,sets=[],records=[],decisions=new Map(),page=0,hasMore=false,archive=[],archiveError="",claims=new Map(),temporaryFolder=null,externalCandidates=new Map();
 const normal=v=>String(v||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
 const head=v=>String(v||"").split("/")[0].toLowerCase().trim().replace(/^0+(?=\d)/,"");
 // PostgREST limits request URL size. A set may contain 575+ provider IDs;
@@ -276,6 +276,30 @@ function detail(card,review){
  heading.append(status);
  const meta=element("div","metadata",card.set_name+" · PokéWallet ID "+card.provider_id.slice(0,18)+"…");
  body.append(heading,meta);
+ // Private discovery references never count as approved images.
+ const candidateSection=element("div","external-sources");
+ const ext=externalCandidates.get(card.provider_id)||[];
+ if(ext.length){
+  candidateSection.append(element("p","note","External source candidates ("+ext.length+") — references only, NOT approved artwork"));
+  for(const candidate of ext){
+   const item=element("p","note",candidate.source_name+" · product "+candidate.source_product_id+" · "+candidate.candidate_status+" · printing: "+(candidate.printing_flags||[]).join(", "));
+   if(candidate.source_page_url&&/^https:\/\//.test(candidate.source_page_url)){
+    const link=element("a",null,"Open source product page");link.href=candidate.source_page_url;link.target="_blank";link.rel="noopener noreferrer";item.append(" · ",link);
+   }
+   if(candidate.source_image_url&&/^https:\/\//.test(candidate.source_image_url)){
+    const link=element("a",null,"Inspect external image");link.href=candidate.source_image_url;link.target="_blank";link.rel="noopener noreferrer";item.append(" · ",link);
+   }
+   item.append(" · usage rights: "+candidate.usage_rights);
+   candidateSection.append(item);
+  }
+ }
+ if(card.image_status!=="matched"){
+  const search=element("a",null,"Search CardUploader for this exact printing");
+  search.href="https://carduploader.com/dashboard/card-search?q="+encodeURIComponent(card.card_name+" "+card.card_number);
+  search.target="_blank";search.rel="noopener noreferrer";
+  candidateSection.append(search,element("p","note","Discovery reference only. Do not copy or approve artwork until the exact printing and reuse rights are confirmed."));
+ }
+ body.append(candidateSection);
  const savedImage=review?.review_status==="approved"?review.candidate_path:card.image_path;
  if(savedImage)showCardImage(visual,savedImage,card.card_name+" "+card.card_number);
  const form=element("div");
@@ -645,7 +669,7 @@ async function reloadReviewSets(){
 }
 async function refresh(){
  const setId=$("set").value,filter=$("filter").value;
- records=[];hasMore=false;decisions.clear();
+ records=[];hasMore=false;decisions.clear();externalCandidates.clear();
  if(!setId){$("set-note").textContent="";$("counts").textContent="No unresolved images in imported sets.";render();return;}
  const current=sets.find(s=>s.set_id===setId);
  const verified=verifiedFolderFor(setId);
@@ -662,6 +686,11 @@ async function refresh(){
   try{
    const reviews=await lookupByProviderIds("cv_admin_image_reviews","provider_id,review_status,candidate_path,notes",ids);
    for(const row of reviews)decisions.set(row.provider_id,row);
+   const external=await lookupByProviderIds("cv_admin_external_image_candidates","provider_id,source_name,source_product_id,source_page_url,source_image_url,printing_flags,candidate_status,usage_rights",ids);
+   for(const row of external){
+    if(!externalCandidates.has(row.provider_id))externalCandidates.set(row.provider_id,[]);
+    externalCandidates.get(row.provider_id).push(row);
+   }
   }catch(error){$("counts").textContent="Unable to load review decisions: "+error.message;return;}
  }
  $("counts").textContent=records.length+" cards on this page · "+current.imported_cards+" imported records in this English set.";
