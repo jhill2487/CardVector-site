@@ -3,6 +3,14 @@
 (() => {
  "use strict";
  const entries = Object.freeze({
+  "24325": Object.freeze({
+   set:"SV: Black Bolt",
+   folder:"black-bolt",
+   code:"zsv10-5",
+   denominator:"086",
+   pathPrefix:"Pokemon TCG/Pokemon TCG/black-bolt/",
+   evidence:"Admin-approved Snivy 001/086 zsv10-5_en_001_std.jpg. R2 CSV does not index Black Bolt images."
+  }),
   "24380": Object.freeze({
    set:"ME01: Mega Evolution",
    folder:"mega-evolution",
