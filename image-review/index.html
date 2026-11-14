@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=56c32f3e90e7" type="image/svg+xml">
+<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=506dd661c2c7" type="image/svg+xml">
 <title>Image Review | CardVector</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#091320;color:#edf4fc}
@@ -35,8 +35,8 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 .zoom-hint{font-size:.8rem;color:#b7c9d7;margin:8px 0 0}#pager{display:flex;gap:12px;align-items:center;justify-content:flex-end}
 @media(max-width:560px){.review-card{grid-template-columns:65px minmax(0,1fr);gap:10px}.image{width:63px;height:90px}.candidate{grid-template-columns:1fr}header img{width:130px}}
 </style></head>
-<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=56c32f3e90e7" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
-<main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1><p class="note" id="build-version">Review build 162 · reusable approved image series</p>
+<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=506dd661c2c7" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
+<main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1><p class="note" id="build-version">Review build 163 · reusable approved image series</p>
 <p class="muted">Review English-language Pokémon card images by set. Suggested images require review. Approved images are saved in the private catalog; public search remains unchanged.</p>
 <section id="access" class="panel"><h2>Administrator sign-in</h2><p id="access-message" role="status">Checking administrator session…</p>
 <form id="admin-login" hidden><label for="admin-email">Email</label><input id="admin-email" type="email" required autocomplete="username" value="jhill2487@gmail.com">
@@ -63,8 +63,8 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 </dialog>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/kaggle-catalog.js?v=20261113-candidates&cv=56c32f3e90e7"></script>
-<script src="/r2-set-mappings.js?v=20261113e-white-flare&cv=56c32f3e90e7"></script>
+<script src="/kaggle-catalog.js?v=20261113-candidates&cv=506dd661c2c7"></script>
+<script src="/r2-set-mappings.js?v=20261113e-white-flare&cv=506dd661c2c7"></script>
 <script>
 (()=>{"use strict";
 const $=id=>document.getElementById(id);
@@ -400,7 +400,7 @@ async function shareApprovedArtwork(){
   }
   await loadClaims();
   $("match-set-note").textContent="Saved "+count+" shared-artwork approvals. Original printing records and finish identifiers were not modified.";
-  await refresh();
+  await reloadReviewSets();
  }catch(error){notice("Shared artwork matching failed: "+error.message,true);}
  finally{button.disabled=false;}
 }
@@ -585,22 +585,44 @@ async function matchApprovedSet(){
   await loadClaims();
   progress("First pass complete: "+saved+" base artwork approvals, "+problems.length+" exceptions. Finish variants remain separate.");
   $("match-set-note").textContent="Bulk base artwork saved. Inspect exceptions, then use the separate finish-sharing action. Public search remains unchanged.";
-  await refresh();
+  await reloadReviewSets();
  }catch(error){progress("First pass error: "+error.message);notice("Bulk artwork matching failed: "+error.message,true);}
  finally{button.disabled=false;button.textContent=originalLabel;}
 }
+// Only show sets that have unresolved imported images. A matched set can
+// reappear automatically when new pending, missing or review-required cards arrive.
+function hasUnresolvedImages(s){
+ const matched=Number(s.matched_cards)||0;
+ const missing=Number(s.unmatched_cards)||0;
+ const review=Number(s.review_cards)||0;
+ const imported=Number(s.imported_cards)||0;
+ return missing>0||review>0||Math.max(0,imported-matched-missing-review)>0;
+}
 async function getSets(){
+ const select=$("set"),previous=select.value;
  const {data,error}=await db.from("cv_admin_set_coverage").select("set_id,set_name,imported_cards,unmatched_cards,matched_cards,review_cards,coverage_status").order("unmatched_cards",{ascending:false}).limit(1000);
  if(error)throw error;
- sets=data||[];
- const select=$("set");select.replaceChildren();
- for(const s of sets){const o=document.createElement("option");o.value=s.set_id;o.textContent=s.set_name+" ("+s.matched_cards+" matched, "+s.unmatched_cards+" missing, "+Math.max(0,s.imported_cards-s.matched_cards-s.unmatched_cards-s.review_cards)+" pending)";select.append(o);}
- if(!sets.length){const o=document.createElement("option");o.textContent="No English sets imported yet";o.value="";select.append(o);}
+ sets=(data||[]).filter(hasUnresolvedImages);
+ select.replaceChildren();
+ for(const s of sets){
+  const o=document.createElement("option");o.value=s.set_id;
+  o.textContent=s.set_name+" ("+s.matched_cards+" matched, "+s.unmatched_cards+" missing, "+Math.max(0,s.imported_cards-s.matched_cards-s.unmatched_cards-s.review_cards)+" pending)";
+  select.append(o);
+ }
+ if(!sets.length){const o=document.createElement("option");o.textContent="All imported sets have their images matched";o.value="";select.append(o);}
+ else if(sets.some(s=>String(s.set_id)===previous))select.value=previous;
+}
+async function reloadReviewSets(){
+ const previous=$("set").value;
+ await getSets();
+ page=0;
+ if($("set").value!==previous)configureFolder($("set").value);
+ await refresh();
 }
 async function refresh(){
  const setId=$("set").value,filter=$("filter").value;
  records=[];hasMore=false;decisions.clear();
- if(!setId){render();return;}
+ if(!setId){$("set-note").textContent="";$("counts").textContent="No unresolved images in imported sets.";render();return;}
  const current=sets.find(s=>s.set_id===setId);
  const verified=verifiedFolderFor(setId);
  $("set-note").textContent=(verified?"Verified R2 folder: "+verified.folder+(verified.code?" · Code: "+verified.code:"")+" · ":"No verified R2 set folder yet · ")+(current.coverage_status==="confirmed_absent"?"Confirmed set-level Kaggle gap. Inspect alternative sources; individual cards still need identity and finish verification.":"Coverage status: "+current.coverage_status.replaceAll("_"," ")+". Unmatched does not necessarily mean absent from Kaggle.");
@@ -643,7 +665,7 @@ async function init(){
  $("set").addEventListener("change",()=>{page=0;configureFolder($("set").value);refresh()});
  $("r2-folder").addEventListener("change",()=>{const folder=$("r2-folder").value,setId=String($("set").value);if(folder&&!folderAllowedForSet(setId,folder)){$("r2-folder").value="";temporaryFolder=null;notice("This folder does not match the selected promo/energy set. Use a verified set-specific folder.",true);}else{temporaryFolder=folder?{setId,folder}:null;}page=0;refresh();});
  $("filter").addEventListener("change",()=>{page=0;refresh()});
- $("refresh").addEventListener("click",()=>{page=0;refresh()});
+ $("refresh").addEventListener("click",()=>reloadReviewSets().catch(error=>notice("Unable to refresh set list: "+error.message,true)));
  $("match-set").addEventListener("click",matchApprovedSet);
  $("match-shared").addEventListener("click",shareApprovedArtwork);
  $("zoom-close").addEventListener("click",()=>{$("image-zoom").close();});
