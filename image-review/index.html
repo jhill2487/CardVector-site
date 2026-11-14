@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=4233991c0673" type="image/svg+xml">
+<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=56c32f3e90e7" type="image/svg+xml">
 <title>Image Review | CardVector</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#091320;color:#edf4fc}
@@ -35,8 +35,8 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 .zoom-hint{font-size:.8rem;color:#b7c9d7;margin:8px 0 0}#pager{display:flex;gap:12px;align-items:center;justify-content:flex-end}
 @media(max-width:560px){.review-card{grid-template-columns:65px minmax(0,1fr);gap:10px}.image{width:63px;height:90px}.candidate{grid-template-columns:1fr}header img{width:130px}}
 </style></head>
-<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=4233991c0673" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
-<main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1><p class="note" id="build-version">Review build 156 · batched database requests</p>
+<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=56c32f3e90e7" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
+<main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1><p class="note" id="build-version">Review build 162 · reusable approved image series</p>
 <p class="muted">Review English-language Pokémon card images by set. Suggested images require review. Approved images are saved in the private catalog; public search remains unchanged.</p>
 <section id="access" class="panel"><h2>Administrator sign-in</h2><p id="access-message" role="status">Checking administrator session…</p>
 <form id="admin-login" hidden><label for="admin-email">Email</label><input id="admin-email" type="email" required autocomplete="username" value="jhill2487@gmail.com">
@@ -63,8 +63,8 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 </dialog>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/kaggle-catalog.js?v=20261113-candidates&cv=4233991c0673"></script>
-<script src="/r2-set-mappings.js?v=20261113e-white-flare&cv=4233991c0673"></script>
+<script src="/kaggle-catalog.js?v=20261113-candidates&cv=56c32f3e90e7"></script>
+<script src="/r2-set-mappings.js?v=20261113e-white-flare&cv=56c32f3e90e7"></script>
 <script>
 (()=>{"use strict";
 const $=id=>document.getElementById(id);
@@ -416,6 +416,33 @@ function baseArtworkCards(cards){
  for(const card of base)counts.set(card.card_number,(counts.get(card.card_number)||0)+1);
  return base.filter(card=>counts.get(card.card_number)===1);
 }
+// Derive a reusable image filename series from administrator-approved standard
+// artwork for THIS set only. Never treat merely selecting a folder as approval.
+function approvedArtworkSeries(cards,reviews,folder){
+ const byId=new Map(cards.map(card=>[card.provider_id,card]));
+ const found=new Map();
+ for(const review of reviews){
+  if(review.review_status!=="approved"||!review.candidate_path)continue;
+  const card=byId.get(review.provider_id);
+  if(!card||isFinishPrinting(card))continue;
+  const parts=String(review.candidate_path).split("/");
+  if(parts.length<2||parts[parts.length-2]!==folder)continue;
+  const match=parts[parts.length-1].match(/^([a-z0-9-]+_en_)(\d+)(_std)\.(jpg|jpeg|png|webp)$/i);
+  if(!match)continue;
+  const [number]=String(card.card_number||"").split("/");
+  if(!/^\d+$/.test(number)||Number(match[2])!==Number(number))continue;
+  const candidate={
+   folder:parts.slice(0,-1).join("/")+"/",
+   prefix:match[1],
+   pad:match[2].length,
+   suffix:match[3]+"."+match[4]
+  };
+  const key=candidate.folder+"|"+candidate.prefix+"|"+candidate.pad+"|"+candidate.suffix;
+  found.set(key,candidate);
+ }
+ // Conflicting approved series must be resolved manually; no guessing.
+ return {series:found.size===1?[...found.values()][0]:null,ambiguous:found.size>1};
+}
 // First-pass artwork approval is per unique base card, never per printing.
 // A verified set mapping or an approved standard-image anchor provides a
 // numbered series; each candidate is probed before ONE batch confirmation.
@@ -450,23 +477,16 @@ async function matchApprovedSet(){
   for(const card of cards.filter(c=>!isFinishPrinting(c))){
    numberCounts.set(card.card_number,(numberCounts.get(card.card_number)||0)+1);
   }
-  // Prefer an explicitly registered mapping. For older indexed sets, derive
-  // a filename series only from an approved, same-set standard card.
-  let indexedAnchor=null;
-  if(!mapping?.pathPrefix){
-   for(const decision of reviews){
-    if(decision.review_status!=="approved"||!decision.candidate_path)continue;
-    const matched=archive.find(row=>row.path.replace(/^archive\//,"")===decision.candidate_path
-     &&row.setSlug===mapping?.folder);
-    const match=matched?.filename?.match(/^(.+_en_)([0-9]+)(_std)\.(jpg|jpeg|png|webp)$/i);
-    if(match){
-     indexedAnchor={folder:matched.path.slice(0,-matched.filename.length),prefix:match[1],
-      pad:match[2].length,suffix:match[3]+"."+match[4]};
-     break;
-    }
-   }
+  // Prior manual approval establishes set identity and the precise image
+  // filename series. This is reusable for every regular or patterned set.
+  const learned=approvedArtworkSeries(cards,reviews,mapping?.folder||"");
+  if(learned.ambiguous&&!mapping?.pathPrefix)throw Error("Conflicting approved image filename series for this set. Resolve the anchors before bulk matching.");
+  const indexedAnchor=learned.series;
+  if(!mapping)throw Error("Select the correct R2 folder and approve one base image before bulk matching.");
+  if(!mapping.pathPrefix&&!indexedAnchor&&!mapping.code){
+   progress("No approved standard-image filename series yet. Approve one correct base image, then retry bulk matching.");
+   throw Error("No approved base image establishes an unambiguous filename series for this set.");
   }
-  if(!mapping){throw Error("Approve one base image from its correct R2 folder to establish set identity.");}
   for(const card of baseCards){
    const label=card.card_name+" #"+card.card_number;
    if(reviewed.has(card.provider_id))continue; // Never override an earlier decision.
