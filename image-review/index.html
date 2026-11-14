@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=0101bdb6f24c" type="image/svg+xml">
+<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=6c022353109b" type="image/svg+xml">
 <title>Image Review | CardVector</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#091320;color:#edf4fc}
@@ -35,8 +35,8 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 .zoom-hint{font-size:.8rem;color:#b7c9d7;margin:8px 0 0}#pager{display:flex;gap:12px;align-items:center;justify-content:flex-end}
 @media(max-width:560px){.review-card{grid-template-columns:65px minmax(0,1fr);gap:10px}.image{width:63px;height:90px}.candidate{grid-template-columns:1fr}header img{width:130px}}
 </style></head>
-<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=0101bdb6f24c" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
-<main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1>
+<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=6c022353109b" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
+<main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1><p class="note" id="build-version">Review build 156 · batched database requests</p>
 <p class="muted">Review English-language Pokémon card images by set. Suggested images require review. Approved images are saved in the private catalog; public search remains unchanged.</p>
 <section id="access" class="panel"><h2>Administrator sign-in</h2><p id="access-message" role="status">Checking administrator session…</p>
 <form id="admin-login" hidden><label for="admin-email">Email</label><input id="admin-email" type="email" required autocomplete="username" value="jhill2487@gmail.com">
@@ -63,8 +63,8 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 </dialog>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/kaggle-catalog.js?v=20261113-candidates&cv=0101bdb6f24c"></script>
-<script src="/r2-set-mappings.js?v=20261113c&cv=0101bdb6f24c"></script>
+<script src="/kaggle-catalog.js?v=20261113-candidates&cv=6c022353109b"></script>
+<script src="/r2-set-mappings.js?v=20261113c&cv=6c022353109b"></script>
 <script>
 (()=>{"use strict";
 const $=id=>document.getElementById(id);
@@ -76,6 +76,18 @@ const endpoint="https://iqdpfgpkagjxzedfxrvn.supabase.co";
 let db=null,sets=[],records=[],decisions=new Map(),page=0,hasMore=false,archive=[],archiveError="",claims=new Map(),temporaryFolder=null;
 const normal=v=>String(v||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
 const head=v=>String(v||"").split("/")[0].toLowerCase().trim().replace(/^0+(?=\d)/,"");
+// PostgREST limits request URL size. A set may contain 575+ provider IDs;
+// always split provider_id IN lookups to keep requests reliably small on mobile.
+async function lookupByProviderIds(table,columns,ids){
+ const results=[];
+ for(let i=0;i<ids.length;i+=35){
+  const chunk=ids.slice(i,i+35);
+  const {data,error}=await db.from(table).select(columns).in("provider_id",chunk);
+  if(error)throw Error(table+" lookup failed ("+(i+1)+"–"+(i+chunk.length)+" of "+ids.length+"): "+error.message+(error.details?" · "+error.details:""));
+  results.push(...(data||[]));
+ }
+ return results;
+}
 function claimedByDifferentSet(path,setId,cardNumber){
  const owners=claims.get(String(path||"").replace(/^archive\//,""));
  return Boolean(owners&&[...owners].some(identity=>{
@@ -91,9 +103,8 @@ async function loadClaims(){
  const next=new Map(),rows=data||[];
  if(rows.length){
   const ids=rows.map(x=>x.provider_id);
-  const result=await db.from("cv_admin_pokewallet_catalog").select("provider_id,set_id,card_number").in("provider_id",ids);
-  if(result.error)throw result.error;
-  const setsById=new Map((result.data||[]).map(x=>[x.provider_id,{set_id:String(x.set_id),card_number:String(x.card_number)}]));
+  const rowsById=await lookupByProviderIds("cv_admin_pokewallet_catalog","provider_id,set_id,card_number",ids);
+  const setsById=new Map(rowsById.map(x=>[x.provider_id,{set_id:String(x.set_id),card_number:String(x.card_number)}]));
   for(const review of rows){
    const identity=setsById.get(review.provider_id),path=review.candidate_path;
    if(!identity||!path)continue;
@@ -358,11 +369,8 @@ async function shareApprovedArtwork(){
   if(result.error)throw result.error;
   const cards=result.data||[];
   if(!cards.length)throw Error("No imported cards");
-  const response=await db.from("cv_admin_image_reviews")
-   .select("provider_id,review_status,candidate_path")
-   .in("provider_id",cards.map(c=>c.provider_id));
-  if(response.error)throw response.error;
-  const decisions=new Map((response.data||[]).map(r=>[r.provider_id,r]));
+  const reviewRows=await lookupByProviderIds("cv_admin_image_reviews","provider_id,review_status,candidate_path",cards.map(c=>c.provider_id));
+  const decisions=new Map(reviewRows.map(r=>[r.provider_id,r]));
   const anchors=new Map();
   for(const card of cards){
    const r=decisions.get(card.provider_id);
@@ -433,10 +441,8 @@ async function matchApprovedSet(){
   const cards=q.data||[];
   if(!cards.length)throw Error("No imported cards.");
   const baseCards=baseArtworkCards(cards);
-  const r=await db.from("cv_admin_image_reviews")
-   .select("provider_id,review_status,candidate_path").in("provider_id",cards.map(c=>c.provider_id));
-  if(r.error)throw r.error;
-  const reviews=r.data||[],reviewed=new Map(reviews.map(row=>[row.provider_id,row]));
+  const reviews=await lookupByProviderIds("cv_admin_image_reviews","provider_id,review_status,candidate_path",cards.map(c=>c.provider_id));
+  const reviewed=new Map(reviews.map(row=>[row.provider_id,row]));
   const mapping=verifiedFolderFor(setId);
   const problems=[];
   const candidates=[];
@@ -587,9 +593,10 @@ async function refresh(){
  hasMore=result.length>PAGE;records=result.slice(0,PAGE);
  if(records.length){
   const ids=records.map(x=>x.provider_id);
-  const reviews=await db.from("cv_admin_image_reviews").select("provider_id,review_status,candidate_path,notes").in("provider_id",ids);
-  if(reviews.error){$("counts").textContent="Unable to load review decisions.";return;}
-  for(const row of reviews.data||[])decisions.set(row.provider_id,row);
+  try{
+   const reviews=await lookupByProviderIds("cv_admin_image_reviews","provider_id,review_status,candidate_path,notes",ids);
+   for(const row of reviews)decisions.set(row.provider_id,row);
+  }catch(error){$("counts").textContent="Unable to load review decisions: "+error.message;return;}
  }
  $("counts").textContent=records.length+" cards on this page · "+current.imported_cards+" imported records in this English set.";
  render();
