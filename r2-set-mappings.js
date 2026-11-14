@@ -11,6 +11,14 @@
    pathPrefix:"ascended-heroes/ascended-heroes/",
    evidence:"295 indexed Ascended Heroes R2 files; me2-5_en_001,002,003,293,294,295_std.jpg independently returned HTTP 200 image/jpeg"
   }),
+  "24326": Object.freeze({
+   set:"SV: White Flare",
+   folder:"white-flare",
+   code:"rsv10-5",
+   denominator:"086",
+   pathPrefix:"Pokemon TCG/Pokemon TCG/white-flare/",
+   evidence:"173 R2-indexed images rsv10-5_en_001..173_std.jpg; sampled 001,002,172,173 returned HTTP 200 image/jpeg"
+  }),
   "24325": Object.freeze({
    set:"SV: Black Bolt",
    folder:"black-bolt",
