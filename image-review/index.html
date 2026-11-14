@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=a5ce82aa191c" type="image/svg+xml">
+<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=be464a2b280e" type="image/svg+xml">
 <title>Image Review | CardVector</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#091320;color:#edf4fc}
@@ -35,7 +35,7 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 .zoom-hint{font-size:.8rem;color:#b7c9d7;margin:8px 0 0}#pager{display:flex;gap:12px;align-items:center;justify-content:flex-end}
 @media(max-width:560px){.review-card{grid-template-columns:65px minmax(0,1fr);gap:10px}.image{width:63px;height:90px}.candidate{grid-template-columns:1fr}header img{width:130px}}
 </style></head>
-<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=a5ce82aa191c" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
+<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=be464a2b280e" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
 <main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1>
 <p class="muted">Review English-language Pokémon card images by set. Suggested images require review. Approved images are saved in the private catalog; public search remains unchanged.</p>
 <section id="access" class="panel"><h2>Administrator sign-in</h2><p id="access-message" role="status">Checking administrator session…</p>
@@ -63,8 +63,8 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 </dialog>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/kaggle-catalog.js?v=20261113-candidates&cv=a5ce82aa191c"></script>
-<script src="/r2-set-mappings.js?v=20261113a&cv=a5ce82aa191c"></script>
+<script src="/kaggle-catalog.js?v=20261113-candidates&cv=be464a2b280e"></script>
+<script src="/r2-set-mappings.js?v=20261113a&cv=be464a2b280e"></script>
 <script>
 (()=>{"use strict";
 const $=id=>document.getElementById(id);
@@ -120,6 +120,16 @@ function currentFolderFor(setId){
  if(verified)return verified;
  if(temporaryFolder?.setId===String(setId))return {folder:temporaryFolder.folder,code:null,denominator:null,temporary:true};
  return null;
+}
+function folderAllowedForSet(setId,folder){
+ const record=sets.find(x=>String(x.set_id)===String(setId));
+ const name=normal(record?.set_name);
+ const value=normal(folder);
+ // Prevent a regular expansion image from anchoring a separate promo catalog.
+ // Specialized code-only promo folders need an explicit verified registry entry.
+ if(name.includes("promo")&&!value.includes("promo"))return false;
+ if(name.includes("energies")&&!value.includes("energ"))return false;
+ return Boolean(folder);
 }
 function configureFolder(setId){
  const verified=verifiedFolderFor(setId),wrapper=$("folder-setup"),select=$("r2-folder");
@@ -238,6 +248,7 @@ function detail(card,review){
    if(value==="approved"&&(!url||selectedPath!==path||!previewLoaded)){notice("Select a candidate image and wait for its preview before approving.",true);return;}
    if(value==="approved"&&claimedByDifferentSet(path,card.set_id)){notice("This R2 image is already approved for a different set.",true);return;}
    if(value==="approved"&&!found.some(x=>x.r.path.replace(/^archive\//,"")===path)){notice("Approval requires an indexed candidate from the selected set folder.",true);return;}
+   if(value==="approved"&&!verifiedFolderFor(card.set_id)&&!folderAllowedForSet(card.set_id,temporaryFolder?.folder)){notice("The R2 folder must match this specific set; regular Mega Evolution files cannot approve Mega Evolution Promo cards.",true);return;}
    if(value==="approved"&&!window.confirm("Save this approved image to the private catalog? Public search will not change."))return;
    for(const child of actions.querySelectorAll("button"))child.disabled=true;
    const session=await db.auth.getUser();
@@ -397,7 +408,7 @@ async function init(){
   $("admin-password").value="";await authorized();
  });
  $("set").addEventListener("change",()=>{page=0;configureFolder($("set").value);refresh()});
- $("r2-folder").addEventListener("change",()=>{const folder=$("r2-folder").value;temporaryFolder=folder?{setId:String($("set").value),folder}:null;page=0;refresh();});
+ $("r2-folder").addEventListener("change",()=>{const folder=$("r2-folder").value,setId=String($("set").value);if(folder&&!folderAllowedForSet(setId,folder)){$("r2-folder").value="";temporaryFolder=null;notice("This folder does not match the selected promo/energy set. Use a verified set-specific folder.",true);}else{temporaryFolder=folder?{setId,folder}:null;}page=0;refresh();});
  $("filter").addEventListener("change",()=>{page=0;refresh()});
  $("refresh").addEventListener("click",()=>{page=0;refresh()});
  $("match-set").addEventListener("click",matchApprovedSet);
