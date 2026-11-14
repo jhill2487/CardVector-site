@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=f471b7458900" type="image/svg+xml">
+<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=0101bdb6f24c" type="image/svg+xml">
 <title>Image Review | CardVector</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#091320;color:#edf4fc}
@@ -35,7 +35,7 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 .zoom-hint{font-size:.8rem;color:#b7c9d7;margin:8px 0 0}#pager{display:flex;gap:12px;align-items:center;justify-content:flex-end}
 @media(max-width:560px){.review-card{grid-template-columns:65px minmax(0,1fr);gap:10px}.image{width:63px;height:90px}.candidate{grid-template-columns:1fr}header img{width:130px}}
 </style></head>
-<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=f471b7458900" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
+<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=0101bdb6f24c" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
 <main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1>
 <p class="muted">Review English-language Pokémon card images by set. Suggested images require review. Approved images are saved in the private catalog; public search remains unchanged.</p>
 <section id="access" class="panel"><h2>Administrator sign-in</h2><p id="access-message" role="status">Checking administrator session…</p>
@@ -47,7 +47,7 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 <div class="control"><label for="filter">Review status</label><select id="filter"><option value="pending">Pending images</option><option value="missing">Missing images</option><option value="needs_review">Ambiguous images</option><option value="matched">Existing exact matches</option><option value="resolved">Reviewed decisions</option><option value="all">All imported cards</option></select></div>
 <button id="refresh" type="button" class="secondary">Refresh</button></div>
 <div id="folder-setup" class="panel" hidden><label for="r2-folder">R2 set folder for first review</label><select id="r2-folder"><option value="">Select a folder…</option></select><p class="note" id="folder-help">The correct set folder must be verified before approving its first card. Selecting a folder here does not save or approve anything.</p></div>
-<div class="actions"><button id="match-set" type="button" class="secondary">First pass: match base artwork</button><button id="match-shared" type="button" class="secondary">Share approved artwork with other finishes</button></div><p id="match-progress" class="note" role="status" aria-live="polite">Ready for artwork matching.</p><p class="note" id="match-set-note">First pass matches base artwork per unique set and card number, leaving Poké Ball, Master Ball and other pattern records pending. After inspecting the base matches, use the separate shared-artwork action to associate the same artwork with their distinct printings. Public search is unchanged.</p>
+<div class="actions"><button id="match-set" type="button" class="secondary">First pass: match base artwork</button><button id="match-shared" type="button" class="secondary">Share approved artwork with other finishes</button></div><p id="match-progress" class="note" role="status" aria-live="polite">Ready for artwork matching.</p><details id="match-exceptions" hidden><summary id="match-exceptions-summary">Review exceptions</summary><ol id="match-exceptions-list"></ol></details><p class="note" id="match-set-note">First pass matches base artwork per unique set and card number, leaving Poké Ball, Master Ball and other pattern records pending. After inspecting the base matches, use the separate shared-artwork action to associate the same artwork with their distinct printings. Public search is unchanged.</p>
 <p id="set-note" class="note"></p>
 <p id="counts" class="summary" role="status" aria-live="polite">Loading…</p>
 <div id="cards"></div>
@@ -63,8 +63,8 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 </dialog>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/kaggle-catalog.js?v=20261113-candidates&cv=f471b7458900"></script>
-<script src="/r2-set-mappings.js?v=20261113c&cv=f471b7458900"></script>
+<script src="/kaggle-catalog.js?v=20261113-candidates&cv=0101bdb6f24c"></script>
+<script src="/r2-set-mappings.js?v=20261113c&cv=0101bdb6f24c"></script>
 <script>
 (()=>{"use strict";
 const $=id=>document.getElementById(id);
@@ -408,106 +408,160 @@ function baseArtworkCards(cards){
  for(const card of base)counts.set(card.card_number,(counts.get(card.card_number)||0)+1);
  return base.filter(card=>counts.get(card.card_number)===1);
 }
+// First-pass artwork approval is per unique base card, never per printing.
+// A verified set mapping or an approved standard-image anchor provides a
+// numbered series; each candidate is probed before ONE batch confirmation.
 async function matchApprovedSet(){
  const button=$("match-set"),setId=$("set").value,originalLabel=button.textContent;
  button.disabled=true;button.textContent="Checking set…";
  const progress=message=>{$("match-progress").textContent=message;};
- progress("Checking saved approvals for the selected set…");
+ const exceptions=$("match-exceptions"),exceptionList=$("match-exceptions-list");
+ const report=(items)=>{
+  exceptionList.replaceChildren();
+  $("match-exceptions-summary").textContent=items.length+" artwork exceptions to review";
+  exceptions.hidden=!items.length;
+  for(const item of items.slice(0,100))exceptionList.append(element("li",null,item));
+  if(items.length>100)exceptionList.append(element("li",null,"And "+(items.length-100)+" more exceptions."));
+ };
+ report([]);
+ progress("Preparing one bulk pass for verified base artwork…");
  try{
-  const q=await db.from("cv_admin_pokewallet_catalog").select("provider_id,set_id,card_name,card_number").eq("set_id",setId).limit(1000);
+  if(!setId)throw Error("Select a set first.");
+  const q=await db.from("cv_admin_pokewallet_catalog")
+   .select("provider_id,set_id,card_name,card_number").eq("set_id",setId).limit(1000);
   if(q.error)throw q.error;
   const cards=q.data||[];
   if(!cards.length)throw Error("No imported cards.");
   const baseCards=baseArtworkCards(cards);
-  progress("Found "+baseCards.length+" base card records. Checking matching artwork…");
-  const r=await db.from("cv_admin_image_reviews").select("provider_id,review_status,candidate_path").in("provider_id",cards.map(c=>c.provider_id));
+  const r=await db.from("cv_admin_image_reviews")
+   .select("provider_id,review_status,candidate_path").in("provider_id",cards.map(c=>c.provider_id));
   if(r.error)throw r.error;
-  const reviews=r.data||[],existing=new Set(reviews.map(x=>x.provider_id));
-  const anchors=reviews.filter(x=>x.review_status==="approved"&&x.candidate_path);
-  let candidates=[];
-  for(const anchor of anchors){
-   const base=cards.find(x=>x.provider_id===anchor.provider_id);
-   const parts=String(base?.card_number||"").split("/");
-   if(parts.length!==2)continue;
-   const mapping=verifiedFolderFor(base?.set_id);
-   if(!mapping)continue;
-   const image=archive.filter(x=>x.path.replace(/^archive\//,"")===anchor.candidate_path&&x.setSlug===mapping.folder);
-   if(image.length!==1)continue;
-   const file=image[0].filename.match(/^(.+_en_)([0-9]+)(_std)\.(jpg|jpeg|png|webp)$/i);
-   if(!file)continue;
-   const folder=image[0].path.slice(0,-image[0].filename.length);
-   const counts=new Map();
-   for(const c of baseCards){const h=head(c.card_number);counts.set(h,(counts.get(h)||0)+1)}
-   const found=[];
-   for(const c of baseCards){
-    const [number,denom]=String(c.card_number||"").split("/");
-    if(denom!==parts[1]||!/^[0-9]+$/.test(number)||counts.get(head(number))!==1||existing.has(c.provider_id))continue;
-    const expected=folder+file[1]+String(Number(number)).padStart(file[2].length,"0")+file[3]+"."+file[4];
-    const images=archive.filter(x=>x.path===expected&&!claimedByDifferentSet(x.path,c.set_id,c.card_number)&&(!mapping.code||window.CardVectorR2SetMappings.validCandidate(c.set_id,x)));
-    if(images.length!==1||head(images[0].number)!==head(number))continue;
-    if(images[0].name&&normal(images[0].name)!==normal(c.card_name))continue;
-    found.push({provider_id:c.provider_id,candidate_path:expected.replace(/^archive\//,"")});
-   }
-   if(found.length>candidates.length)candidates=found;
-  }
-  // Mega Evolution objects exist in R2 but are absent from the CSV index.
-  // Preflight each same-set mapped filename before it can enter a bulk approval.
+  const reviews=r.data||[],reviewed=new Map(reviews.map(row=>[row.provider_id,row]));
   const mapping=verifiedFolderFor(setId);
-  if(!candidates.length&&mapping?.pathPrefix){
-   const counts=new Map();
-   for(const c of baseCards){const n=head(c.card_number);counts.set(n,(counts.get(n)||0)+1);}
-   const proposed=baseCards.filter(c=>!existing.has(c.provider_id)&&counts.get(head(c.card_number))===1)
-    .map(c=>({card:c,match:mappedSeriesCandidate(c,mapping)})).filter(x=>x.match);
-   if(!proposed.length){$("match-set-note").textContent="No additional uniquely numbered standard-finish paths to test.";return;}
-   progress("Checking 0 / "+proposed.length+" R2 images. No matches will be saved before your confirmation.");
-   button.textContent="Checking 0 / "+proposed.length;
-   function imageExists(url){
-    return new Promise(resolve=>{
-     const img=new Image();
-     let settled=false;
-     const finish=valid=>{if(settled)return;settled=true;clearTimeout(timer);img.onload=null;img.onerror=null;resolve(valid);};
-     const timer=setTimeout(()=>finish(false),7000);
-     img.onload=()=>finish(true);
-     img.onerror=()=>finish(false);
-     img.src=url;
-    });
-   }
-   let checked=0,ok=[],cursor=0;
-   async function worker(){
-    while(cursor<proposed.length){
-     const task=proposed[cursor++];
-     const available=await imageExists(task.match.r.url);
-     if(available)ok.push({provider_id:task.card.provider_id,candidate_path:task.match.r.path.replace(/^archive\//,"")});
-     checked++;
-     if(checked%5===0||checked===proposed.length){
-      const message="Checked "+checked+" / "+proposed.length+" images; "+ok.length+" accessible. No approvals saved yet.";
-      progress(message);button.textContent="Checking "+checked+" / "+proposed.length;
-     }
+  const problems=[];
+  const candidates=[];
+  const numberCounts=new Map();
+  for(const card of cards.filter(c=>!isFinishPrinting(c))){
+   numberCounts.set(card.card_number,(numberCounts.get(card.card_number)||0)+1);
+  }
+  // Prefer an explicitly registered mapping. For older indexed sets, derive
+  // a filename series only from an approved, same-set standard card.
+  let indexedAnchor=null;
+  if(!mapping?.pathPrefix){
+   for(const decision of reviews){
+    if(decision.review_status!=="approved"||!decision.candidate_path)continue;
+    const matched=archive.find(row=>row.path.replace(/^archive\//,"")===decision.candidate_path
+     &&row.setSlug===mapping?.folder);
+    const match=matched?.filename?.match(/^(.+_en_)([0-9]+)(_std)\.(jpg|jpeg|png|webp)$/i);
+    if(match){
+     indexedAnchor={folder:matched.path.slice(0,-matched.filename.length),prefix:match[1],
+      pad:match[2].length,suffix:match[3]+"."+match[4]};
+     break;
     }
    }
-   await Promise.all(Array.from({length:Math.min(12,proposed.length)},()=>worker()));
-   candidates=ok;
-   progress("Image check completed: "+ok.length+" accessible of "+proposed.length+". Review confirmation before saving.");
   }
-  if(!candidates.length){const message="No accessible base artwork images found. Nothing was saved. Check the R2 filenames or network connection.";progress(message);$("match-set-note").textContent=message;return}
-  progress("Ready to confirm "+candidates.length+" base artwork matches. Nothing saved yet.");
-  if(!window.confirm("First pass: save "+candidates.length+" base artwork matches from this verified set? Every unindexed file was checked for availability. Pattern variants remain unapproved until the second pass. Check artwork and card numbers before confirming."))return;
+  if(!mapping){throw Error("Approve one base image from its correct R2 folder to establish set identity.");}
+  for(const card of baseCards){
+   const label=card.card_name+" #"+card.card_number;
+   if(reviewed.has(card.provider_id))continue; // Never override an earlier decision.
+   if(numberCounts.get(card.card_number)!==1){problems.push(label+" — repeated base identity");continue;}
+   const [number,denom]=String(card.card_number).split("/");
+   if(!/^\d+$/.test(number)||!/^\d+$/.test(denom)){
+    problems.push(label+" — invalid collector number");continue;
+   }
+   if(mapping.denominator&&denom!==mapping.denominator){
+    problems.push(label+" — number is outside verified set series");continue;
+   }
+   let path=null;
+   if(mapping.pathPrefix&&mapping.code){
+    path=mapping.pathPrefix+mapping.code+"_en_"+String(Number(number)).padStart(3,"0")+"_std.jpg";
+   }else if(indexedAnchor){
+    path=indexedAnchor.folder+indexedAnchor.prefix+String(Number(number)).padStart(indexedAnchor.pad,"0")+indexedAnchor.suffix;
+   }else{
+    const hits=archive.filter(row=>row.setSlug===mapping.folder
+     &&head(row.number)===head(card.card_number)
+     &&(!row.name||normal(row.name)===normal(card.card_name))
+     &&(!mapping.code||window.CardVectorR2SetMappings.validCandidate(setId,row)));
+    if(hits.length===1)path=hits[0].path.replace(/^archive\//,"");
+    else {problems.push(label+" — "+(hits.length?"multiple images; choose manually":"no verified image series"));continue;}
+   }
+   if(claimedByDifferentSet(path,setId,card.card_number)){
+    problems.push(label+" — R2 image claimed by another card");continue;
+   }
+   const url=candidateUrl(path);
+   if(!url){problems.push(label+" — unsafe image path");continue;}
+   candidates.push({provider_id:card.provider_id,candidate_path:path,url,label});
+  }
+  const skipped=baseCards.length-candidates.length;
+  progress("Preparing "+candidates.length+" base images; "+skipped+" already reviewed or require attention.");
+  if(!candidates.length){
+   report(problems);
+   progress("No new base images to match. "+(problems.length?problems.length+" exceptions need review.":"Previously reviewed images remain unchanged."));
+   return;
+  }
+  // Count failed/timeout images as exceptions instead of blocking the batch.
+  function imageExists(url){
+   return new Promise(resolve=>{
+    const img=new Image();
+    let settled=false;
+    const finish=valid=>{
+     if(settled)return;
+     settled=true;clearTimeout(timer);img.onload=null;img.onerror=null;img.src="";
+     resolve(valid);
+    };
+    const timer=setTimeout(()=>finish(false),10000);
+    img.onload=()=>finish(true);
+    img.onerror=()=>finish(false);
+    img.src=url;
+   });
+  }
+  const ok=[];let checked=0,cursor=0;
+  progress("Checking 0 / "+candidates.length+" images in R2. Nothing saved yet.");
+  button.textContent="Checking 0 / "+candidates.length;
+  async function worker(){
+   while(cursor<candidates.length){
+    const item=candidates[cursor++];
+    if(await imageExists(item.url))ok.push(item);
+    else problems.push(item.label+" — R2 image missing or inaccessible");
+    checked++;
+    if(checked%5===0||checked===candidates.length){
+     progress("Checked "+checked+" / "+candidates.length+" images; "+ok.length+" accessible, "+problems.length+" exceptions. Nothing saved yet.");
+     button.textContent="Checking "+checked+" / "+candidates.length;
+    }
+   }
+  }
+  await Promise.all(Array.from({length:Math.min(12,candidates.length)},()=>worker()));
+  report(problems);
+  if(!ok.length){
+   progress("No accessible base artwork found. "+problems.length+" exceptions listed; nothing was saved.");
+   return;
+  }
+  ok.sort((a,b)=>a.candidate_path.localeCompare(b.candidate_path));
+  progress("Ready to approve "+ok.length+" base artwork matches in one batch; "+problems.length+" exceptions. Finish variants are not included.");
+  if(!window.confirm("Approve "+ok.length+" verified base artwork matches for this set in ONE batch? "+problems.length+" exceptions will be left for review. Poké Ball, Master Ball and other printing records stay separate. Public search unchanged.")){
+   progress("Bulk approval canceled. No new images saved.");
+   return;
+  }
   const auth=await db.auth.getUser();
-  if(auth.error||!auth.data.user)throw Error("Administrator session expired");
+  if(auth.error||!auth.data.user)throw Error("Administrator session expired.");
   let saved=0;
-  for(let i=0;i<candidates.length;i+=40){
-   const rows=candidates.slice(i,i+40).map(c=>({...c,review_status:"approved",notes:"Matched to confirmed set numbering series; standard finish only",reviewed_by:auth.data.user.id,reviewed_at:new Date().toISOString()}));
+  for(let i=0;i<ok.length;i+=40){
+   const rows=ok.slice(i,i+40).map(item=>({
+    provider_id:item.provider_id,candidate_path:item.candidate_path,
+    review_status:"approved",notes:"Bulk verified base artwork; individual finish variants deferred",
+    reviewed_by:auth.data.user.id,reviewed_at:new Date().toISOString()
+   }));
    const result=await db.from("cv_admin_image_reviews").upsert(rows,{onConflict:"provider_id"});
-   if(result.error)throw result.error;
+   if(result.error)throw Error("Saved "+saved+" before failure: "+result.error.message);
    saved+=rows.length;
-   progress("Saved "+saved+" / "+candidates.length+" approved base artwork matches.");
+   progress("Saved "+saved+" / "+ok.length+" base images; "+problems.length+" exceptions.");
   }
   await loadClaims();
-  progress("Completed: "+saved+" base artwork matches saved. Finish variants remain separate.");
-  $("match-set-note").textContent="Saved "+saved+" approved private set image matches. Catalog publication remains separate.";
+  progress("First pass complete: "+saved+" base artwork approvals, "+problems.length+" exceptions. Finish variants remain separate.");
+  $("match-set-note").textContent="Bulk base artwork saved. Inspect exceptions, then use the separate finish-sharing action. Public search remains unchanged.";
   await refresh();
- }catch(error){progress("First pass failed: "+error.message+". No further records were saved.");notice("Set matching failed: "+error.message,true)}
- finally{button.disabled=false;button.textContent=originalLabel}
+ }catch(error){progress("First pass error: "+error.message);notice("Bulk artwork matching failed: "+error.message,true);}
+ finally{button.disabled=false;button.textContent=originalLabel;}
 }
 async function getSets(){
  const {data,error}=await db.from("cv_admin_set_coverage").select("set_id,set_name,imported_cards,unmatched_cards,matched_cards,review_cards,coverage_status").order("unmatched_cards",{ascending:false}).limit(1000);
