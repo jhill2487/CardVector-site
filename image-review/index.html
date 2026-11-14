@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=b2b8a6037910" type="image/svg+xml">
+<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=f2f580fed772" type="image/svg+xml">
 <title>Image Review | CardVector</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#091320;color:#edf4fc}
@@ -35,7 +35,7 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 .zoom-hint{font-size:.8rem;color:#b7c9d7;margin:8px 0 0}#pager{display:flex;gap:12px;align-items:center;justify-content:flex-end}
 @media(max-width:560px){.review-card{grid-template-columns:65px minmax(0,1fr);gap:10px}.image{width:63px;height:90px}.candidate{grid-template-columns:1fr}header img{width:130px}}
 </style></head>
-<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=b2b8a6037910" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
+<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=f2f580fed772" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
 <main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1>
 <p class="muted">Review English-language Pokémon card images by set. Suggested images require review. Approved images are saved in the private catalog; public search remains unchanged.</p>
 <section id="access" class="panel"><h2>Administrator sign-in</h2><p id="access-message" role="status">Checking administrator session…</p>
@@ -47,7 +47,7 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 <div class="control"><label for="filter">Review status</label><select id="filter"><option value="pending">Pending images</option><option value="missing">Missing images</option><option value="needs_review">Ambiguous images</option><option value="matched">Existing exact matches</option><option value="resolved">Reviewed decisions</option><option value="all">All imported cards</option></select></div>
 <button id="refresh" type="button" class="secondary">Refresh</button></div>
 <div id="folder-setup" class="panel" hidden><label for="r2-folder">R2 set folder for first review</label><select id="r2-folder"><option value="">Select a folder…</option></select><p class="note" id="folder-help">The correct set folder must be verified before approving its first card. Selecting a folder here does not save or approve anything.</p></div>
-<div class="actions"><button id="match-set" type="button" class="secondary">Match set using approved image</button></div><p class="note" id="match-set-note">Use an approved R2 card to identify unique numbered standard-finish images in the same set. No public search changes.</p>
+<div class="actions"><button id="match-set" type="button" class="secondary">Match set using approved image</button><button id="match-shared" type="button" class="secondary">Share approved artwork with other finishes</button></div><p class="note" id="match-set-note">Use a verified R2 image for a set and number. The shared-artwork action reuses approved artwork only for other records with that exact set ID and card number; finishing options remain separate. No public search changes.</p>
 <p id="set-note" class="note"></p>
 <p id="counts" class="summary" role="status" aria-live="polite">Loading…</p>
 <div id="cards"></div>
@@ -63,8 +63,8 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 </dialog>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/kaggle-catalog.js?v=20261113-candidates&cv=b2b8a6037910"></script>
-<script src="/r2-set-mappings.js?v=20261113b&cv=b2b8a6037910"></script>
+<script src="/kaggle-catalog.js?v=20261113-candidates&cv=f2f580fed772"></script>
+<script src="/r2-set-mappings.js?v=20261113b&cv=f2f580fed772"></script>
 <script>
 (()=>{"use strict";
 const $=id=>document.getElementById(id);
@@ -76,9 +76,12 @@ const endpoint="https://iqdpfgpkagjxzedfxrvn.supabase.co";
 let db=null,sets=[],records=[],decisions=new Map(),page=0,hasMore=false,archive=[],archiveError="",claims=new Map(),temporaryFolder=null;
 const normal=v=>String(v||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
 const head=v=>String(v||"").split("/")[0].toLowerCase().trim().replace(/^0+(?=\d)/,"");
-function claimedByDifferentSet(path,setId){
- const sets=claims.get(String(path||"").replace(/^archive\//,""));
- return Boolean(sets&&[...sets].some(id=>id!==String(setId)));
+function claimedByDifferentSet(path,setId,cardNumber){
+ const owners=claims.get(String(path||"").replace(/^archive\//,""));
+ return Boolean(owners&&[...owners].some(identity=>{
+  const [ownerSet,ownerNumber]=identity.split("|");
+  return ownerSet!==String(setId)||(cardNumber!=null&&ownerNumber!==String(cardNumber));
+ }));
 }
 async function loadClaims(){
  const {data,error}=await db.from("cv_admin_image_reviews")
@@ -88,14 +91,14 @@ async function loadClaims(){
  const next=new Map(),rows=data||[];
  if(rows.length){
   const ids=rows.map(x=>x.provider_id);
-  const result=await db.from("cv_admin_pokewallet_catalog").select("provider_id,set_id").in("provider_id",ids);
+  const result=await db.from("cv_admin_pokewallet_catalog").select("provider_id,set_id,card_number").in("provider_id",ids);
   if(result.error)throw result.error;
-  const setsById=new Map((result.data||[]).map(x=>[x.provider_id,String(x.set_id)]));
+  const setsById=new Map((result.data||[]).map(x=>[x.provider_id,{set_id:String(x.set_id),card_number:String(x.card_number)}]));
   for(const review of rows){
-   const id=setsById.get(review.provider_id),path=review.candidate_path;
-   if(!id||!path)continue;
+   const identity=setsById.get(review.provider_id),path=review.candidate_path;
+   if(!identity||!path)continue;
    if(!next.has(path))next.set(path,new Set());
-   next.get(path).add(id);
+   next.get(path).add(identity.set_id+"|"+identity.card_number);
   }
  }
  claims=next;
@@ -107,7 +110,7 @@ function verifiedFolderFor(setId){
  // used on this page without making an unverified public mapping.
  const folders=new Set();
  for(const [path,ids] of claims){
-  if(ids.has(String(setId))){
+  if([...ids].some(identity=>identity.startsWith(String(setId)+"|"))){
    const parts=path.split("/");
    if(parts.length>=2)folders.add(parts[parts.length-2]);
   }
@@ -161,7 +164,7 @@ function mappedSeriesCandidate(card,mapping){
  if(!/^\d+$/.test(number)||total!==mapping.denominator)return null;
  const n=String(Number(number)).padStart(3,"0");
  const path=mapping.pathPrefix+mapping.code+"_en_"+n+"_std.jpg";
- if(claimedByDifferentSet(path,card.set_id))return null;
+ if(claimedByDifferentSet(path,card.set_id,card.card_number))return null;
  const url=candidateUrl(path);
  if(!url)return null;
  return {r:{path:"archive/"+path,url,setSlug:mapping.folder,filename:path.split("/").pop(),number},score:50,inferred:true,evidence:"Verified R2 set series · image must load"};
@@ -175,7 +178,7 @@ function seriesCandidatesFor(card,mapping){
  if(mapping.denominator&&total!==mapping.denominator)return [];
  const target=Number(number),out=new Map();
  for(const [approvedPath,owners] of claims){
-  if(!owners.has(String(card.set_id)))continue;
+  if(![...owners].some(identity=>identity.startsWith(String(card.set_id)+"|")))continue;
   const segments=approvedPath.split("/");
   if(segments.length<2||segments[segments.length-2]!==mapping.folder)continue;
   const approvedFile=segments[segments.length-1];
@@ -183,7 +186,7 @@ function seriesCandidatesFor(card,mapping){
   if(!parsed)continue;
   if(mapping.code&&!parsed[1].toLowerCase().startsWith(mapping.code.toLowerCase()+"_en_"))continue;
   const candidate=segments.slice(0,-1).concat(parsed[1]+String(target).padStart(parsed[2].length,"0")+parsed[3]+"."+parsed[4]).join("/");
-  if(candidate===approvedPath||claimedByDifferentSet(candidate,card.set_id))continue;
+  if(candidate===approvedPath||claimedByDifferentSet(candidate,card.set_id,card.card_number))continue;
   const url=candidateUrl(candidate);
   if(!url)continue;
   out.set(candidate,{r:{path:"archive/"+candidate,url,setSlug:mapping.folder,filename:candidate.split("/").pop(),number},score:50,inferred:true,evidence:"Predicted from approved set image · verify artwork"});
@@ -195,7 +198,7 @@ function candidatesFor(card){
  const n=head(card.card_number),name=normal(card.card_name),mapping=currentFolderFor(card.set_id);
  if(!n||!name||!mapping)return [];
  if(mapping.denominator&&String(card.card_number||"").split("/")[1]!==mapping.denominator)return [];
- const indexed=archive.filter(row=>head(row.number)===n&&!claimedByDifferentSet(row.path,card.set_id)).map(row=>{
+ const indexed=archive.filter(row=>head(row.number)===n&&!claimedByDifferentSet(row.path,card.set_id,card.card_number)).map(row=>{
   if(row.setSlug!==mapping.folder)return null;
   if(mapping.code&&!window.CardVectorR2SetMappings.validCandidate(card.set_id,row))return null;
   if(row.name&&normal(row.name)!==name)return null;
@@ -287,7 +290,7 @@ function detail(card,review){
   button.addEventListener("click",async()=>{
    const path=input.value.trim(),url=candidateUrl(path);
    if(value==="approved"&&(!url||selectedPath!==path||!previewLoaded)){notice("Select a candidate image and wait for its preview before approving.",true);return;}
-   if(value==="approved"&&claimedByDifferentSet(path,card.set_id)){notice("This R2 image is already approved for a different set.",true);return;}
+   if(value==="approved"&&claimedByDifferentSet(path,card.set_id,card.card_number)){notice("This R2 image is approved for a different set or collector number.",true);return;}
    if(value==="approved"&&!found.some(x=>x.r.path.replace(/^archive\//,"")===path)){notice("Approval requires a candidate from the verified set folder.",true);return;}
    if(value==="approved"&&!verifiedFolderFor(card.set_id)&&!folderAllowedForSet(card.set_id,temporaryFolder?.folder)){notice("The R2 folder must match this specific set; regular Mega Evolution files cannot approve Mega Evolution Promo cards.",true);return;}
    if(value==="approved"&&!window.confirm("Save this approved image to the private catalog? Public search will not change."))return;
@@ -343,6 +346,56 @@ async function loadArchive(){
  catch(e){archive=[];archiveError=e.message||"Failed loading R2 image index";}
 }
 
+// Use one approved image for the SAME set + full collector number only.
+// Each printing remains a separate provider_id and preserves its variants.
+async function shareApprovedArtwork(){
+ const button=$("match-shared"),setId=$("set").value;
+ button.disabled=true;
+ try{
+  const result=await db.from("cv_admin_pokewallet_catalog")
+   .select("provider_id,set_id,card_name,card_number")
+   .eq("set_id",setId).limit(1000);
+  if(result.error)throw result.error;
+  const cards=result.data||[];
+  if(!cards.length)throw Error("No imported cards");
+  const response=await db.from("cv_admin_image_reviews")
+   .select("provider_id,review_status,candidate_path")
+   .in("provider_id",cards.map(c=>c.provider_id));
+  if(response.error)throw response.error;
+  const decisions=new Map((response.data||[]).map(r=>[r.provider_id,r]));
+  const anchors=new Map();
+  for(const card of cards){
+   const r=decisions.get(card.provider_id);
+   if(r?.review_status!=="approved"||!r.candidate_path)continue;
+   if(!anchors.has(card.card_number))anchors.set(card.card_number,new Set());
+   anchors.get(card.card_number).add(r.candidate_path);
+  }
+  const pending=cards.flatMap(card=>{
+   if(decisions.has(card.provider_id))return [];
+   const paths=anchors.get(card.card_number);
+   if(!paths||paths.size!==1)return [];
+   const path=[...paths][0];
+   if(claimedByDifferentSet(path,setId,card.card_number))return [];
+   return [{provider_id:card.provider_id,candidate_path:path,review_status:"approved",
+     notes:"Shared approved same-set artwork; individual printing/finish retained"}];
+  });
+  if(!pending.length){$("match-set-note").textContent="No eligible same-number printing records. Approve one artwork image for a repeated card number first.";return;}
+  if(!window.confirm("Reuse verified artwork for "+pending.length+" additional printing records in "+setId+"? Only identical set ID and collector number qualify. Poké Ball, Master Ball, and other finish identities stay separate. Public search unchanged."))return;
+  const auth=await db.auth.getUser();
+  if(auth.error||!auth.data.user)throw Error("Administrator session expired");
+  let count=0;
+  for(let i=0;i<pending.length;i+=40){
+   const rows=pending.slice(i,i+40).map(r=>({...r,reviewed_by:auth.data.user.id,reviewed_at:new Date().toISOString()}));
+   const saved=await db.from("cv_admin_image_reviews").upsert(rows,{onConflict:"provider_id"});
+   if(saved.error)throw saved.error;
+   count+=rows.length;
+  }
+  await loadClaims();
+  $("match-set-note").textContent="Saved "+count+" shared-artwork approvals. Original printing records and finish identifiers were not modified.";
+  await refresh();
+ }catch(error){notice("Shared artwork matching failed: "+error.message,true);}
+ finally{button.disabled=false;}
+}
 async function matchApprovedSet(){
  const button=$("match-set"),setId=$("set").value;
  button.disabled=true;
@@ -374,7 +427,7 @@ async function matchApprovedSet(){
     const [number,denom]=String(c.card_number||"").split("/");
     if(denom!==parts[1]||!/^[0-9]+$/.test(number)||counts.get(head(number))!==1||existing.has(c.provider_id))continue;
     const expected=folder+file[1]+String(Number(number)).padStart(file[2].length,"0")+file[3]+"."+file[4];
-    const images=archive.filter(x=>x.path===expected&&!claimedByDifferentSet(x.path,c.set_id)&&(!mapping.code||window.CardVectorR2SetMappings.validCandidate(c.set_id,x)));
+    const images=archive.filter(x=>x.path===expected&&!claimedByDifferentSet(x.path,c.set_id,c.card_number)&&(!mapping.code||window.CardVectorR2SetMappings.validCandidate(c.set_id,x)));
     if(images.length!==1||head(images[0].number)!==head(number))continue;
     if(images[0].name&&normal(images[0].name)!==normal(c.card_name))continue;
     found.push({provider_id:c.provider_id,candidate_path:expected.replace(/^archive\//,"")});
@@ -486,6 +539,7 @@ async function init(){
  $("filter").addEventListener("change",()=>{page=0;refresh()});
  $("refresh").addEventListener("click",()=>{page=0;refresh()});
  $("match-set").addEventListener("click",matchApprovedSet);
+ $("match-shared").addEventListener("click",shareApprovedArtwork);
  $("zoom-close").addEventListener("click",()=>{$("image-zoom").close();});
  $("zoom-toggle").addEventListener("click",()=>{
   const modal=$("image-zoom");
