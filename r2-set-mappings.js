@@ -3,6 +3,14 @@
 (() => {
  "use strict";
  const entries = Object.freeze({
+  "24541": Object.freeze({
+   set:"ME: Ascended Heroes",
+   folder:"ascended-heroes",
+   code:"me2-5",
+   denominator:"217",
+   pathPrefix:"ascended-heroes/ascended-heroes/",
+   evidence:"295 indexed Ascended Heroes R2 files; me2-5_en_001,002,003,293,294,295_std.jpg independently returned HTTP 200 image/jpeg"
+  }),
   "24325": Object.freeze({
    set:"SV: Black Bolt",
    folder:"black-bolt",
