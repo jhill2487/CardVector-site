@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=ed2ca8ae8ee1" type="image/svg+xml">
+<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=b02c3480c12e" type="image/svg+xml">
 <title>Image Review | CardVector</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#091320;color:#edf4fc}
@@ -35,8 +35,8 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 .zoom-hint{font-size:.8rem;color:#b7c9d7;margin:8px 0 0}#pager{display:flex;gap:12px;align-items:center;justify-content:flex-end}
 @media(max-width:560px){.review-card{grid-template-columns:65px minmax(0,1fr);gap:10px}.image{width:63px;height:90px}.candidate{grid-template-columns:1fr}header img{width:130px}}
 </style></head>
-<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=ed2ca8ae8ee1" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
-<main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1><p class="note" id="build-version">Review build 172 · reusable approved image series</p>
+<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=b02c3480c12e" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
+<main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1><p class="note" id="build-version">Review build 173 · uploaded R2 review candidates</p>
 <p class="muted">Review English-language Pokémon card images by set. Suggested images require review. Approved images are saved in the private catalog; public search remains unchanged.</p>
 <section id="access" class="panel"><h2>Administrator sign-in</h2><p id="access-message" role="status">Checking administrator session…</p>
 <form id="admin-login" hidden><label for="admin-email">Email</label><input id="admin-email" type="email" required autocomplete="username" value="jhill2487@gmail.com">
@@ -44,7 +44,7 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 <button type="submit" id="admin-submit">Sign in</button></form></section>
 <div id="private"><section class="panel">
 <div class="toolbar"><div class="control"><label for="set">English set</label><select id="set"><option value="">Loading sets…</option></select></div>
-<div class="control"><label for="filter">Review status</label><select id="filter"><option value="pending">Pending images</option><option value="missing">Missing images</option><option value="needs_review">Ambiguous images</option><option value="matched">Existing exact matches</option><option value="resolved">Reviewed decisions</option><option value="all">All imported cards</option></select></div>
+<div class="control"><label for="filter">Review status</label><select id="filter"><option value="uploaded">Uploaded R2 candidates</option><option value="pending">Pending images</option><option value="missing">Missing images</option><option value="needs_review">Ambiguous images</option><option value="matched">Existing exact matches</option><option value="resolved">Reviewed decisions</option><option value="all">All imported cards</option></select></div>
 <button id="refresh" type="button" class="secondary">Refresh</button></div>
 <div id="folder-setup" class="panel" hidden><label for="r2-folder">R2 set folder for first review</label><select id="r2-folder"><option value="">Select a folder…</option></select><p class="note" id="folder-help">The correct set folder must be verified before approving its first card. Selecting a folder here does not save or approve anything.</p></div>
 <div class="actions"><button id="match-set" type="button" class="secondary">First pass: match base artwork</button><button id="match-shared" type="button" class="secondary">Share base artwork with other finishes</button></div><p id="match-progress" class="note" role="status" aria-live="polite">Ready for artwork matching.</p><details id="match-exceptions" hidden><summary id="match-exceptions-summary">Review exceptions</summary><ol id="match-exceptions-list"></ol></details><p class="note" id="match-set-note">First pass matches base artwork per unique set and card number, leaving Poké Ball, Master Ball and other pattern records pending. Share representative base artwork with ordinary and Poké Ball/Master Ball finishes while preserving distinct printing identities; visible foil patterns remain unverified. Staff and special stamped printings require their own images. Public search is unchanged.</p>
@@ -63,8 +63,8 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 </dialog>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/kaggle-catalog.js?v=20261113-candidates&cv=ed2ca8ae8ee1"></script>
-<script src="/r2-set-mappings.js?v=20261115-journey-probe&cv=ed2ca8ae8ee1"></script>
+<script src="/kaggle-catalog.js?v=20261113-candidates&cv=b02c3480c12e"></script>
+<script src="/r2-set-mappings.js?v=20261115-journey-probe&cv=b02c3480c12e"></script>
 <script>
 (()=>{"use strict";
 const $=id=>document.getElementById(id);
@@ -329,12 +329,13 @@ function detail(card,review){
   candidateSection.append(search,element("p","note","Discovery reference only. Do not copy or approve artwork until the exact printing and reuse rights are confirmed."));
  }
  body.append(candidateSection);
- const savedImage=review?.review_status==="approved"?review.candidate_path:card.image_path;
+ const savedImage=review?.candidate_path||card.image_path;
  if(savedImage)showCardImage(visual,savedImage,card.card_name+" "+card.card_number);
  const form=element("div");
  const label=element("label",null,"R2 image path (optional until approving)");
  let selectedPath="",previewLoaded=false;
- const selectedLabel=element("p","note","No candidate selected. Tap the correct image below.");
+ const uploadedCandidate=review?.review_status==="pending_review"&&Boolean(review.candidate_path);
+ const selectedLabel=element("p","note",uploadedCandidate?"Uploaded R2 candidate available. Click Preview image and inspect the card before approving.":"No candidate selected. Tap the correct image below.");
  const input=element("input");input.type="text";input.placeholder="set-folder/card-file.jpg";input.value=review?.candidate_path||card.image_path||"";
  input.setAttribute("aria-label","R2 candidate path for "+card.card_name);
  input.addEventListener("input",()=>{selectedPath="";previewLoaded=false;selectedLabel.textContent="Select an image before approval.";});
@@ -373,8 +374,9 @@ function detail(card,review){
    const path=input.value.trim(),url=candidateUrl(path);
    if(value==="approved"&&(!url||selectedPath!==path||!previewLoaded)){notice("Select a candidate image and wait for its preview before approving.",true);return;}
    if(value==="approved"&&claimedByDifferentSet(path,card.set_id,card.card_number)){notice("This R2 image is approved for a different set or collector number.",true);return;}
-   if(value==="approved"&&!found.some(x=>x.r.path.replace(/^archive\//,"")===path)){notice("Approval requires an exact-printing candidate from the verified set folder. Standard art cannot approve Poké Ball or Master Ball patterns.",true);return;}
-   if(value==="approved"&&!verifiedFolderFor(card.set_id)&&!folderAllowedForSet(card.set_id,temporaryFolder?.folder)){notice("The R2 folder must match this specific set; regular Mega Evolution files cannot approve Mega Evolution Promo cards.",true);return;}
+   const savedUploaded=uploadedCandidate&&path===review.candidate_path&&card.set_name==="Delta Reign"&&path.startsWith("pokewallet/delta-reign/")&&!requiresDistinctImage(card)&&!requiredPatternToken(card);
+   if(value==="approved"&&!savedUploaded&&!found.some(x=>x.r.path.replace(/^archive\//,"")===path)){notice("Approval requires an exact-printing candidate from the verified set folder or a previously uploaded verified-source candidate. Special printings remain separate.",true);return;}
+   if(value==="approved"&&!savedUploaded&&!verifiedFolderFor(card.set_id)&&!folderAllowedForSet(card.set_id,temporaryFolder?.folder)){notice("The R2 folder must match this specific set; regular Mega Evolution files cannot approve Mega Evolution Promo cards.",true);return;}
    if(value==="approved"&&!window.confirm("Save this approved image to the private catalog? Public search will not change."))return;
    for(const child of actions.querySelectorAll("button"))child.disabled=true;
    const session=await db.auth.getUser();
@@ -768,8 +770,21 @@ async function refresh(){
  const verified=verifiedFolderFor(setId);
  $("set-note").textContent=(verified?(verified.provisional?"Unverified R2 filename probes: ":"Verified R2 folder: ")+verified.folder+(verified.code?" · Code: "+verified.code:"")+" · ":"No verified R2 set folder yet · ")+(current.coverage_status==="confirmed_absent"?"Confirmed set-level Kaggle gap. Inspect alternative sources; individual cards still need identity and finish verification.":"Coverage status: "+current.coverage_status.replaceAll("_"," ")+". Unmatched does not necessarily mean absent from Kaggle.");
  $("counts").textContent="Loading cards…";
- let query=db.from("cv_admin_pokewallet_catalog").select("provider_id,set_id,set_name,card_name,card_number,image_status,image_path").eq("set_id",setId).order("card_number",{ascending:true}).range(page*PAGE,(page+1)*PAGE);
- if(["pending","missing","needs_review","matched"].includes(filter))query=query.eq("image_status",filter);
+ let query=db.from("cv_admin_pokewallet_catalog").select("provider_id,set_id,set_name,card_name,card_number,image_status,image_path").eq("set_id",setId).order("card_number",{ascending:true});
+ if(filter==="uploaded"){
+  // Catalog image_status remains missing until an admin approves an uploaded candidate.
+  // Find pending reviews independently rather than filtering catalog status first.
+  const {data:uploads,error:uploadError}=await db.from("cv_admin_image_reviews")
+   .select("provider_id,candidate_path").eq("review_status","pending_review").not("candidate_path","is",null).limit(1000);
+  if(uploadError){$("counts").textContent="Unable to load uploaded candidates: "+uploadError.message;render();return;}
+  const setIds=new Set((uploads||[]).map(x=>x.provider_id));
+  if(!setIds.size){$("counts").textContent="No uploaded R2 candidates awaiting review.";render();return;}
+  // Use the existing pagination after resolving which candidates belong to the set.
+  query=query.in("provider_id",[...setIds]).range(page*PAGE,(page+1)*PAGE);
+ }else{
+  if(["pending","missing","needs_review","matched"].includes(filter))query=query.eq("image_status",filter);
+  query=query.range(page*PAGE,(page+1)*PAGE);
+ }
  const {data,error}=await query;
  if(error){$("counts").textContent="Unable to load cards: "+error.message;render();return;}
  const result=data||[];
@@ -796,7 +811,7 @@ async function authorized(){
   $("admin-login").hidden=false;return;
  }
  $("access").hidden=true;$("private").style.display="block";
- try{await Promise.all([getSets(),loadArchive(),loadClaims()]);configureFolder($("set").value);if(!verifiedFolderFor($("set").value))$("filter").value="pending";await refresh();}catch(e){notice("Unable to load image review: "+e.message,true);}
+ try{await Promise.all([getSets(),loadArchive(),loadClaims()]);configureFolder($("set").value);if(!verifiedFolderFor($("set").value))$("filter").value="uploaded";await refresh();}catch(e){notice("Unable to load image review: "+e.message,true);}
 }
 async function init(){
  if(!window.supabase?.createClient){$("access-message").textContent="Authentication service unavailable.";return;}
