@@ -3,6 +3,14 @@
 (() => {
  "use strict";
  const entries = Object.freeze({
+  "23821": Object.freeze({
+   set:"SV: Prismatic Evolutions",
+   folder:"prismatic-evolutions",
+   code:"sv8-5",
+   denominator:"131",
+   pathPrefix:"Pokemon TCG/Pokemon TCG/prismatic-evolutions/",
+   evidence:"Administrator-approved Exeggcute 001/131 image sv8-5_en_001_std.jpg on 2026-11-15; additional files must be loaded and confirmed before bulk matching."
+  }),
   "23353": Object.freeze({
    set:"SV: Paldean Fates",
    folder:"paldean-fates",
