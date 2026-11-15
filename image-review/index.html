@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=ab738cd08944" type="image/svg+xml">
+<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=14292d642fb1" type="image/svg+xml">
 <title>Image Review | CardVector</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#091320;color:#edf4fc}
@@ -35,7 +35,7 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 .zoom-hint{font-size:.8rem;color:#b7c9d7;margin:8px 0 0}#pager{display:flex;gap:12px;align-items:center;justify-content:flex-end}
 @media(max-width:560px){.review-card{grid-template-columns:65px minmax(0,1fr);gap:10px}.image{width:63px;height:90px}.candidate{grid-template-columns:1fr}header img{width:130px}}
 </style></head>
-<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=ab738cd08944" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
+<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=14292d642fb1" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
 <main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1><p class="note" id="build-version">Review build 174 · visible saved-candidate approval feedback</p>
 <p class="muted">Review English-language Pokémon card images by set. Suggested images require review. Approved images are saved in the private catalog; public search remains unchanged.</p>
 <section id="access" class="panel"><h2>Administrator sign-in</h2><p id="access-message" role="status">Checking administrator session…</p>
@@ -63,8 +63,8 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 </dialog>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/kaggle-catalog.js?v=20261113-candidates&cv=ab738cd08944"></script>
-<script src="/r2-set-mappings.js?v=20261115-journey-probe&cv=ab738cd08944"></script>
+<script src="/kaggle-catalog.js?v=20261113-candidates&cv=14292d642fb1"></script>
+<script src="/r2-set-mappings.js?v=20261115-journey-probe&cv=14292d642fb1"></script>
 <script>
 (()=>{"use strict";
 const $=id=>document.getElementById(id);
@@ -589,6 +589,32 @@ function mappingFromApprovedReviews(cards,reviews){
  }
  return folders.size===1?{folder:[...folders][0],code:null,denominator:null}:null;
 }
+// Exact-card staged uploads are an alternative to sequential R2 filenames.
+// Require a manually approved image in the SAME source folder first.
+function uploadedImageIdentity(card,path){
+ const m=String(path||"").match(/^(pokewallet\/[a-z0-9-]+\/)0*(\d+)-0*(\d+)_([a-f0-9]{16})\.(png|jpg|jpeg|webp)$/i);
+ const n=String(card.card_number||"").match(/^(\d+)\/(\d+)$/);
+ const id=String(card.provider_id||"").match(/^pk_([a-f0-9]{16})[a-f0-9]*$/i);
+ return m&&n&&id&&Number(m[2])===Number(n[1])&&Number(m[3])===Number(n[2])&&m[4].toLowerCase()===id[1].toLowerCase()?{folder:m[1],path:String(path)}:null;
+}
+function uploadedCandidatesForFirstPass(cards,reviews){
+ const byId=new Map(cards.map(c=>[c.provider_id,c])),folders=new Set();
+ for(const r of reviews){
+  const c=byId.get(r.provider_id);
+  if(r.review_status!=="approved"||!c||isFinishPrinting(c))continue;
+  const identity=uploadedImageIdentity(c,r.candidate_path);
+  if(identity)folders.add(identity.folder);
+ }
+ if(folders.size!==1)return new Map();
+ const folder=[...folders][0],candidates=new Map();
+ for(const r of reviews){
+  const c=byId.get(r.provider_id);
+  if(r.review_status!=="pending_review"||!c||isFinishPrinting(c))continue;
+  const identity=uploadedImageIdentity(c,r.candidate_path);
+  if(identity?.folder===folder)candidates.set(c.provider_id,identity.path);
+ }
+ return candidates;
+}
 // First-pass artwork approval is per unique base card, never per printing.
 // A verified set mapping or an approved standard-image anchor provides a
 // numbered series; each candidate is probed before ONE batch confirmation.
@@ -617,6 +643,7 @@ async function matchApprovedSet(){
   const patternCount=cards.filter(c=>Boolean(requiredPatternToken(c))).length;
   const reviews=await lookupByProviderIds("cv_admin_image_reviews","provider_id,review_status,candidate_path",cards.map(c=>c.provider_id));
   const reviewed=new Map(reviews.map(row=>[row.provider_id,row]));
+  const uploadedCandidates=uploadedCandidatesForFirstPass(cards,reviews);
   const approvedAnchors=reviews.filter(row=>row.review_status==="approved"&&row.candidate_path).length;
   progress("Found "+approvedAnchors+" approved anchors; "+patternCount+" patterned printings excluded from base matching. Checking set-specific R2 image series…");
   const mapping=verifiedFolderFor(setId)||mappingFromApprovedReviews(cards,reviews);
@@ -629,34 +656,35 @@ async function matchApprovedSet(){
   // Prior manual approval establishes set identity and the precise image
   // filename series. This is reusable for every regular or patterned set.
   const learned=approvedArtworkSeries(cards,reviews,mapping?.folder||"");
-  if(learned.ambiguous&&(!mapping?.pathPrefix||mapping.provisional))throw Error("Conflicting approved image filename series for this set. Resolve the anchors before bulk matching.");
+  if(learned.ambiguous&&(!mapping?.pathPrefix||mapping?.provisional))throw Error("Conflicting approved image filename series for this set. Resolve the anchors before bulk matching.");
   const indexedAnchor=learned.series;
-  if(!mapping)throw Error("No verified R2 set folder. Approve an indexed base image for this set and refresh.");
-  if((mapping.provisional&&!indexedAnchor)||(!mapping.pathPrefix&&!indexedAnchor&&!mapping.code)){
+  if(!mapping&&!uploadedCandidates.size)throw Error("No verified R2 folder or eligible uploaded candidates. Approve one source image first.");
+  if(!uploadedCandidates.size&&((mapping?.provisional&&!indexedAnchor)||(!mapping?.pathPrefix&&!indexedAnchor&&!mapping?.code))){
    progress("No verified image series yet. Inspect and approve one correct base image from R2 first.");
    throw Error("No approved base image establishes an unambiguous filename series for this set.");
   }
   for(const card of baseCards){
    const label=card.card_name+" #"+card.card_number;
-   if(reviewed.has(card.provider_id))continue; // Never override an earlier decision.
+   if(reviewed.has(card.provider_id)&&!uploadedCandidates.has(card.provider_id))continue; // Preserve final decisions.
    if(numberCounts.get(card.card_number)!==1){problems.push(label+" — repeated base identity");continue;}
    const [number,denom]=String(card.card_number).split("/");
    if(!/^\d+$/.test(number)||!/^\d+$/.test(denom)){
     problems.push(label+" — invalid collector number");continue;
    }
-   if(mapping.denominator&&denom!==mapping.denominator){
+   if(mapping?.denominator&&denom!==mapping.denominator){
     problems.push(label+" — number is outside verified set series");continue;
    }
-   let path=null;
-   if(mapping.pathPrefix&&!mapping.provisional&&mapping.code){
+   let path=uploadedCandidates.get(card.provider_id)||null;
+   if(path){ /* Candidate bound to this exact card and anchored source folder. */ }
+   else if(mapping?.pathPrefix&&!mapping.provisional&&mapping.code){
     path=mapping.pathPrefix+mapping.code+"_en_"+String(Number(number)).padStart(3,"0")+"_std.jpg";
    }else if(indexedAnchor){
     path=indexedAnchor.folder+indexedAnchor.prefix+String(Number(number)).padStart(indexedAnchor.pad,"0")+indexedAnchor.suffix;
    }else{
-    const hits=archive.filter(row=>row.setSlug===mapping.folder
+    const hits=archive.filter(row=>row.setSlug===mapping?.folder
      &&head(row.number)===head(card.card_number)
      &&(!row.name||normal(row.name)===normal(card.card_name))
-     &&(!mapping.code||window.CardVectorR2SetMappings.validCandidate(setId,row)));
+     &&(!mapping?.code||window.CardVectorR2SetMappings.validCandidate(setId,row)));
     if(hits.length===1)path=hits[0].path.replace(/^archive\//,"");
     else {problems.push(label+" — "+(hits.length?"multiple images; choose manually":"no verified image series"));continue;}
    }
@@ -668,7 +696,7 @@ async function matchApprovedSet(){
    candidates.push({provider_id:card.provider_id,candidate_path:path,url,label});
   }
   const skipped=baseCards.length-candidates.length;
-  progress("Found "+approvedAnchors+" approved anchors. Preparing "+candidates.length+" base images; "+skipped+" already reviewed or require attention.");
+  progress("Found "+approvedAnchors+" approved anchors and "+uploadedCandidates.size+" eligible uploaded candidates. Preparing "+candidates.length+" base images; "+skipped+" already reviewed or require attention.");
   if(!candidates.length){
    report(problems);
    progress("No new base images to match. "+(problems.length?problems.length+" exceptions need review.":"Previously reviewed images remain unchanged."));
