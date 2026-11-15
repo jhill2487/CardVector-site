@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=11736e4e0f18" type="image/svg+xml">
+<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=0e4c0d2cba2e" type="image/svg+xml">
 <title>Image Review | CardVector</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#091320;color:#edf4fc}
@@ -35,8 +35,8 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 .zoom-hint{font-size:.8rem;color:#b7c9d7;margin:8px 0 0}#pager{display:flex;gap:12px;align-items:center;justify-content:flex-end}
 @media(max-width:560px){.review-card{grid-template-columns:65px minmax(0,1fr);gap:10px}.image{width:63px;height:90px}.candidate{grid-template-columns:1fr}header img{width:130px}}
 </style></head>
-<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=11736e4e0f18" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
-<main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1><p class="note" id="build-version">Review build 168 · reusable approved image series</p>
+<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=0e4c0d2cba2e" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
+<main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1><p class="note" id="build-version">Review build 169 · reusable approved image series</p>
 <p class="muted">Review English-language Pokémon card images by set. Suggested images require review. Approved images are saved in the private catalog; public search remains unchanged.</p>
 <section id="access" class="panel"><h2>Administrator sign-in</h2><p id="access-message" role="status">Checking administrator session…</p>
 <form id="admin-login" hidden><label for="admin-email">Email</label><input id="admin-email" type="email" required autocomplete="username" value="jhill2487@gmail.com">
@@ -63,8 +63,8 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 </dialog>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/kaggle-catalog.js?v=20261113-candidates&cv=11736e4e0f18"></script>
-<script src="/r2-set-mappings.js?v=20261115-prismatic&cv=11736e4e0f18"></script>
+<script src="/kaggle-catalog.js?v=20261113-candidates&cv=0e4c0d2cba2e"></script>
+<script src="/r2-set-mappings.js?v=20261115-prismatic-foil-guard&cv=0e4c0d2cba2e"></script>
 <script>
 (()=>{"use strict";
 const $=id=>document.getElementById(id);
@@ -216,9 +216,19 @@ function requiredStampToken(card){
  if(/\bStamped\s*$/i.test(name))return /stamped|stamp/i;
  return null;
 }
+function requiredPatternToken(card){
+ const name=String(card.card_name||"");
+ if(/ Master Ball Pattern$/i.test(name))return /(?:master[-_ ]?ball|[_-]mb[-_.])/i;
+ if(/ Poke Ball Pattern$/i.test(name))return /(?:poke[-_ ]?ball|[_-]pb[-_.])/i;
+ return null;
+}
 function candidateMatchesPrinting(card,row){
- const required=requiredStampToken(card);
- return !required||required.test(String(row.path||"")+" "+String(row.filename||""));
+ const source=String(row.path||"")+" "+String(row.filename||"");
+ const stamp=requiredStampToken(card),pattern=requiredPatternToken(card);
+ // Standard artwork cannot establish identity of distinct foil patterns.
+ if(pattern&&!pattern.test(source))return false;
+ if(stamp&&!stamp.test(source))return false;
+ return true;
 }
 function candidatesFor(card){
  const n=head(card.card_number),name=normal(card.card_name),mapping=currentFolderFor(card.set_id);
@@ -232,7 +242,7 @@ function candidatesFor(card){
   return {r:row,score:200,evidence:"Verified set folder + card number"+(requiresDistinctImage(card)?" + stamp-specific file":"")};
  }).filter(Boolean).sort((a,b)=>b.score-a.score||a.r.path.localeCompare(b.r.path)).slice(0,8);
  // Generic numbered _std artwork cannot prove a visible staff/store stamp.
- if(requiresDistinctImage(card))return indexed;
+ if(requiresDistinctImage(card)||requiredPatternToken(card))return indexed;
  return indexed.length?indexed:seriesCandidatesFor(card,mapping);
 }
 const PAGE=30;
@@ -344,7 +354,7 @@ function detail(card,review){
    const path=input.value.trim(),url=candidateUrl(path);
    if(value==="approved"&&(!url||selectedPath!==path||!previewLoaded)){notice("Select a candidate image and wait for its preview before approving.",true);return;}
    if(value==="approved"&&claimedByDifferentSet(path,card.set_id,card.card_number)){notice("This R2 image is approved for a different set or collector number.",true);return;}
-   if(value==="approved"&&!found.some(x=>x.r.path.replace(/^archive\//,"")===path)){notice("Approval requires a candidate from the verified set folder.",true);return;}
+   if(value==="approved"&&!found.some(x=>x.r.path.replace(/^archive\//,"")===path)){notice("Approval requires an exact-printing candidate from the verified set folder. Standard art cannot approve Poké Ball or Master Ball patterns.",true);return;}
    if(value==="approved"&&!verifiedFolderFor(card.set_id)&&!folderAllowedForSet(card.set_id,temporaryFolder?.folder)){notice("The R2 folder must match this specific set; regular Mega Evolution files cannot approve Mega Evolution Promo cards.",true);return;}
    if(value==="approved"&&!window.confirm("Save this approved image to the private catalog? Public search will not change."))return;
    for(const child of actions.querySelectorAll("button"))child.disabled=true;
@@ -535,10 +545,11 @@ async function matchApprovedSet(){
   const cards=q.data||[];
   if(!cards.length)throw Error("No imported cards.");
   const baseCards=baseArtworkCards(cards);
+  const patternCount=cards.filter(c=>Boolean(requiredPatternToken(c))).length;
   const reviews=await lookupByProviderIds("cv_admin_image_reviews","provider_id,review_status,candidate_path",cards.map(c=>c.provider_id));
   const reviewed=new Map(reviews.map(row=>[row.provider_id,row]));
   const approvedAnchors=reviews.filter(row=>row.review_status==="approved"&&row.candidate_path).length;
-  progress("Found "+approvedAnchors+" approved image anchors. Checking the set-specific R2 image series…");
+  progress("Found "+approvedAnchors+" approved anchors; "+patternCount+" patterned printings excluded from base matching. Checking set-specific R2 image series…");
   const mapping=verifiedFolderFor(setId)||mappingFromApprovedReviews(cards,reviews);
   const problems=[];
   const candidates=[];
