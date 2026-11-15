@@ -3,6 +3,15 @@
 (() => {
  "use strict";
  const entries = Object.freeze({
+  "24073": Object.freeze({
+   set:"SV09: Journey Together",
+   folder:"journey-together",
+   code:"sv9",
+   denominator:"159",
+   provisional:true,
+   pathPrefixes:["Pokemon TCG/Pokemon TCG/journey-together/","journey-together/journey-together/"],
+   evidence:"Folder naming hypotheses only; R2 CSV did not establish a verified mapping. Probed images must load and the administrator must approve an exact-card anchor before any bulk matching."
+  }),
   "23821": Object.freeze({
    set:"SV: Prismatic Evolutions",
    folder:"prismatic-evolutions",
