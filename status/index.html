@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?cv=e61b0d80e52a">
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?cv=318199538dbb">
 <title>Development Dashboard | CardVector</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#091320;color:#f2f6fa}
@@ -37,7 +37,7 @@ dt{color:#acbdca}dd{margin:0;overflow-wrap:anywhere}
 </style>
 </head>
 <body>
-<header><a href="/" aria-label="CardVector home"><img src="/assets/cardvector-twin-arrow.svg?cv=e61b0d80e52a" alt="CardVector"></a><a href="/dashboard/">Collector dashboard</a></header>
+<header><a href="/" aria-label="CardVector home"><img src="/assets/cardvector-twin-arrow.svg?cv=318199538dbb" alt="CardVector"></a><a href="/dashboard/">Collector dashboard</a></header>
 <main>
 <section id="access" class="panel" aria-labelledby="access-heading"><h1 id="access-heading">Development dashboard</h1><p id="access-text" role="status" aria-live="polite">Checking administrator access…</p><form id="admin-login" hidden><label for="admin-email">Administrator email</label><input id="admin-email" type="email" value="jhill2487@gmail.com" autocomplete="username" required><label for="admin-password">Password</label><input id="admin-password" type="password" autocomplete="current-password" required><button id="admin-submit" type="submit">Sign in to development dashboard</button></form><p><a href="/account/">Collector account</a></p></section>
 <div id="private">
@@ -72,7 +72,7 @@ dt{color:#acbdca}dd{margin:0;overflow-wrap:anywhere}
 <p id="import-summary" class="muted">Checking secure importer progress…</p>
 <div class="stats"><div class="metric"><small>Sets completed</small><b id="import-sets">—</b></div><div class="metric"><small>Card records imported</small><b id="import-cards">—</b></div><div class="metric"><small>Exact image matches</small><b id="import-matched">—</b></div><div class="metric"><small>Needs review / missing</small><b id="import-review">—</b></div></div>
 <div class="head"><span class="muted">Import completion</span><strong id="import-percent">Not available</strong></div><div class="progress" role="progressbar" aria-label="PokéWallet sets imported" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="import-progress"><div id="import-bar" class="bar"></div></div>
-<p class="note">Counts are read from a private Supabase checkpoint, available only to the approved administrator. Import progress remains unreported until an importer batch actually publishes it; image match counts appear after reconciliation runs.</p>
+<p class="note">Import progress is read from the private importer checkpoint. Image totals are counted live from the private card catalog on every dashboard refresh, including image reviews made between importer runs.</p>
 <p><a href="https://github.com/jhill2487/CardVector/blob/main/Docs/Architecture/Pokewallet_Kaggle_Reconciliation.md" target="_blank" rel="noopener noreferrer">Importer documentation</a> · <a href="https://github.com/jhill2487/CardVector/pull/113" target="_blank" rel="noopener noreferrer">Importer implementation</a></p>
 </section>
 <section class="panel wide">
@@ -174,16 +174,32 @@ async function getImportProgress(){
   const percent=total?Math.min(100,Math.round(done/total*100)):0;
   $("import-sets").textContent=done.toLocaleString()+(total?" / "+total.toLocaleString():"");
   $("import-cards").textContent=Number(data.cards_imported).toLocaleString();
-  $("import-matched").textContent=data.images_matched==null?"Not reconciled":Number(data.images_matched).toLocaleString();
-  $("import-review").textContent=data.images_review==null||data.images_missing==null?"Not reconciled":Number(data.images_review).toLocaleString()+" / "+Number(data.images_missing).toLocaleString();
+  // Image counts update independently from the importer progress checkpoint.
   $("import-percent").textContent=total?percent+"%":"Awaiting set directory";
   $("import-bar").style.width=percent+"%";
   $("import-progress").setAttribute("aria-valuenow",String(percent));
   $("import-badge").textContent=data.status.replace(/_/g," ");
-  $("import-summary").textContent="Last reported: "+safeDate(data.updated_at)+". Import data is recorded by the authenticated backend, not estimated from GitHub workflows.";
+  $("import-summary").textContent="Import checkpoint: "+safeDate(data.updated_at)+". Image totals below are retrieved independently from the live catalog.";
  }catch(error){
   $("import-badge").textContent="Progress unavailable";
   $("import-summary").textContent="Could not read secure progress data. Check administrator session or Supabase connection.";
+ }
+}
+async function getLiveImageCounts(){
+ try{
+  const {data,error}=await client.from("cv_admin_image_status_summary")
+   .select("total_cards,matched_cards,review_cards,missing_cards,pending_cards").single();
+  if(error)throw error;
+  if(!data)throw Error("Image summary not available");
+  $("import-matched").textContent=Number(data.matched_cards).toLocaleString();
+  $("import-review").textContent=Number(data.review_cards).toLocaleString()+" / "+Number(data.missing_cards).toLocaleString();
+  $("import-matched").title="Live count from private catalog. "+Number(data.pending_cards).toLocaleString()+" still pending.";
+  $("import-review").title=Number(data.pending_cards).toLocaleString()+" cards pending matching; needs-review / missing shown above.";
+ }catch(error){
+  $("import-matched").textContent="Unavailable";
+  $("import-review").textContent="Unavailable";
+  $("import-matched").title="Could not retrieve live catalog totals";
+  $("import-review").title="Could not retrieve live catalog totals";
  }
 }
 async function getSetCoverage(){
@@ -245,7 +261,7 @@ async function getAnalytics(){
 async function check(){
  if(!ready||active)return;
  active=true;$("refresh").disabled=true;$("refresh").textContent="Refreshing…";
- try{await Promise.allSettled([getDeploy(),getDevelopment(),getImportProgress(),getSetCoverage(),getAnalytics()]);}
+ try{await Promise.allSettled([getDeploy(),getDevelopment(),getImportProgress(),getLiveImageCounts(),getSetCoverage(),getAnalytics()]);}
  finally{active=false;$("refresh").disabled=false;$("refresh").textContent="Refresh all status";$("checked").textContent="Checked "+new Date().toLocaleTimeString();}
 }
 async function verifyAdministrator(){
