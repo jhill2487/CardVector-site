@@ -3,6 +3,14 @@
 (() => {
  "use strict";
  const entries = Object.freeze({
+  "23353": Object.freeze({
+   set:"SV: Paldean Fates",
+   folder:"paldean-fates",
+   code:"sv4-5",
+   denominator:"091",
+   pathPrefix:"Pokemon TCG/Pokemon TCG/paldean-fates/",
+   evidence:"Administrator approved correct matching R2 base art for Pineco 001/091 and Forretress ex 002/091 on 2026-11-15. Other images must still load before bulk approval."
+  }),
   "24541": Object.freeze({
    set:"ME: Ascended Heroes",
    folder:"ascended-heroes",
