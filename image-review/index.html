@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=b02c3480c12e" type="image/svg+xml">
+<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=ab738cd08944" type="image/svg+xml">
 <title>Image Review | CardVector</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#091320;color:#edf4fc}
@@ -35,8 +35,8 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 .zoom-hint{font-size:.8rem;color:#b7c9d7;margin:8px 0 0}#pager{display:flex;gap:12px;align-items:center;justify-content:flex-end}
 @media(max-width:560px){.review-card{grid-template-columns:65px minmax(0,1fr);gap:10px}.image{width:63px;height:90px}.candidate{grid-template-columns:1fr}header img{width:130px}}
 </style></head>
-<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=b02c3480c12e" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
-<main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1><p class="note" id="build-version">Review build 173 · uploaded R2 review candidates</p>
+<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=ab738cd08944" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
+<main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1><p class="note" id="build-version">Review build 174 · visible saved-candidate approval feedback</p>
 <p class="muted">Review English-language Pokémon card images by set. Suggested images require review. Approved images are saved in the private catalog; public search remains unchanged.</p>
 <section id="access" class="panel"><h2>Administrator sign-in</h2><p id="access-message" role="status">Checking administrator session…</p>
 <form id="admin-login" hidden><label for="admin-email">Email</label><input id="admin-email" type="email" required autocomplete="username" value="jhill2487@gmail.com">
@@ -63,8 +63,8 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 </dialog>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/kaggle-catalog.js?v=20261113-candidates&cv=b02c3480c12e"></script>
-<script src="/r2-set-mappings.js?v=20261115-journey-probe&cv=b02c3480c12e"></script>
+<script src="/kaggle-catalog.js?v=20261113-candidates&cv=ab738cd08944"></script>
+<script src="/r2-set-mappings.js?v=20261115-journey-probe&cv=ab738cd08944"></script>
 <script>
 (()=>{"use strict";
 const $=id=>document.getElementById(id);
@@ -335,7 +335,9 @@ function detail(card,review){
  const label=element("label",null,"R2 image path (optional until approving)");
  let selectedPath="",previewLoaded=false;
  const uploadedCandidate=review?.review_status==="pending_review"&&Boolean(review.candidate_path);
- const selectedLabel=element("p","note",uploadedCandidate?"Uploaded R2 candidate available. Click Preview image and inspect the card before approving.":"No candidate selected. Tap the correct image below.");
+ const selectedLabel=element("p","note",uploadedCandidate?"Loading saved R2 candidate. Inspect the image before approving.":"No candidate selected. Tap the correct image below.");
+ selectedLabel.setAttribute("role","status");selectedLabel.setAttribute("aria-live","polite");
+ const cardMessage=(message,isError=false)=>{selectedLabel.textContent=message;selectedLabel.style.color=isError?"#ffb6bd":"#bdd9c8";notice(message,isError);};
  const input=element("input");input.type="text";input.placeholder="set-folder/card-file.jpg";input.value=review?.candidate_path||card.image_path||"";
  input.setAttribute("aria-label","R2 candidate path for "+card.card_name);
  input.addEventListener("input",()=>{selectedPath="";previewLoaded=false;selectedLabel.textContent="Select an image before approval.";});
@@ -343,12 +345,12 @@ function detail(card,review){
  const preview=element("button","secondary","Preview image");preview.type="button";
  preview.addEventListener("click",()=>{
   const url=candidateUrl(input.value.trim());
-  if(!url){notice("Enter a valid relative R2 image path before previewing.",true);return;}
+  if(!url){cardMessage("Enter a valid relative R2 image path before previewing.",true);return;}
   previewLoaded=false;
   showCardImage(visual,input.value.trim(),card.card_name+" "+card.card_number);
   const img=visual.querySelector("img");
-  img.onload=()=>{previewLoaded=true;selectedLabel.textContent="Selected image loaded. Tap the main image to inspect it larger before approving.";};
-  img.onerror=()=>{previewLoaded=false;visual.textContent="Image not found";visual.classList.remove("has-image");selectedLabel.textContent="Image failed to load — cannot approve.";notice("Candidate image did not load; do not approve.",true);};notice("Check that the card, set, number, and finish match.");
+  img.onload=()=>{previewLoaded=true;cardMessage("Image loaded. Inspect the card and click Approve R2 candidate to confirm.");};
+  img.onerror=()=>{previewLoaded=false;visual.textContent="Image not found";visual.classList.remove("has-image");cardMessage("Image failed to load — cannot approve.",true);};
  });
  pathWrap.append(preview);
  const suggestions=element("div","suggestions");
@@ -372,32 +374,33 @@ function detail(card,review){
   const button=element("button",value==="approved"?"":"secondary",title);button.type="button";
   button.addEventListener("click",async()=>{
    const path=input.value.trim(),url=candidateUrl(path);
-   if(value==="approved"&&(!url||selectedPath!==path||!previewLoaded)){notice("Select a candidate image and wait for its preview before approving.",true);return;}
-   if(value==="approved"&&claimedByDifferentSet(path,card.set_id,card.card_number)){notice("This R2 image is approved for a different set or collector number.",true);return;}
+   if(value==="approved"&&(!url||selectedPath!==path||!previewLoaded)){cardMessage("Approval blocked: image not yet previewed successfully. Click Preview image first and verify the artwork.",true);return;}
+   if(value==="approved"&&claimedByDifferentSet(path,card.set_id,card.card_number)){cardMessage("Approval blocked: image belongs to another set or collector number.",true);return;}
    const savedUploaded=uploadedCandidate&&path===review.candidate_path&&card.set_name==="Delta Reign"&&path.startsWith("pokewallet/delta-reign/")&&!requiresDistinctImage(card)&&!requiredPatternToken(card);
-   if(value==="approved"&&!savedUploaded&&!found.some(x=>x.r.path.replace(/^archive\//,"")===path)){notice("Approval requires an exact-printing candidate from the verified set folder or a previously uploaded verified-source candidate. Special printings remain separate.",true);return;}
-   if(value==="approved"&&!savedUploaded&&!verifiedFolderFor(card.set_id)&&!folderAllowedForSet(card.set_id,temporaryFolder?.folder)){notice("The R2 folder must match this specific set; regular Mega Evolution files cannot approve Mega Evolution Promo cards.",true);return;}
+   if(value==="approved"&&!savedUploaded&&!found.some(x=>x.r.path.replace(/^archive\//,"")===path)){cardMessage("Approval blocked: candidate is not registered for this exact printing.",true);return;}
+   if(value==="approved"&&!savedUploaded&&!verifiedFolderFor(card.set_id)&&!folderAllowedForSet(card.set_id,temporaryFolder?.folder)){cardMessage("Approval blocked: select the correct set-specific R2 folder.",true);return;}
    if(value==="approved"&&!window.confirm("Save this approved image to the private catalog? Public search will not change."))return;
+   cardMessage("Saving review decision…");
    for(const child of actions.querySelectorAll("button"))child.disabled=true;
    const session=await db.auth.getUser();
    if(session.error||!session.data.user){notice("Your session expired. Sign in again.",true);for(const child of actions.querySelectorAll("button"))child.disabled=false;return;}
    const record={provider_id:card.provider_id,review_status:value,candidate_path:url?path:null,notes:notes.value.slice(0,2000),reviewed_by:session.data.user.id,reviewed_at:new Date().toISOString()};
    const {error}=await db.from("cv_admin_image_reviews").upsert(record,{onConflict:"provider_id"});
    for(const child of actions.querySelectorAll("button"))child.disabled=false;
-   if(error){notice("Unable to save review: "+error.message,true);return;}
+   if(error){cardMessage("Unable to save review: "+error.message,true);return;}
    decisions.set(card.provider_id,record);
    if(value==="approved"){
     const {data:verified,error:verifyError}=await db.from("cv_admin_pokewallet_catalog")
      .select("image_status,image_path").eq("provider_id",card.provider_id).single();
     if(verifyError||verified?.image_status!=="matched"||verified?.image_path!==path){
-     notice("Review saved, but the catalog image did not update. Do not approve again; report this error.",true);
+     cardMessage("Review saved, but the catalog image did not update. Do not approve again; report this error.",true);
      status.textContent="approved · catalog not synced";
      return;
     }
     card.image_status="matched";
     card.image_path=path;
     showCardImage(visual,path,card.card_name+" "+card.card_number);
-    selectedLabel.textContent="Approved image saved. Tap the main image to inspect it larger.";
+    cardMessage("Approved image saved and catalog match confirmed.");
     previewLoaded=true;
    }
    await loadClaims();
@@ -415,7 +418,11 @@ function detail(card,review){
   const link=document.createElement("a");link.href=referenceDelta;link.target="_blank";link.rel="noopener noreferrer";link.textContent="Open CardUploader set search for visual reference";p.append(link);
   const foot=document.createTextNode(". Reference only; do not copy images without permission.");p.append(foot);body.append(p);
  }
- box.append(visual,body);return box;
+ box.append(visual,body);
+ // A pre-registered upload is already the chosen candidate; load and validate it
+ // as soon as the card renders instead of requiring an invisible extra selection.
+ if(uploadedCandidate){selectedPath=review.candidate_path;preview.click();}
+ return box;
 }
 function render(){
  const list=$("cards");list.replaceChildren();
