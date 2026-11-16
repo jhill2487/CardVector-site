@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=d3c07293813d" type="image/svg+xml">
+<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=6564e2133873" type="image/svg+xml">
 <title>Image Review | CardVector</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#091320;color:#edf4fc}
@@ -62,7 +62,7 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
  .review-card .review-advanced .suggestions{max-width:100%}
 }
 </style></head>
-<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=d3c07293813d" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
+<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=6564e2133873" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
 <main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1><p class="note" id="build-version">Review build 175 · simplified mobile review</p>
 <p class="muted">Select a set, inspect each card image, and approve or skip. Advanced options are available when needed.</p>
 <section id="access" class="panel"><h2>Administrator sign-in</h2><p id="access-message" role="status">Checking administrator session…</p>
@@ -90,9 +90,9 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 </dialog>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/kaggle-catalog.js?v=20261113-candidates&cv=d3c07293813d"></script>
-<script src="/r2-set-mappings.js?v=20261115-journey-probe&cv=d3c07293813d"></script>
-<script src="/r2-artwork-test.js?v=20261116-csv-feedback2&cv=d3c07293813d"></script>
+<script src="/kaggle-catalog.js?v=20261113-candidates&cv=6564e2133873"></script>
+<script src="/r2-set-mappings.js?v=20261115-journey-probe&cv=6564e2133873"></script>
+<script src="/r2-artwork-test.js?v=20261116-csv-feedback2&cv=6564e2133873"></script>
 <script>
 (()=>{"use strict";
 const $=id=>document.getElementById(id);
@@ -449,9 +449,10 @@ function detail(card,review){
    }
    await loadClaims();
    status.textContent=value==="approved"?"approved · catalog matched":value.replace("_"," ");
-   // Keep the approved card visible and its image displayed immediately;
-   // the missing-images filter will update on the next explicit refresh.
-   if(value!=="approved")await refresh();
+   // Rebuild the review card from saved Supabase state after every decision.
+   // Approved cards immediately show the completed state (or disappear from
+   // the uploaded-only queue), rather than retaining stale Approve buttons.
+   await refresh();
    notice(value==="approved"?"Approved image saved to private catalog for "+card.card_name+". Find it under Reviewed decisions. Public search unchanged.":"Review decision saved for "+card.card_name+". Public search unchanged.");
   });actions.append(button);
  }
