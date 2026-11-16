@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=a8c69f87bdb2" type="image/svg+xml">
+<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=c069f8bdcf4d" type="image/svg+xml">
 <title>Image Review | CardVector</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#091320;color:#edf4fc}
@@ -35,7 +35,7 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 .zoom-hint{font-size:.8rem;color:#b7c9d7;margin:8px 0 0}#pager{display:flex;gap:12px;align-items:center;justify-content:flex-end}
 @media(max-width:560px){.review-card{grid-template-columns:65px minmax(0,1fr);gap:10px}.image{width:63px;height:90px}.candidate{grid-template-columns:1fr}header img{width:130px}}
 </style></head>
-<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=a8c69f87bdb2" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
+<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=c069f8bdcf4d" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
 <main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1><p class="note" id="build-version">Review build 174 · visible saved-candidate approval feedback</p>
 <p class="muted">Review English-language Pokémon card images by set. Suggested images require review. Approved images are saved in the private catalog; public search remains unchanged.</p>
 <section id="access" class="panel"><h2>Administrator sign-in</h2><p id="access-message" role="status">Checking administrator session…</p>
@@ -47,7 +47,7 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 <div class="control"><label for="filter">Review status</label><select id="filter"><option value="uploaded">Uploaded R2 candidates</option><option value="pending">Pending images</option><option value="missing">Missing images</option><option value="needs_review">Ambiguous images</option><option value="matched">Existing exact matches</option><option value="resolved">Reviewed decisions</option><option value="all">All imported cards</option></select></div>
 <button id="refresh" type="button" class="secondary">Refresh</button></div>
 <div id="folder-setup" class="panel" hidden><label for="r2-folder">R2 set folder for first review</label><select id="r2-folder"><option value="">Select a folder…</option></select><p class="note" id="folder-help">The correct set folder must be verified before approving its first card. Selecting a folder here does not save or approve anything.</p></div>
-<div class="actions"><button id="csv-test" type="button" class="secondary">Test R2 CSV artwork mapping</button><button id="match-set" type="button" class="secondary">First pass: match base artwork</button><button id="match-shared" type="button" class="secondary">Share base artwork with other finishes</button></div><p id="match-progress" class="note" role="status" aria-live="polite">Ready for artwork matching.</p><details id="match-exceptions" hidden><summary id="match-exceptions-summary">Review exceptions</summary><ol id="match-exceptions-list"></ol></details><p class="note" id="match-set-note">First pass matches base artwork per unique set and card number, leaving Poké Ball, Master Ball and other pattern records pending. Share representative base artwork with ordinary and Poké Ball/Master Ball finishes while preserving distinct printing identities; visible foil patterns remain unverified. Staff and special stamped printings require their own images. Public search is unchanged.</p>
+<div class="actions"><button id="csv-test" type="button" class="secondary">Test R2 CSV artwork mapping</button><p id="csv-test-result" class="note" role="status" aria-live="polite" style="flex-basis:100%;border:1px solid #52667b;border-radius:9px;padding:12px;margin:4px 0 0" hidden>CSV test status will appear here.</p><button id="match-set" type="button" class="secondary">First pass: match base artwork</button><button id="match-shared" type="button" class="secondary">Share base artwork with other finishes</button></div><p id="match-progress" class="note" role="status" aria-live="polite">Ready for artwork matching.</p><details id="match-exceptions" hidden><summary id="match-exceptions-summary">Review exceptions</summary><ol id="match-exceptions-list"></ol></details><p class="note" id="match-set-note">First pass matches base artwork per unique set and card number, leaving Poké Ball, Master Ball and other pattern records pending. Share representative base artwork with ordinary and Poké Ball/Master Ball finishes while preserving distinct printing identities; visible foil patterns remain unverified. Staff and special stamped printings require their own images. Public search is unchanged.</p>
 <p id="set-note" class="note"></p>
 <p id="counts" class="summary" role="status" aria-live="polite">Loading…</p>
 <div id="cards"></div>
@@ -63,9 +63,9 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 </dialog>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/kaggle-catalog.js?v=20261113-candidates&cv=a8c69f87bdb2"></script>
-<script src="/r2-set-mappings.js?v=20261115-journey-probe&cv=a8c69f87bdb2"></script>
-<script src="/r2-artwork-test.js?v=20261116-csv-pilot&cv=a8c69f87bdb2"></script>
+<script src="/kaggle-catalog.js?v=20261113-candidates&cv=c069f8bdcf4d"></script>
+<script src="/r2-set-mappings.js?v=20261115-journey-probe&cv=c069f8bdcf4d"></script>
+<script src="/r2-artwork-test.js?v=20261116-csv-feedback2&cv=c069f8bdcf4d"></script>
 <script>
 (()=>{"use strict";
 const $=id=>document.getElementById(id);
@@ -620,33 +620,44 @@ function uploadedCandidatesForFirstPass(cards,reviews){
 // A verified set mapping or an approved standard-image anchor provides a
 // numbered series; each candidate is probed before ONE batch confirmation.
 async function testR2CSVArtwork(){
- const button=$("csv-test"),setId=$("set").value,original=button.textContent;
+ const button=$("csv-test"),output=$("csv-test-result"),setId=$("set").value,original=button.textContent;
+ const show=(text,failed=false)=>{
+  output.hidden=false;output.textContent=text;
+  output.style.borderColor=failed?"#c76570":"#5c8a72";
+  output.style.color=failed?"#ffb6bd":"#e1f7e8";
+ };
+ show("Starting R2 CSV test for selected set. Loading catalog and indexed filenames…");
+ $("match-progress").textContent="R2 CSV test running — result appears directly below the button.";
  button.disabled=true;button.textContent="Checking CSV…";
  try{
   const set=sets.find(s=>String(s.set_id)===String(setId));
   if(!set)throw Error("Select an imported set");
-  if(!window.CardVectorR2ArtworkTest)throw Error("CSV test module did not load");
+  if(!window.CardVectorR2ArtworkTest)throw Error("CSV test module did not load. Reload Image Review to fetch the latest script.");
   const {data,error}=await db.from("cv_admin_pokewallet_catalog")
    .select("provider_id,set_id,card_name,card_number,image_status,image_path").eq("set_id",setId).limit(1000);
   if(error)throw error;
   const cards=data||[],mapping=window.CardVectorR2SetMappings?.get(setId)||null;
-  if(!archive.length)throw Error("R2 image CSV has no indexed artwork; verify index access");
+  if(!cards.length)throw Error("This set has no imported card records.");
+  if(!archive.length)throw Error("R2 image CSV has no indexed artwork: "+(archiveError||"index empty or unavailable"));
   const result=window.CardVectorR2ArtworkTest.plan(archive,cards,set.set_name,mapping,temporaryFolder?.folder);
   const {folder,source}=result.choice;
-  $("match-progress").textContent="CSV TEST ONLY — "+(folder||"no uniquely identified folder")+" ("+source+"): "+
-   result.matched.length+" of "+cards.length+" records resolve to one base artwork file; "+
-   result.missing.length+" unavailable/mismatched; "+result.ambiguous.length+" ambiguous. "+
-   result.indexed+" files indexed in folder. No approvals changed.";
+  const summary="CSV TEST ONLY — "+set.set_name+": "+(folder||"no uniquely identified folder")+" ("+source+"). "+
+   result.matched.length+" / "+cards.length+" records map to a single standard artwork image. "+
+   result.missing.length+" missing/mismatched; "+result.ambiguous.length+" ambiguous. "+
+   result.indexed+" R2 files indexed in folder. No approvals or variant records changed.";
+  show(summary);
+  $("match-progress").textContent=summary;
   const list=$("match-exceptions-list");
   list.replaceChildren();
-  for(const problem of [...result.ambiguous,...result.missing].slice(0,100)){
+  for(const problem of [...result.ambiguous,...result.missing].slice(0,100))
    list.append(element("li",null,problem.card.card_name+" #"+problem.card.card_number+" — "+problem.reason));
-  }
   $("match-exceptions-summary").textContent=(result.missing.length+result.ambiguous.length)+" CSV artwork exceptions";
   $("match-exceptions").hidden=!(result.missing.length+result.ambiguous.length);
   $("match-set-note").textContent="Read-only CSV test. One base-artwork file can serve multiple distinct finish records for the same set and card number. Existing approvals and variant records were not modified.";
- }catch(e){notice("CSV artwork test failed: "+e.message,true);}
- finally{button.disabled=false;button.textContent=original;}
+ }catch(e){
+  const msg="R2 CSV TEST ERROR — "+(e?.message||String(e))+". No changes were made.";
+  show(msg,true);$("match-progress").textContent=msg;
+ }finally{button.disabled=false;button.textContent=original;}
 }
 async function matchApprovedSet(){
  const button=$("match-set"),setId=$("set").value,originalLabel=button.textContent;
