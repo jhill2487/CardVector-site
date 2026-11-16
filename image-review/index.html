@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=b759e03c7765" type="image/svg+xml">
+<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=85f6ac60c65f" type="image/svg+xml">
 <title>Image Review | CardVector</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#091320;color:#edf4fc}
@@ -62,7 +62,7 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
  .review-card .review-advanced .suggestions{max-width:100%}
 }
 </style></head>
-<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=b759e03c7765" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
+<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=85f6ac60c65f" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
 <main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1><p class="note" id="build-version">Review build 175 · simplified mobile review</p>
 <p class="muted">Select a set, inspect each card image, and approve or skip. Advanced options are available when needed.</p>
 <section id="access" class="panel"><h2>Administrator sign-in</h2><p id="access-message" role="status">Checking administrator session…</p>
@@ -90,9 +90,9 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 </dialog>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/kaggle-catalog.js?v=20261113-candidates&cv=b759e03c7765"></script>
-<script src="/r2-set-mappings.js?v=20261115-journey-probe&cv=b759e03c7765"></script>
-<script src="/r2-artwork-test.js?v=20261116-csv-feedback2&cv=b759e03c7765"></script>
+<script src="/kaggle-catalog.js?v=20261113-candidates&cv=85f6ac60c65f"></script>
+<script src="/r2-set-mappings.js?v=20261115-journey-probe&cv=85f6ac60c65f"></script>
+<script src="/r2-artwork-test.js?v=20261116-csv-feedback2&cv=85f6ac60c65f"></script>
 <script>
 (()=>{"use strict";
 const $=id=>document.getElementById(id);
@@ -349,7 +349,7 @@ function detail(card,review){
  const body=element("div");
  const heading=element("div","cardname",card.card_name+" — "+card.card_number);
  const state=review?.review_status||card.image_status;
- const status=element("span","tag",({pending_review:"Needs review",keep_missing:"Missing",approved:"Approved",matched:"Matched",rejected:"Rejected",missing:"Missing"})[state]||String(state).replaceAll("_"," "));
+ const status=element("span","tag",({pending_review:"Needs review",keep_missing:"Missing",approved:"Approved",matched:"Matched",rejected:"Awaiting replacement",missing:"Missing"})[state]||String(state).replaceAll("_"," "));
  heading.append(status);
  const meta=element("div","metadata",card.set_name);
  body.append(heading,meta);
@@ -377,9 +377,11 @@ function detail(card,review){
   candidateSection.append(search,element("p","note","Discovery reference only. Do not copy or approve artwork until the exact printing and reuse rights are confirmed."));
  }
  
- const waitingForImport=card.image_status!=="matched"&&!review?.candidate_path;
+ const waitingForImport=card.image_status!=="matched"&&(!review?.candidate_path||review.review_status==="rejected");
  if(waitingForImport)status.textContent="Awaiting image";
- const savedImage=review?.candidate_path||card.image_path;
+ // Never display a rejected archive candidate as though it were verified.
+ const rejectedImage=review?.review_status==="rejected";
+ const savedImage=rejectedImage?card.image_path:(review?.candidate_path||card.image_path);
  if(savedImage)showCardImage(visual,savedImage,card.card_name+" "+card.card_number);
  const form=element("div");
  const label=element("label",null,"R2 image path (optional until approving)");
@@ -388,7 +390,7 @@ function detail(card,review){
  const selectedLabel=element("p","note",uploadedCandidate?"Checking image…":"Choose an image under Image options.");
  selectedLabel.setAttribute("role","status");selectedLabel.setAttribute("aria-live","polite");
  const cardMessage=(message,isError=false)=>{selectedLabel.textContent=message;selectedLabel.style.color=isError?"#ffb6bd":"#bdd9c8";notice(message,isError);};
- const input=element("input");input.type="text";input.placeholder="set-folder/card-file.jpg";input.value=review?.candidate_path||card.image_path||"";
+ const input=element("input");input.type="text";input.placeholder="set-folder/card-file.jpg";input.value=review?.review_status==="rejected"?"":(review?.candidate_path||card.image_path||"");
  input.setAttribute("aria-label","R2 candidate path for "+card.card_name);
  input.addEventListener("input",()=>{selectedPath="";previewLoaded=false;selectedLabel.textContent="Select an image before approval.";});
  const pathWrap=element("div","candidate");pathWrap.append(input);
