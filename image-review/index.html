@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=c069f8bdcf4d" type="image/svg+xml">
+<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=b7fe2ccd5e4b" type="image/svg+xml">
 <title>Image Review | CardVector</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#091320;color:#edf4fc}
@@ -34,10 +34,37 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 #image-zoom.zoomed .zoom-area{max-height:76dvh;overflow:auto}
 .zoom-hint{font-size:.8rem;color:#b7c9d7;margin:8px 0 0}#pager{display:flex;gap:12px;align-items:center;justify-content:flex-end}
 @media(max-width:560px){.review-card{grid-template-columns:65px minmax(0,1fr);gap:10px}.image{width:63px;height:90px}.candidate{grid-template-columns:1fr}header img{width:130px}}
+
+/* Compact artwork-first review: diagnostics and manual paths stay available on demand. */
+.review-card{align-items:start}.review-card .metadata{margin:5px 0 8px}
+.review-card .actions{margin:12px 0}.review-card .actions button{flex:1 1 42%;min-width:0}
+.review-advanced{border-top:1px solid #35495c;margin-top:16px;padding-top:12px}
+.review-advanced summary,.set-tools summary{cursor:pointer;color:#ffbd81;font-weight:650;padding:8px 0}
+.review-advanced[open] summary{margin-bottom:12px}
+.review-advanced .external-sources{margin-top:12px}
+.review-advanced textarea{margin-top:10px}
+.set-tools{border:1px solid #41576c;border-radius:10px;padding:8px 12px;margin-top:12px}
+.set-tools[open]{padding-bottom:12px}
+#match-set-note{margin:8px 0}
+@media(max-width:560px){
+ .review-card{grid-template-columns:76px minmax(0,1fr);gap:12px;padding:16px 0}
+ .image{width:76px;height:106px}
+ .review-card .cardname{font-size:1rem;line-height:1.35}
+ .review-card .tag{display:inline-block;margin:6px 0 0}
+ .review-card .metadata{font-size:.8rem}
+ .review-card .note{font-size:.8rem}
+ .review-card .actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ .review-card .actions button{font-size:.85rem;padding:11px 7px;min-height:43px}
+ .review-card .candidate{display:block}
+ .review-card .candidate button{width:100%;margin-top:8px}
+ .review-card .review-advanced{margin-left:-88px}
+ .review-card .review-advanced input{font-size:14px}
+ .review-card .review-advanced .suggestions{max-width:100%}
+}
 </style></head>
-<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=c069f8bdcf4d" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
-<main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1><p class="note" id="build-version">Review build 174 · visible saved-candidate approval feedback</p>
-<p class="muted">Review English-language Pokémon card images by set. Suggested images require review. Approved images are saved in the private catalog; public search remains unchanged.</p>
+<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=b7fe2ccd5e4b" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
+<main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1><p class="note" id="build-version">Review build 175 · simplified mobile review</p>
+<p class="muted">Select a set, inspect each card image, and approve or skip. Advanced options are available when needed.</p>
 <section id="access" class="panel"><h2>Administrator sign-in</h2><p id="access-message" role="status">Checking administrator session…</p>
 <form id="admin-login" hidden><label for="admin-email">Email</label><input id="admin-email" type="email" required autocomplete="username" value="jhill2487@gmail.com">
 <label for="admin-password">Password</label><input id="admin-password" type="password" required autocomplete="current-password">
@@ -47,13 +74,13 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 <div class="control"><label for="filter">Review status</label><select id="filter"><option value="uploaded">Uploaded R2 candidates</option><option value="pending">Pending images</option><option value="missing">Missing images</option><option value="needs_review">Ambiguous images</option><option value="matched">Existing exact matches</option><option value="resolved">Reviewed decisions</option><option value="all">All imported cards</option></select></div>
 <button id="refresh" type="button" class="secondary">Refresh</button></div>
 <div id="folder-setup" class="panel" hidden><label for="r2-folder">R2 set folder for first review</label><select id="r2-folder"><option value="">Select a folder…</option></select><p class="note" id="folder-help">The correct set folder must be verified before approving its first card. Selecting a folder here does not save or approve anything.</p></div>
-<div class="actions"><button id="csv-test" type="button" class="secondary">Test R2 CSV artwork mapping</button><p id="csv-test-result" class="note" role="status" aria-live="polite" style="flex-basis:100%;border:1px solid #52667b;border-radius:9px;padding:12px;margin:4px 0 0" hidden>CSV test status will appear here.</p><button id="match-set" type="button" class="secondary">First pass: match base artwork</button><button id="match-shared" type="button" class="secondary">Share base artwork with other finishes</button></div><p id="match-progress" class="note" role="status" aria-live="polite">Ready for artwork matching.</p><details id="match-exceptions" hidden><summary id="match-exceptions-summary">Review exceptions</summary><ol id="match-exceptions-list"></ol></details><p class="note" id="match-set-note">First pass matches base artwork per unique set and card number, leaving Poké Ball, Master Ball and other pattern records pending. Share representative base artwork with ordinary and Poké Ball/Master Ball finishes while preserving distinct printing identities; visible foil patterns remain unverified. Staff and special stamped printings require their own images. Public search is unchanged.</p>
-<p id="set-note" class="note"></p>
+<details class="set-tools"><summary>Bulk matching and CSV tools</summary><div class="actions"><button id="csv-test" type="button" class="secondary">Test R2 CSV artwork mapping</button><p id="csv-test-result" class="note" role="status" aria-live="polite" style="flex-basis:100%;border:1px solid #52667b;border-radius:9px;padding:12px;margin:4px 0 0" hidden>CSV test status will appear here.</p><button id="match-set" type="button" class="secondary">First pass: match base artwork</button><button id="match-shared" type="button" class="secondary">Share base artwork with other finishes</button></div><p id="match-progress" class="note" role="status" aria-live="polite">Ready for artwork matching.</p><details id="match-exceptions" hidden><summary id="match-exceptions-summary">Review exceptions</summary><ol id="match-exceptions-list"></ol></details><p class="note" id="match-set-note">First pass matches base artwork per unique set and card number, leaving Poké Ball, Master Ball and other pattern records pending. Share representative base artwork with ordinary and Poké Ball/Master Ball finishes while preserving distinct printing identities; visible foil patterns remain unverified. Staff and special stamped printings require their own images. Public search is unchanged.</p>
+</details><p id="set-note" class="note"></p>
 <p id="counts" class="summary" role="status" aria-live="polite">Loading…</p>
 <div id="cards"></div>
 <div id="pager"><button id="previous" type="button" class="secondary" disabled>Previous</button><span id="page-label"></span><button id="next" type="button" class="secondary" disabled>Next</button></div>
 </section>
-<section class="panel"><h2>How approvals work</h2><p class="note">Enter or inspect a candidate path only when it points to a card image already in CardVector's Cloudflare R2 archive. Use Preview before approving. You can mark a card for later review, reject an incorrect candidate, or keep it missing. Approvals are recorded in the private review table and synchronized to the private catalog. No public search change occurs. For entire missing sets, use external sources to research artwork and licensing rather than approving cards without verifying identity and finish.</p></section>
+<details class="panel"><summary>How approvals work</summary><p class="note">Enter or inspect a candidate path only when it points to a card image already in CardVector's Cloudflare R2 archive. Use Preview before approving. You can mark a card for later review, reject an incorrect candidate, or keep it missing. Approvals are recorded in the private review table and synchronized to the private catalog. No public search change occurs. For entire missing sets, use external sources to research artwork and licensing rather than approving cards without verifying identity and finish.</p></details>
 </div><p id="notice" role="status" aria-live="polite"></p>
 <dialog id="image-zoom" aria-label="Inspect card image">
  <div class="zoom-controls"><strong id="zoom-title">Inspect card image</strong>
@@ -63,9 +90,9 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 </dialog>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/kaggle-catalog.js?v=20261113-candidates&cv=c069f8bdcf4d"></script>
-<script src="/r2-set-mappings.js?v=20261115-journey-probe&cv=c069f8bdcf4d"></script>
-<script src="/r2-artwork-test.js?v=20261116-csv-feedback2&cv=c069f8bdcf4d"></script>
+<script src="/kaggle-catalog.js?v=20261113-candidates&cv=b7fe2ccd5e4b"></script>
+<script src="/r2-set-mappings.js?v=20261115-journey-probe&cv=b7fe2ccd5e4b"></script>
+<script src="/r2-artwork-test.js?v=20261116-csv-feedback2&cv=b7fe2ccd5e4b"></script>
 <script>
 (()=>{"use strict";
 const $=id=>document.getElementById(id);
@@ -265,7 +292,7 @@ function candidatesFor(card){
  if(requiresDistinctImage(card)||requiredPatternToken(card))return indexed;
  return indexed.length?indexed:(mapping.provisional?provisionalR2Candidates(card,mapping):seriesCandidatesFor(card,mapping));
 }
-const PAGE=30;
+const PAGE=8;
 const notice=(text,isError=false)=>{$("notice").textContent=text;$("notice").style.color=isError?"#ffb6bd":"#bdd9c8";};
 function candidateUrl(path){
  if(!path||typeof path!=="string"||path.length>500||path.startsWith("/")||path.includes("..")||/[?#\\]/.test(path)||!/\.(jpg|jpeg|png|webp)$/i.test(path))return null;
@@ -302,9 +329,10 @@ function detail(card,review){
  const visual=element("div","image","No image");
  const body=element("div");
  const heading=element("div","cardname",card.card_name+" — "+card.card_number);
- const status=element("span","tag",review?.review_status||card.image_status.replace("_"," "));
+ const state=review?.review_status||card.image_status;
+ const status=element("span","tag",({pending_review:"Needs review",keep_missing:"Missing",approved:"Approved",matched:"Matched",rejected:"Rejected",missing:"Missing"})[state]||String(state).replaceAll("_"," "));
  heading.append(status);
- const meta=element("div","metadata",card.set_name+" · PokéWallet ID "+card.provider_id.slice(0,18)+"…");
+ const meta=element("div","metadata",card.set_name);
  body.append(heading,meta);
  // Private discovery references never count as approved images.
  const candidateSection=element("div","external-sources");
@@ -329,7 +357,7 @@ function detail(card,review){
   search.target="_blank";search.rel="noopener noreferrer";
   candidateSection.append(search,element("p","note","Discovery reference only. Do not copy or approve artwork until the exact printing and reuse rights are confirmed."));
  }
- body.append(candidateSection);
+ 
  const savedImage=review?.candidate_path||card.image_path;
  if(savedImage)showCardImage(visual,savedImage,card.card_name+" "+card.card_number);
  const form=element("div");
@@ -412,7 +440,12 @@ function detail(card,review){
    notice(value==="approved"?"Approved image saved to private catalog for "+card.card_name+". Find it under Reviewed decisions. Public search unchanged.":"Review decision saved for "+card.card_name+". Public search unchanged.");
   });actions.append(button);
  }
- form.append(label,pathWrap,selectedLabel,hint,suggestions,notes,actions);
+ const advanced=element("details","review-advanced");
+ const summary=element("summary",null,"Image options, R2 path and notes");
+ advanced.append(summary,label,pathWrap,hint,suggestions,notes,candidateSection);
+ advanced.open=!uploadedCandidate&&!savedImage;
+ if(uploadedCandidate)selectedLabel.textContent="R2 candidate ready for review.";
+ form.append(selectedLabel,actions,advanced);
  body.append(form);
  if(card.set_name==="Delta Reign"){
   const p=element("p","note","Delta Reign has a confirmed Kaggle archive gap. ");
