@@ -3,6 +3,14 @@
 (() => {
  "use strict";
  const entries = Object.freeze({
+  "23537": Object.freeze({
+   set:"SV07: Stellar Crown",
+   folder:"stellar-crown",
+   code:"sv7",
+   denominator:"142",
+   pathPrefix:"Pokemon TCG/Pokemon TCG/stellar-crown/",
+   evidence:"Administrator-approved exact-card anchors: Venusaur ex 001/142, Ledyba 002/142, Ledian 003/142 (2026-11-16). Other files are predictions only until individually loaded and confirmed."
+  }),
   "24073": Object.freeze({
    set:"SV09: Journey Together",
    folder:"journey-together",
