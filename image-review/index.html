@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=b7fe2ccd5e4b" type="image/svg+xml">
+<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=f742c483328d" type="image/svg+xml">
 <title>Image Review | CardVector</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#091320;color:#edf4fc}
@@ -62,7 +62,7 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
  .review-card .review-advanced .suggestions{max-width:100%}
 }
 </style></head>
-<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=b7fe2ccd5e4b" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
+<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=f742c483328d" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
 <main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1><p class="note" id="build-version">Review build 175 · simplified mobile review</p>
 <p class="muted">Select a set, inspect each card image, and approve or skip. Advanced options are available when needed.</p>
 <section id="access" class="panel"><h2>Administrator sign-in</h2><p id="access-message" role="status">Checking administrator session…</p>
@@ -90,9 +90,9 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 </dialog>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/kaggle-catalog.js?v=20261113-candidates&cv=b7fe2ccd5e4b"></script>
-<script src="/r2-set-mappings.js?v=20261115-journey-probe&cv=b7fe2ccd5e4b"></script>
-<script src="/r2-artwork-test.js?v=20261116-csv-feedback2&cv=b7fe2ccd5e4b"></script>
+<script src="/kaggle-catalog.js?v=20261113-candidates&cv=f742c483328d"></script>
+<script src="/r2-set-mappings.js?v=20261115-journey-probe&cv=f742c483328d"></script>
+<script src="/r2-artwork-test.js?v=20261116-csv-feedback2&cv=f742c483328d"></script>
 <script>
 (()=>{"use strict";
 const $=id=>document.getElementById(id);
@@ -364,7 +364,7 @@ function detail(card,review){
  const label=element("label",null,"R2 image path (optional until approving)");
  let selectedPath="",previewLoaded=false;
  const uploadedCandidate=review?.review_status==="pending_review"&&Boolean(review.candidate_path);
- const selectedLabel=element("p","note",uploadedCandidate?"Loading saved R2 candidate. Inspect the image before approving.":"No candidate selected. Tap the correct image below.");
+ const selectedLabel=element("p","note",uploadedCandidate?"Checking image…":"Choose an image under Image options.");
  selectedLabel.setAttribute("role","status");selectedLabel.setAttribute("aria-live","polite");
  const cardMessage=(message,isError=false)=>{selectedLabel.textContent=message;selectedLabel.style.color=isError?"#ffb6bd":"#bdd9c8";notice(message,isError);};
  const input=element("input");input.type="text";input.placeholder="set-folder/card-file.jpg";input.value=review?.candidate_path||card.image_path||"";
@@ -378,7 +378,7 @@ function detail(card,review){
   previewLoaded=false;
   showCardImage(visual,input.value.trim(),card.card_name+" "+card.card_number);
   const img=visual.querySelector("img");
-  img.onload=()=>{previewLoaded=true;cardMessage("Image loaded. Inspect the card and click Approve R2 candidate to confirm.");};
+  img.onload=()=>{previewLoaded=true;cardMessage("Image ready. Confirm the artwork matches this card, then tap Approve image.");};
   img.onerror=()=>{previewLoaded=false;visual.textContent="Image not found";visual.classList.remove("has-image");cardMessage("Image failed to load — cannot approve.",true);};
  });
  pathWrap.append(preview);
@@ -398,7 +398,7 @@ function detail(card,review){
  suggestions.style.cssText="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0";
  const notes=element("textarea");notes.rows=2;notes.maxLength=2000;notes.placeholder="Review notes or reason for rejection";notes.value=review?.notes||"";notes.setAttribute("aria-label","Review notes for "+card.card_name);
  const actions=element("div","actions");
- const statuses=[["approved","Approve R2 candidate"],["rejected","Reject"],["keep_missing","Keep missing"],["pending_review","Review later"]];
+ const statuses=[["approved","Approve image"],["rejected","Reject"],["keep_missing","No image"],["pending_review","Review later"]];
  for(const [value,title] of statuses){
   const button=element("button",value==="approved"?"":"secondary",title);button.type="button";
   button.addEventListener("click",async()=>{
@@ -450,7 +450,7 @@ function detail(card,review){
  if(card.set_name==="Delta Reign"){
   const p=element("p","note","Delta Reign has a confirmed Kaggle archive gap. ");
   const link=document.createElement("a");link.href=referenceDelta;link.target="_blank";link.rel="noopener noreferrer";link.textContent="Open CardUploader set search for visual reference";p.append(link);
-  const foot=document.createTextNode(". Reference only; do not copy images without permission.");p.append(foot);body.append(p);
+  const foot=document.createTextNode(". Reference only; do not copy images without permission.");p.append(foot);advanced.append(p);
  }
  box.append(visual,body);
  // A pre-registered upload is already the chosen candidate; load and validate it
