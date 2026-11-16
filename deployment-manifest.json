@@ -1,8 +1,8 @@
 {
   "source_repository": "jhill2487/CardVector",
   "source_path": "Docs/",
-  "source_commit": "b3cbc2d358f0ec45c7dbb3fc2ace4231b8128ec2",
-  "generated_at": "2026-11-16T01:09:26+00:00",
+  "source_commit": "5d9873a772e5f360347729c1cd18044b07de463a",
+  "generated_at": "2026-11-16T01:20:54+00:00",
   "public_files": [
     "index.html",
     "404.html",
@@ -14,6 +14,7 @@
     "pokewallet.js",
     "kaggle-catalog.js",
     "r2-set-mappings.js",
+    "r2-artwork-test.js",
     "style.css",
     "partners.css",
     "brand-site.css",
