@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=6ceef73b9790" type="image/svg+xml">
+<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=e38a62a1108d" type="image/svg+xml">
 <title>Image Review | CardVector</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#091320;color:#edf4fc}
@@ -62,7 +62,7 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
  .review-card .review-advanced .suggestions{max-width:100%}
 }
 </style></head>
-<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=6ceef73b9790" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
+<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=e38a62a1108d" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
 <main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1><p class="note" id="build-version">Review build 175 · simplified mobile review</p>
 <p class="muted">Select a set, inspect each card image, and approve or skip. Advanced options are available when needed.</p>
 <section id="access" class="panel"><h2>Administrator sign-in</h2><p id="access-message" role="status">Checking administrator session…</p>
@@ -90,9 +90,9 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 </dialog>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/kaggle-catalog.js?v=20261113-candidates&cv=6ceef73b9790"></script>
-<script src="/r2-set-mappings.js?v=20261115-journey-probe&cv=6ceef73b9790"></script>
-<script src="/r2-artwork-test.js?v=20261116-csv-feedback2&cv=6ceef73b9790"></script>
+<script src="/kaggle-catalog.js?v=20261113-candidates&cv=e38a62a1108d"></script>
+<script src="/r2-set-mappings.js?v=20261115-journey-probe&cv=e38a62a1108d"></script>
+<script src="/r2-artwork-test.js?v=20261116-csv-feedback2&cv=e38a62a1108d"></script>
 <script>
 (()=>{"use strict";
 const $=id=>document.getElementById(id);
@@ -452,6 +452,24 @@ function detail(card,review){
    if(value!=="approved")await refresh();
    notice(value==="approved"?"Approved image saved to private catalog for "+card.card_name+". Find it under Reviewed decisions. Public search unchanged.":"Review decision saved for "+card.card_name+". Public search unchanged.");
   });actions.append(button);
+ }
+ // An already-approved catalog image is not an outstanding approval task.
+ // Make corrections an explicit action to prevent accidental overwrites.
+ const alreadyApproved=review?.review_status==="approved"&&card.image_status==="matched"&&review.candidate_path===card.image_path;
+ if(alreadyApproved){
+  const reviewActions=[...actions.children];
+  actions.replaceChildren();
+  const confirmed=element("p","note","Already approved and matched. No further action needed.");
+  confirmed.style.color="#bdd9c8";
+  const change=element("button","secondary","Change approved image");
+  change.type="button";
+  change.addEventListener("click",()=>{
+   actions.replaceChildren(...reviewActions);
+   preview.click();
+   advanced.open=true;
+   cardMessage("To replace this approved image, inspect the new candidate first. Existing approval remains until you save a change.");
+  });
+  actions.append(confirmed,change);
  }
  const advanced=element("details","review-advanced");
  const summary=element("summary",null,"Image options, R2 path and notes");
