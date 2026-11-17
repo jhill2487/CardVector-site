@@ -561,7 +561,10 @@
         <p class="blog-meta">${escapeHtml(post.dateLabel)} &middot; ${escapeHtml(post.status)}</p>
         <p class="hero-lede">${escapeHtml(post.description || post.summary)}</p>
         <div class="brief-post-layout">
-          ${post.sections.filter((section) => !(section.heading === "Brief" && /^#\s/.test(section.body.trim()))).map((section) => `
+          ${post.sections.map((section) => {
+            if (section.heading !== "Brief" || !/^#\s/.test(section.body.trim())) return section;
+            return { heading: "Introduction", body: section.body.replace(/^# [^\n]*\n?/, "").trim() };
+          }).filter((section) => section.body).map((section) => `
             <section class="brief-post-section">
               <h2>${escapeHtml(section.heading)}</h2>
               ${renderBriefBody(section.body)}
