@@ -477,11 +477,61 @@
     document.title = "Pokemon Market Briefs for Card Sellers | Putnam Collectibles";
   }
 
+  function renderBriefInline(value) {
+    return escapeHtml(value)
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
+  }
+
   function renderBriefBody(body) {
-    return String(body || "")
-      .split(/\n{2,}/)
-      .map((paragraph) => `<p>${escapeHtml(paragraph.trim())}</p>`)
-      .join("");
+    const lines = String(body || "").split("\n");
+    const output = [];
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i].trim();
+      if (!line) { i++; continue; }
+      if (line.startsWith("### ")) {
+        output.push("<h3>" + renderBriefInline(line.slice(4)) + "</h3>");
+        i++; continue;
+      }
+      if (line.startsWith("|") && i + 1 < lines.length && /^\|?[\s:|\-]+\|?$/.test(lines[i + 1].trim())) {
+        const cells = (row) => row.replace(/^\||\|$/g, "").split("|").map(cell => renderBriefInline(cell.trim()));
+        const headers = cells(line);
+        const rows = [];
+        i += 2;
+        while (i < lines.length && lines[i].trim().startsWith("|")) {
+          rows.push("<tr>" + cells(lines[i].trim()).map(cell => "<td>" + cell + "</td>").join("") + "</tr>");
+          i++;
+        }
+        output.push('<div class="brief-table-scroll"><table><thead><tr>' +
+          headers.map(cell => "<th>" + cell + "</th>").join("") +
+          "</tr></thead><tbody>" + rows.join("") + "</tbody></table></div>");
+        continue;
+      }
+      if (/^(?:[-*] |\d+\. )/.test(line)) {
+        const tag = /^\d+\. /.test(line) ? "ol" : "ul";
+        const items = [];
+        while (i < lines.length && /^(?:[-*] |\d+\. )/.test(lines[i].trim())) {
+          items.push("<li>" + renderBriefInline(lines[i].trim().replace(/^(?:[-*] |\d+\. )/, "")) + "</li>");
+          i++;
+        }
+        output.push("<" + tag + ">" + items.join("") + "</" + tag + ">");
+        continue;
+      }
+      const paragraph = [];
+      while (i < lines.length && lines[i].trim() && !lines[i].trim().startsWith("### ")) {
+        paragraph.push(renderBriefInline(lines[i].trim()));
+        i++;
+      }
+      output.push("<p>" + paragraph.join("<br>") + "</p>");
+    }
+    return output.join("");
+  }
+
+  function renderBriefAdSlot(side) {
+    return '<aside class="brief-ad-rail brief-ad-rail-' + side + '" aria-label="Advertising placement">' +
+      '<div class="brief-ad-placeholder"><span class="brief-ad-label">Advertisement</span>' +
+      '<p>Your brand here</p><a href="/contact/">Advertise with CardVector</a></div></aside>';
   }
 
   function renderAffiliateLinkPanel(post) {
@@ -502,7 +552,9 @@
     const posts = await loadMarketBriefPosts();
     const post = posts.find((item) => item.slug === slug) || posts[0];
     main.innerHTML = `
-      <article class="blog-shell blog-post wrap" aria-labelledby="market-brief-post-title">
+      <div class="brief-page-grid">
+        ${renderBriefAdSlot("left")}
+      <article class="blog-shell blog-post" aria-labelledby="market-brief-post-title">
         <a class="operator-inline-link" href="/market-briefs/">Back to Market Briefs</a>
         <p class="eyebrow">${escapeHtml(post.label)}</p>
         <h1 id="market-brief-post-title">${escapeHtml(post.title)}</h1>
@@ -519,18 +571,10 @@
               ${renderBriefBody(section.body)}
             </section>`).join("")}
         </div>
-        ${renderAffiliateLinkPanel(post)}
-        <nav class="brief-internal-links" aria-label="Related Putnam Collectibles pages">
-          <a href="/market-briefs/">More Pokemon market briefs</a>
-          <a href="/tools/carduploader/">CardUploader seller workflow</a>
-        <a href="${siteLinks.CARDUPLOADER_BUYLIST_URL}" target="_blank" rel="noopener noreferrer">CardUploader buylist</a>
-        </nav>
-        <aside class="brief-disclosure">
-          <strong>How this brief is prepared</strong>
-          <p>Putnam Collectibles uses ChatGPT-assisted research to identify possible market updates, then reviews each brief before publication. Future posts should include dated sources and current marketplace checks.</p>
-        </aside>
-      </article>`;
-    document.title = `${post.seoTitle || post.title} | Putnam Collectibles`;
+      </article>
+      ${renderBriefAdSlot("right")}
+      </div>`;
+    document.title = `${post.seoTitle || post.title} | CardVector`;
   }
 
   function captureConfig() {

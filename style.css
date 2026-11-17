@@ -3528,3 +3528,80 @@ h3 {
     grid-column: 1;
   }
 }
+
+
+/* Market Brief reading layout: sponsorship rails only on wide screens. */
+.brief-page-grid {
+  display: grid;
+  grid-template-columns: minmax(155px, 240px) minmax(0, 900px) minmax(155px, 240px);
+  gap: clamp(16px, 2.2vw, 36px);
+  align-items: start;
+  justify-content: center;
+  max-width: 1510px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+.brief-page-grid > .blog-post {
+  min-width: 0;
+  width: 100%;
+  max-width: 900px;
+}
+.brief-ad-rail {
+  min-width: 0;
+  padding-top: 72px;
+}
+.brief-ad-placeholder {
+  position: sticky;
+  top: 88px;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 16px;
+  min-height: 310px;
+  padding: 20px 12px;
+  border: 1px dashed rgba(143, 161, 184, .55);
+  border-radius: 14px;
+  background: rgba(110, 128, 150, .04);
+  text-align: center;
+}
+.brief-ad-label {
+  color: var(--muted);
+  font-size: .7rem;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+.brief-ad-placeholder p {
+  color: var(--muted);
+  font-size: 1.2rem;
+  font-weight: 750;
+}
+.brief-ad-placeholder a {
+  color: var(--blue-700);
+  font-size: .82rem;
+  font-weight: 750;
+}
+.brief-post-section p + p,
+.brief-post-section p + h3,
+.brief-post-section ul + p,
+.brief-post-section ol + p {
+  margin-top: 14px;
+}
+.brief-post-section h3 {
+  margin: 18px 0 10px;
+}
+.brief-post-section ul, .brief-post-section ol {
+  padding-left: 24px;
+  margin: 12px 0;
+}
+.brief-post-section li { margin: 6px 0; }
+.brief-table-scroll { width: 100%; overflow-x: auto; margin-top: 12px; }
+.brief-table-scroll table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.brief-table-scroll th, .brief-table-scroll td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+@media (max-width: 1130px) {
+  .brief-page-grid { grid-template-columns: minmax(0, 900px); padding: 0 20px; }
+  .brief-ad-rail { display: none; }
+}
