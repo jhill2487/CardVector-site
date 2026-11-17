@@ -18,3 +18,19 @@ html{background:#081524}body{background:#081524!important;color:#edf7ff!importan
 .footer a{color:#bceef7!important}
 a{accent-color:#ff891c}
 @media(max-width:720px){.site-header .nav-links{gap:10px!important;flex-wrap:wrap!important}.site-header .nav{align-items:center!important}.site-header .brand-logo{width:min(190px,52vw)}.blog-shell{padding-inline:16px!important}}
+
+
+/* Market Brief article heading uses the dark-page palette, not the legacy light theme. */
+.brief-page-grid .blog-post h1#market-brief-post-title {
+  color: #f5f9ff !important;
+  font-size: clamp(2rem, 3.8vw, 3.5rem);
+  line-height: 1.12;
+  overflow-wrap: anywhere;
+  letter-spacing: -.035em;
+}
+.brief-page-grid .blog-post .blog-meta {
+  color: #b9d8ed !important;
+}
+.brief-page-grid .brief-ad-placeholder a {
+  color: #8ddfff !important;
+}

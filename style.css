@@ -3535,7 +3535,7 @@ h3 {
   display: grid;
   grid-template-columns: minmax(155px, 240px) minmax(0, 900px) minmax(155px, 240px);
   gap: clamp(16px, 2.2vw, 36px);
-  align-items: start;
+  align-items: stretch;
   justify-content: center;
   max-width: 1510px;
   margin: 0 auto;
@@ -3548,17 +3548,21 @@ h3 {
 }
 .brief-ad-rail {
   min-width: 0;
-  padding-top: 72px;
+  align-self: stretch;
+  display: flex;
+  padding-top: 54px;
+  padding-bottom: 72px;
 }
 .brief-ad-placeholder {
-  position: sticky;
-  top: 88px;
-  display: grid;
-  align-content: center;
-  justify-items: center;
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
   gap: 16px;
-  min-height: 310px;
-  padding: 20px 12px;
+  min-height: 600px;
+  padding: 80px 12px 24px;
   border: 1px dashed rgba(143, 161, 184, .55);
   border-radius: 14px;
   background: rgba(110, 128, 150, .04);

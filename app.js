@@ -560,12 +560,8 @@
         <h1 id="market-brief-post-title">${escapeHtml(post.title)}</h1>
         <p class="blog-meta">${escapeHtml(post.dateLabel)} &middot; ${escapeHtml(post.status)}</p>
         <p class="hero-lede">${escapeHtml(post.description || post.summary)}</p>
-        <aside class="brief-answer-box">
-          <strong>Quick answer</strong>
-          <p>${escapeHtml(post.searchIntent || "Use this brief to understand the market signals behind Pokemon card price changes before buying, selling, or repricing inventory.")}</p>
-        </aside>
         <div class="brief-post-layout">
-          ${post.sections.map((section) => `
+          ${post.sections.filter((section) => !(section.heading === "Brief" && /^#\s/.test(section.body.trim()))).map((section) => `
             <section class="brief-post-section">
               <h2>${escapeHtml(section.heading)}</h2>
               ${renderBriefBody(section.body)}
