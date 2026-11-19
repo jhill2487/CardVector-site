@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=ffad1591ccc6" type="image/svg+xml">
+<meta name="robots" content="noindex,nofollow"><link rel="icon" href="/assets/favicon.svg?cv=4886f59d5652" type="image/svg+xml">
 <title>Image Review | CardVector</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif;background:#091320;color:#edf4fc}
@@ -62,8 +62,8 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
  .review-card .review-advanced .suggestions{max-width:100%}
 }
 </style></head>
-<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=ffad1591ccc6" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
-<main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1><p class="note" id="build-version">Review build 177 · PokéWallet-only full-set staging</p>
+<body><header><a href="/"><img src="/assets/cardvector-twin-arrow.svg?cv=4886f59d5652" alt="CardVector"></a><a href="/status/">Development Dashboard</a></header>
+<main><div class="eyebrow">CARDVECTOR · ADMINISTRATION</div><h1>Image Review</h1><p class="note" id="build-version">Review build 178 · approved R2 matches preserved</p>
 <p class="muted">Only sets with every PokéWallet card image staged are shown. Review images and approve or skip; incomplete imports remain hidden.</p>
 <section id="access" class="panel"><h2>Administrator sign-in</h2><p id="access-message" role="status">Checking administrator session…</p>
 <form id="admin-login" hidden><label for="admin-email">Email</label><input id="admin-email" type="email" required autocomplete="username" value="jhill2487@gmail.com">
@@ -91,9 +91,9 @@ button.secondary{background:#2f4a63;color:#f1f7fc}button:disabled{opacity:.5;cur
 </dialog>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/kaggle-catalog.js?v=20261113-candidates&cv=ffad1591ccc6"></script>
-<script src="/r2-set-mappings.js?v=20261115-journey-probe&cv=ffad1591ccc6"></script>
-<script src="/r2-artwork-test.js?v=20261116-csv-feedback2&cv=ffad1591ccc6"></script>
+<script src="/kaggle-catalog.js?v=20261113-candidates&cv=4886f59d5652"></script>
+<script src="/r2-set-mappings.js?v=20261115-journey-probe&cv=4886f59d5652"></script>
+<script src="/r2-artwork-test.js?v=20261116-csv-feedback2&cv=4886f59d5652"></script>
 <script>
 (()=>{"use strict";
 const $=id=>document.getElementById(id);
@@ -997,25 +997,27 @@ function fullyStagedPokewalletSet(s,stagedCounts){
 }
 async function pokewalletStagedCounts(){
  const staged=[];
- // Only exact PokéWallet-uploaded images count toward readiness.
- // Existing R2 matches from other sources remain archived but do not
- // qualify a set for PokéWallet-only image review.
+ // Previously approved exact matches count regardless of source; only
+ // pending PokéWallet uploads count as newly staged images.
  for(let offset=0;offset<20000;offset+=1000){
   const {data,error}=await db.from("cv_admin_image_reviews")
    .select("provider_id,candidate_path,review_status")
-   .like("candidate_path","pokewallet/%")
    .in("review_status",["approved","pending_review"])
+   .not("candidate_path","is",null)
    .order("provider_id",{ascending:true}).range(offset,offset+999);
   if(error)throw error;
   staged.push(...(data||[]));
   if(!data||data.length<1000)break;
  }
- const valid=staged.filter(r=>r.candidate_path&&/^pokewallet\/[a-z0-9-]+\/.+\.(?:jpg|jpeg|png|webp)$/i.test(r.candidate_path));
+ const valid=staged.filter(r=>{
+  const path=String(r.candidate_path||"");
+  return /\.(?:jpg|jpeg|png|webp)$/i.test(path)&&
+   (r.review_status==="approved"||
+    (r.review_status==="pending_review"&&/^pokewallet\/[a-z0-9-]+\//i.test(path)));
+ });
  const linked=await lookupByProviderIds("cv_admin_pokewallet_catalog","provider_id,set_id",valid.map(r=>r.provider_id));
- const ids=new Set(valid.map(r=>r.provider_id));
  const bySet=new Map();
  for(const card of linked){
-  if(!ids.has(card.provider_id))continue;
   const key=String(card.set_id);
   bySet.set(key,(bySet.get(key)||0)+1);
  }
@@ -1042,7 +1044,7 @@ async function getSets(){
   o.textContent=s.set_name+" ("+s.matched_cards+" matched, "+s.unmatched_cards+" missing, "+Math.max(0,s.imported_cards-s.matched_cards-s.unmatched_cards-s.review_cards)+" pending)";
   select.append(o);
  }
- if(!sets.length){const o=document.createElement("option");o.textContent="No fully staged PokéWallet sets awaiting review";o.value="";select.append(o);}
+ if(!sets.length){const o=document.createElement("option");o.textContent="No fully staged sets awaiting review";o.value="";select.append(o);}
  else if(sets.some(s=>String(s.set_id)===previous))select.value=previous;
 }
 async function reloadReviewSets(){
