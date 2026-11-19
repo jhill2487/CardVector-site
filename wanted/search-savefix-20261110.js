@@ -555,6 +555,7 @@
     container.append(section);
   }
   async function selectCard(card) {
+    if(selectedController)selectedController.abort();
     if(isApprovedCard(card)){
       const panel=$("selected"),body=$("selected-content");
       panel.hidden=false;
@@ -576,7 +577,6 @@
         image_url:card.image,allowedFinishes:finishKeys};
       return;
     }
-    if (selectedController) selectedController.abort();
     selectedController = new AbortController();
     const panel = $("selected"), body = $("selected-content");
     panel.hidden = false; selectedCard = null; populateFinishOptions([]); body.textContent = "Loading exact card details…";
