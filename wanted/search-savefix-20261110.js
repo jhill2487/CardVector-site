@@ -1,4 +1,4 @@
-/* Public TCGdex catalog search only; no Supabase requests or writes. */
+/* Public CardVector-approved printings plus TCGdex historical fallback. */
 (() => {
   "use strict";
   const API = "https://api.tcgdex.net/v2/en/cards";
@@ -404,74 +404,120 @@
     if (!cards.length) { const empty = document.createElement("p"); empty.className = "empty"; empty.textContent = "No cards found. Check spelling or try a shorter name."; results.append(empty); return; }
     renderNext();
   }
+  function comparableSetName(name){
+    return String(name||"").replace(/^[A-Za-z]{1,6}[0-9]{0,3}:\s*/,"")
+      .toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+  }
+  function localNumber(value){
+    return String(value||"").split("/")[0].replace(/^0+(?=\d)/,"").toLowerCase();
+  }
+  function removeDuplicateUnverifiedCards(approved,external){
+    const approvedKeys=new Set(approved.map(c=>comparableSetName(c.set?.name)+"|"+localNumber(c.localId)));
+    return external.filter(c=>{
+      const setId=setIdFor(c);
+      const setName=c.set?.name||setNames.get(setId);
+      return !setName||!approvedKeys.has(comparableSetName(setName)+"|"+localNumber(c.localId));
+    });
+  }
   async function search(query) {
-    const id = ++requestId;
-    if (controller) controller.abort();
-    const field = mode.value, chosenSet = setFilter.value;
-    if (query.length < 2 && !chosenSet) { render([]); results.replaceChildren(); feedback("Enter at least 2 characters, or choose a set."); return; }
-    const cacheKey = [field, query, chosenSet].join("|");
-    if (cache.has(cacheKey)) { const saved = cache.get(cacheKey); render(saved.cards); feedback(saved.datesIncomplete ? "Oldest known printings first; sets with unavailable dates appear last." : "Oldest printing first by set release date."); return; }
-    controller = new AbortController();
-    const searchController = controller;
-    feedback("Searching Pokémon cards…");
-    try {
-      await pocketCatalog;
-      if (chosenSet && pocketSetIds.has(chosenSet.toLowerCase())) throw new Error("Digital-only set excluded");
-      const params = new URLSearchParams();
-      if (field === "name" && query) params.set("name", query);
-      if (field === "illustrator" && query) params.set("illustrator", query);
-      if (chosenSet) params.set("set", chosenSet);
-      // Set-name searches resolve the official set ID before retrieving cards.
-      if (field === "set" && !chosenSet) {
-        const target = [...setNames.entries()].filter(([,name]) => name.toLowerCase().includes(query.toLowerCase())).map(([id]) => id);
-        if (target.length !== 1) { feedback(target.length ? "Select the exact set from the dropdown." : "No matching set. Select a set from the dropdown."); render([]); return; }
-        params.set("set", target[0]);
+    const id=++requestId;
+    if(controller)controller.abort();
+    const field=mode.value,chosenSet=setFilter.value;
+    if(query.length<2&&!chosenSet){
+      render([]);results.replaceChildren();
+      feedback("Enter at least 2 characters, or choose a set.");return;
+    }
+    const cacheKey=[field,query,chosenSet].join("|");
+    if(cache.has(cacheKey)){
+      const saved=cache.get(cacheKey);
+      render(saved.cards);
+      feedback(saved.message);
+      return;
+    }
+    controller=new AbortController();
+    const searchController=controller;
+    feedback("Searching approved CardVector printings and Pokémon cards…");
+    const approvedPromise=approvedCards(query,field,chosenSet)
+      .catch(()=>null); // Distinguish unavailable public catalog from no matches.
+    try{
+      // Verified CardVector set IDs are independent of TCGdex set IDs.
+      if(chosenSet.startsWith(PW_SET_PREFIX)){
+        const approved=await approvedPromise;
+        if(id!==requestId)return;
+        if(approved===null)throw Error("Approved catalog temporarily unavailable");
+        const cards=approved.sort(cardNumberCompare);
+        const message=cards.length?"Approved CardVector printings with exact matched artwork.":"No approved printings match this search.";
+        cache.set(cacheKey,{cards,message});
+        render(cards);feedback(message);return;
       }
-      // Sort after resolving actual set release dates below; card briefs lack them.
-      // The full set endpoint exposes its cards directly; browse by set with no text.
-      const browseSet = Boolean(chosenSet && !query);
-      const endpoint = browseSet
-        ? "https://api.tcgdex.net/v2/en/sets/" + encodeURIComponent(chosenSet)
-        : API + "?" + params.toString();
-      const response = await fetch(endpoint, { signal: searchController.signal });
-      if (!response.ok) throw new Error("TCGdex returned " + response.status);
-      const data = await response.json();
-      let cards = browseSet ? data.cards : data;
-      if (!Array.isArray(cards)) throw new Error("Unexpected search response");
-      // If upstream filtering yields zero cards, verify against its complete
-      // catalog before telling the collector that no printing exists.
-      if (!browseSet && !cards.length && field === "name" && query.length >= 2) {
-        const allResponse = await fetch(API, {signal: searchController.signal});
-        if (allResponse.ok) {
-          const all = await allResponse.json();
-          if (Array.isArray(all)) {
-            const needle = query.toLowerCase().trim();
-            cards = all.filter(c => String(c.name || "").toLowerCase().includes(needle) &&
-              (!chosenSet || String(c.id || "").toLowerCase().startsWith(chosenSet.toLowerCase() + "-")));
+      await pocketCatalog;
+      if(chosenSet&&pocketSetIds.has(chosenSet.toLowerCase()))throw Error("Digital-only set excluded");
+      const params=new URLSearchParams();
+      if(field==="name"&&query)params.set("name",query);
+      if(field==="illustrator"&&query)params.set("illustrator",query);
+      if(chosenSet)params.set("set",chosenSet);
+      let skipExternal=false;
+      if(field==="set"&&!chosenSet){
+        const targets=[...setNames.entries()].filter(([id,name])=>
+          !id.startsWith(PW_SET_PREFIX)&&name.toLowerCase().includes(query.toLowerCase()))
+          .map(([id])=>id);
+        if(targets.length===1)params.set("set",targets[0]);
+        else skipExternal=true; // Public matched sets may have no TCGdex equivalent.
+      }
+      const browseSet=Boolean(chosenSet&&!query);
+      let external=[],externalError=false;
+      if(!skipExternal){
+        try{
+          const endpoint=browseSet
+            ?"https://api.tcgdex.net/v2/en/sets/"+encodeURIComponent(chosenSet)
+            :API+"?"+params.toString();
+          const response=await fetch(endpoint,{signal:searchController.signal});
+          if(!response.ok)throw Error("TCGdex returned "+response.status);
+          const data=await response.json();
+          external=browseSet?data.cards:data;
+          if(!Array.isArray(external))throw Error("Unexpected external search response");
+          if(!browseSet&&!external.length&&field==="name"&&query.length>=2){
+            const allResponse=await fetch(API,{signal:searchController.signal});
+            if(allResponse.ok){
+              const all=await allResponse.json();
+              if(Array.isArray(all))external=all.filter(c=>String(c.name||"").toLowerCase().includes(query.toLowerCase())&&
+                (!chosenSet||String(c.id||"").toLowerCase().startsWith(chosenSet.toLowerCase()+"-")));
+            }
           }
+        }catch(error){
+          if(error.name==="AbortError")throw error;
+          externalError=true;
+          external=[];
         }
       }
-      if (id !== requestId) return;
-      const validCards = cards.filter(c => c && typeof c.id === "string" && typeof c.name === "string" && isPhysicalCard(c));
-      let datesIncomplete = false;
-      if (!browseSet && validCards.length) {
-        feedback("Checking release dates for " + validCards.length + " matching cards…");
-        datesIncomplete = await resolveReleaseDates(validCards, searchController.signal, id);
-        if (id !== requestId) return;
+      const approved=await approvedPromise;
+      if(id!==requestId)return;
+      if(approved===null&&externalError)throw Error("Both card catalogs unavailable");
+      const validExternal=external.filter(c=>c&&typeof c.id==="string"&&typeof c.name==="string"&&isPhysicalCard(c));
+      let datesIncomplete=false;
+      if(validExternal.length&&!browseSet){
+        feedback("Checking set release dates…");
+        datesIncomplete=await resolveReleaseDates(validExternal,searchController.signal,id);
+        if(id!==requestId)return;
       }
-      const sorted = browseSet ? validCards.sort(cardNumberCompare) : validCards.sort(compareByReleaseDate);
-      cache.set(cacheKey, {cards: sorted, datesIncomplete});
-      if (cache.size > 30) cache.delete(cache.keys().next().value);
-      render(sorted);
-      feedback(sorted.length ? (datesIncomplete
-        ? "Oldest known printings first; sets with unavailable release dates appear last."
-        : "Oldest printing first by set release date.") : "No matching cards found.");
-    } catch (error) {
-      if (error.name === "AbortError" || id !== requestId) return;
-      results.replaceChildren(); $("result-count").textContent = "";
+      const verified=approved||[];
+      const cards=[...verified,...removeDuplicateUnverifiedCards(verified,validExternal)];
+      const sorted=browseSet?cards.sort(cardNumberCompare):cards.sort(compareByReleaseDate);
+      const message=sorted.length
+        ?verified.length+" verified CardVector printing(s) with approved artwork"+
+          (validExternal.length?" · additional historical results from TCGdex":"")+
+          (datesIncomplete?" · unknown release dates last":"")
+        :approved===null?"Approved CardVector catalog unavailable; no external matching cards.":"No matching cards found.";
+      cache.set(cacheKey,{cards:sorted,message});
+      if(cache.size>30)cache.delete(cache.keys().next().value);
+      render(sorted);feedback(message);
+    }catch(error){
+      if(error.name==="AbortError"||id!==requestId)return;
+      results.replaceChildren();$("result-count").textContent="";
       feedback("Card search is temporarily unavailable. Please try again.");
     }
   }
+
   function addMarketReference(container, details) {
     const pricing = details.pricing?.tcgplayer;
     const section = document.createElement("details");
