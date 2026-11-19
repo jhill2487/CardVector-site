@@ -34,10 +34,69 @@
     } catch (_) { /* Search continues without set names if unavailable. */ }
   }
   loadSetNames();
+  // Populate the verified-set dropdown even if the external TCGdex list fails.
+  // Deferred until after client initialization below.
 
   let debounce, controller, requestId = 0, matches = [], visible = 0, selectedController, selectedCard = null;
   const supabaseClient = window.supabase?.createClient("https://iqdpfgpkagjxzedfxrvn.supabase.co", "sb_publishable_76aiLaAm5Z4Kv67GkuTo-g_Psx5HINH");
   function feedback(text) { status.textContent = text; }
+
+  // Canonical public CardVector records: only R2 images explicitly approved
+  // for the exact PokéWallet provider ID are exposed by the server.
+  const PW_SET_PREFIX="pw:";
+  const approvedSetNames=new Map();
+  function isApprovedCard(card){return card?._cvApproved===true;}
+  function approvedFinishKeys(card){
+    const keys=new Set();
+    for(const raw of Array.isArray(card?.variants)?card.variants:[]){
+      const type=String(typeof raw==="string"?raw:raw?.type||"").toLowerCase().replace(/[^a-z]+/g," ").trim();
+      if(type==="normal"||type==="non holo"||type==="non holofoil")keys.add("normal");
+      if(type==="holo"||type==="holofoil")keys.add("holo");
+      if(type==="reverse holo"||type==="reverse holofoil")keys.add("reverse");
+    }
+    return ["normal","holo","reverse"].filter(key=>keys.has(key));
+  }
+  function approvedImageUrl(path){
+    if(!path||!/^(?:pokewallet\/|Pokemon TCG\/)/i.test(path)||
+      !/\.(?:jpg|jpeg|png|webp)$/i.test(path)||path.includes("..")||/[?#\\]/.test(path))return null;
+    return "https://images.cardvector.app/archive/"+
+      path.split("/").map(segment=>encodeURIComponent(segment)).join("/");
+  }
+  async function loadApprovedSets(){
+    if(!supabaseClient)return;
+    const {data,error}=await supabaseClient.rpc("cv_public_approved_card_sets");
+    if(error)throw error;
+    for(const row of data||[]){
+      const id=PW_SET_PREFIX+String(row.set_id);
+      if(approvedSetNames.has(id))continue;
+      const label=String(row.set_name||"").trim();
+      if(!label)continue;
+      approvedSetNames.set(id,label);
+      setNames.set(id,label);
+      setFilter.add(new Option(label+" · CardVector verified ("+row.matched_cards+")",id));
+    }
+  }
+  async function approvedCards(query,field,chosenSet){
+    if(!supabaseClient||field==="illustrator"||(query.length<2&&!chosenSet))return [];
+    if(chosenSet&&!chosenSet.startsWith(PW_SET_PREFIX))return [];
+    const {data,error}=await supabaseClient.rpc("cv_public_approved_card_search",{
+      p_query:query,p_mode:field,p_set_id:chosenSet?chosenSet.slice(PW_SET_PREFIX.length):null,p_limit:1000
+    });
+    if(error)throw error;
+    return (data||[]).flatMap(row=>{
+      const image=approvedImageUrl(row.image_path);
+      if(!image||!/^pk_[a-f0-9]{40,128}$/i.test(String(row.provider_id||"")))return [];
+      return [{
+        id:PW_SET_PREFIX+row.provider_id,
+        _cvProviderId:row.provider_id,_cvApproved:true,
+        name:row.card_name,localId:row.card_number,
+        set:{name:row.set_name,id:PW_SET_PREFIX+row.set_id},
+        image,variants:row.variants||[]
+      }];
+    });
+  }
+
+  loadApprovedSets().catch(()=>{ /* External TCGdex search stays available. */ });
   // Explicit crosswalk: TCGdex set IDs -> Limitless English set codes.
   // Never infer a set code from the card name; wrong artwork is worse than none.
   const LIMITLESS_SETS = Object.freeze({
@@ -118,6 +177,15 @@
     tryNext();
   }
   function picture(card, eager = false) {
+    if(isApprovedCard(card)){
+      const image=document.createElement("img");
+      image.alt=card.name+" · approved CardVector image";
+      image.loading=eager?"eager":"lazy";
+      image.decoding="async";
+      image.src=card.image;
+      image.onerror=()=>{const span=document.createElement("span");span.className="placeholder";span.textContent="Image unavailable";image.replaceWith(span);};
+      return image;
+    }
     const urls = imageCandidates(card);
     const fallback = () => {
       const span = document.createElement("span");
@@ -148,6 +216,7 @@
     return img;
   }
   function setIdFor(card) {
+    if(isApprovedCard(card))return String(card.set?.id||"");
     const id = String(card.id || "");
     return id.slice(0, id.lastIndexOf("-"));
   }
@@ -257,6 +326,11 @@
     return info.source==="reviewed"?label+" · Reviewed":label+(info.warning?" · Needs verification":"");
   }
   function enqueueVariant(card, label) {
+    if(isApprovedCard(card)){
+      const keys=approvedFinishKeys(card);
+      label.textContent=keys.length?keys.map(k=>finishNames[k]).join(" · ")+" · Approved PokéWallet":"Finish information requires verification";
+      return;
+    }
     if (variantCache.has(card.id)) { label.textContent = variantCache.get(card.id); return; }
     pendingVariants.push({card,label});
     runVariantQueue();
@@ -432,6 +506,27 @@
     container.append(section);
   }
   async function selectCard(card) {
+    if(isApprovedCard(card)){
+      const panel=$("selected"),body=$("selected-content");
+      panel.hidden=false;
+      panel.scrollIntoView({behavior:"smooth",block:"nearest"});
+      const finishKeys=approvedFinishKeys(card);
+      populateFinishOptions(finishKeys);
+      const box=document.createElement("div");box.className="selected-detail";
+      const details=document.createElement("div"),heading=document.createElement("h3");
+      heading.textContent=card.name;
+      const set=document.createElement("p");set.textContent="Set: "+card.set.name;
+      const number=document.createElement("p");number.textContent="Card #: "+card.localId;
+      const reference=document.createElement("p");reference.textContent="PokéWallet printing ID: "+card._cvProviderId;
+      const note=document.createElement("p");
+      note.textContent=finishKeys.length?"Verified printing image; available finishes from the PokéWallet metadata.":"Approved image available. Finish metadata requires verification before saving a wanted request.";
+      details.append(heading,set,number,reference,note);
+      box.append(picture(card,true),details);body.replaceChildren(box);
+      selectedCard={source:"pokewallet",card_id:card._cvProviderId,
+        card_name:card.name,set_name:card.set.name,card_number:card.localId,
+        image_url:card.image,allowedFinishes:finishKeys};
+      return;
+    }
     if (selectedController) selectedController.abort();
     selectedController = new AbortController();
     const panel = $("selected"), body = $("selected-content");
@@ -526,7 +621,7 @@
       const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
       if (authError || !user) { message.textContent = "Sign in to save your wanted card. Open My account, then return here."; return; }
       const { error } = await supabaseClient.from("cv_wanted_requests").insert({
-        user_id: user.id, source: "tcgdex",
+        user_id: user.id, source: selectedCard.source||"tcgdex",
         card_id: selectedCard.card_id,
         card_name: selectedCard.card_name,
         set_name: selectedCard.set_name,
