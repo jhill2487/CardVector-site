@@ -57,8 +57,11 @@
     return ["normal","holo","reverse"].filter(key=>keys.has(key));
   }
   function approvedImageUrl(path){
-    if(!path||!/^(?:pokewallet\/|Pokemon TCG\/)/i.test(path)||
-      !/\.(?:jpg|jpeg|png|webp)$/i.test(path)||path.includes("..")||/[?#\\]/.test(path))return null;
+    // Every public path already passed server-side approval and match checks.
+    // Preserve all historical R2 folder schemes instead of a small hardcoded list.
+    if(!path||!/^[-a-z0-9 _./]+\.(?:jpg|jpeg|png|webp)$/i.test(path)||
+      path.startsWith("/")||path.split("/").some(segment=>!segment||segment==="."||segment==="..")||
+      /[?#\\]/.test(path))return null;
     return "https://images.cardvector.app/archive/"+
       path.split("/").map(segment=>encodeURIComponent(segment)).join("/");
   }
