@@ -512,7 +512,7 @@
     }
     controller=new AbortController();
     const searchController=controller;
-    feedback("Searching approved CardVector printings and Pokémon cards…");
+    feedback("Searching cards…");
     const approvedPromise=approvedCards(query,field,chosenSet)
       .catch(()=>null); // Distinguish unavailable public catalog from no matches.
     try{
@@ -522,7 +522,7 @@
         if(id!==requestId)return;
         if(approved===null)throw Error("Approved catalog temporarily unavailable");
         const cards=approved.sort(cardNumberCompare);
-        const message=cards.length?"Approved CardVector printings with exact matched artwork.":"No approved printings match this search.";
+        const message=cards.length?cards.length+" cards found.":"No matching cards found.";
         cache.set(cacheKey,{cards,message});
         render(cards);feedback(message);return;
       }
@@ -580,9 +580,7 @@
       const cards=[...verified,...removeDuplicateUnverifiedCards(verified,validExternal)];
       const sorted=browseSet?cards.sort(cardNumberCompare):cards.sort(compareByReleaseDate);
       const message=sorted.length
-        ?verified.length+" verified CardVector printing(s) with approved artwork"+
-          (validExternal.length?" · additional historical results from TCGdex":"")+
-          (datesIncomplete?" · unknown release dates last":"")
+        ?sorted.length+" cards found"+(datesIncomplete?" · unknown release dates listed last":"")
         :approved===null?"Approved CardVector catalog unavailable; no external matching cards.":"No matching cards found.";
       cache.set(cacheKey,{cards:sorted,message});
       if(cache.size>30)cache.delete(cache.keys().next().value);
