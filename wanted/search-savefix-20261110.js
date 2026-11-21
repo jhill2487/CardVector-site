@@ -5,7 +5,7 @@
   const $ = (id) => document.getElementById(id);
   const input = $("card-query"), results = $("results"), status = $("search-status");
   const cache = new Map();
-  // Render every returned result; native image lazy-loading limits network usage.
+  // Compact customer-facing search. Exact identity and finish before pricing.
   const setNames = new Map();
   const releaseDates = new Map();
   const setLabels = new Map();
@@ -46,6 +46,58 @@
   const PW_SET_PREFIX="pw:";
   const approvedSetNames=new Map();
   function isApprovedCard(card){return card?._cvApproved===true;}
+  const marketUSD=new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"});
+  function validatedTcgplayerUrl(url) {
+    const raw=String(url||"");
+    return /^https:\/\/(?:www\.)?tcgplayer\.com\/product\/\d+(?:[/?#][^\s]*)?$/i.test(raw)?raw:null;
+  }
+  function cardMarketRows(card) {
+    return (Array.isArray(card?.marketPrices)?card.marketPrices:[])
+      .filter(p=>p && typeof p.sub_type_name==="string" &&
+         Number.isFinite(Number(p.market_price)) && Number(p.market_price)>0);
+  }
+  function marketUpdatedAt(card) {
+    const dates=cardMarketRows(card).map(p=>new Date(p.updated_at||""))
+      .filter(d=>!Number.isNaN(d.getTime()));
+    return dates.length?new Date(Math.min(...dates.map(d=>d.getTime()))):null;
+  }
+  function marketLine(card) {
+    const prices=cardMarketRows(card);
+    if(!prices.length)return "";
+    const unique=[...new Set(prices.map(p=>Number(p.market_price)))];
+    const min=Math.min(...unique);
+    return prices.length===1?"Market "+marketUSD.format(min):
+      "Market from "+marketUSD.format(min);
+  }
+  function appendTcgplayerMarket(parent,card){
+    const priceRows=cardMarketRows(card);
+    const url=validatedTcgplayerUrl(card?.tcgplayerUrl);
+    if(!priceRows.length&&!url)return;
+    const section=document.createElement("div");
+    section.className="tcgplayer-reference";
+    if(priceRows.length){
+      const heading=document.createElement("strong");
+      heading.textContent="TCGplayer market reference";
+      section.append(heading);
+      for(const p of priceRows){
+        const line=document.createElement("p");
+        line.textContent=p.sub_type_name+" · "+marketUSD.format(Number(p.market_price));
+        section.append(line);
+      }
+      const date=marketUpdatedAt(card);
+      const foot=document.createElement("small");
+      foot.textContent=date?"Price updated "+date.toLocaleDateString("en-US")+
+        " · Market values may have changed":"Last price update unavailable · Verify before buying";
+      section.append(foot);
+    }
+    if(url){
+      const a=document.createElement("a");
+      a.href=url;a.target="_blank";a.rel="noopener noreferrer";
+      a.textContent="View exact product on TCGplayer";
+      section.append(a);
+    }
+    parent.append(section);
+  }
   function approvedFinishKeys(card){
     const keys=new Set();
     for(const raw of Array.isArray(card?.variants)?card.variants:[]){
@@ -76,13 +128,13 @@
       if(!label)continue;
       approvedSetNames.set(id,label);
       setNames.set(id,label);
-      setFilter.add(new Option(label+" · CardVector verified ("+row.matched_cards+")",id));
+      setFilter.add(new Option(label,id));
     }
   }
   async function approvedCards(query,field,chosenSet){
     if(!supabaseClient||field==="illustrator"||(query.length<2&&!chosenSet))return [];
     if(chosenSet&&!chosenSet.startsWith(PW_SET_PREFIX))return [];
-    const {data,error}=await supabaseClient.rpc("cv_public_approved_card_search",{
+    const {data,error}=await supabaseClient.rpc("cv_public_approved_card_search_v2",{
       p_query:query,p_mode:field,p_set_id:chosenSet?chosenSet.slice(PW_SET_PREFIX.length):null,p_limit:1000
     });
     if(error)throw error;
@@ -94,7 +146,10 @@
         _cvProviderId:row.provider_id,_cvApproved:true,
         name:row.card_name,localId:row.card_number,
         set:{name:row.set_name,id:PW_SET_PREFIX+row.set_id},
-        image,variants:row.variants||[]
+        image,variants:row.variants||[],rarity:row.rarity||null,
+        tcgplayerUrl:validatedTcgplayerUrl(row.tcgplayer_url),
+        marketPrices:Array.isArray(row.tcgplayer_prices)?row.tcgplayer_prices:[],
+        marketFetchedAt:row.price_fetched_at||null
       }];
     });
   }
@@ -372,17 +427,35 @@
       button.append(picture(card));
       const setId = card.id.slice(0, card.id.lastIndexOf("-"));
       const name = document.createElement("strong");
-      name.textContent = card.name+" - "+(card.localId||"—")+" - "+(setNames.get(setId)||card.set?.name||"Set details pending");
-      if (!setNames.has(setId)) {
+      name.textContent=card.name;
+      const subline=document.createElement("small");
+      subline.className="card-identity";
+      subline.textContent=(setNames.get(setId)||card.set?.name||"Pokémon TCG")+" · #"+(card.localId||"—");
+      button.append(subline);
+      if(card.rarity){
+        const rarity=document.createElement("small");
+        rarity.className="card-rarity";
+        rarity.textContent=card.rarity;
+        button.append(rarity);
+      }
+      const market=marketLine(card);
+      if(market){
+        const line=document.createElement("small");
+        line.className="card-market";
+        line.textContent=market;
+        button.append(line);
+      }
+      if (!setNames.has(setId) && !isApprovedCard(card)) {
         name.dataset.cardName=card.name;
         name.dataset.cardNumber=card.localId||"—";
         setLabels.set(name,setId);
       }
-      const info = document.createElement("small");
-      const number = document.createElement("small");
-      const finish = document.createElement("small");
-      finish.textContent = "Checking finishes…";
-      button.append(name, info, number, finish);
+      const finish=document.createElement("small");
+      finish.className="card-finishes";
+      finish.textContent=isApprovedCard(card)
+        ?(approvedFinishKeys(card).map(k=>finishNames[k]).join(" · ")||"")
+        :"";
+      button.append(name,finish);
       button.addEventListener("click", () => selectCard(card));
       fragment.append(button);
       // Fetch finishes only for the visible page of results.
@@ -567,10 +640,15 @@
       heading.textContent=card.name;
       const set=document.createElement("p");set.textContent="Set: "+card.set.name;
       const number=document.createElement("p");number.textContent="Card #: "+card.localId;
-      const reference=document.createElement("p");reference.textContent="PokéWallet printing ID: "+card._cvProviderId;
+      // Keep provider identities internal; names, card numbers and finishes are sufficient on-screen.
       const note=document.createElement("p");
-      note.textContent=finishKeys.length?"Verified printing image; available finishes from the PokéWallet metadata.":"Approved image available. Finish metadata requires verification before saving a wanted request.";
-      details.append(heading,set,number,reference,note);
+      note.textContent="Finish details are unavailable for this printing.";
+      details.append(heading,set,number);
+      if(card.rarity){
+        const rarity=document.createElement("p");rarity.textContent="Rarity: "+card.rarity;details.append(rarity);
+      }
+      appendTcgplayerMarket(details,card);
+      if(!finishKeys.length)details.append(note);
       box.append(picture(card,true),details);body.replaceChildren(box);
       selectedCard={source:"pokewallet",card_id:card._cvProviderId,
         card_name:card.name,set_name:card.set.name,card_number:card.localId,
@@ -592,7 +670,7 @@
       const heading = document.createElement("h3"); heading.textContent = details.name || card.name;
       const set = document.createElement("p"); set.textContent = "Set: " + (details.set?.name || "Unknown");
       const number = document.createElement("p"); number.textContent = "Card #: " + (details.localId || card.localId || "Unknown");
-      const reference = document.createElement("p"); reference.textContent = "TCGdex ID: " + card.id;
+      const reference = document.createElement("p"); reference.textContent = "Collector number: " + (details.localId || card.localId || "—");
       const initialFinishInfo=finishInfo(details);
       const finishKeys = initialFinishInfo.keys;
       const finishes = finishKeys.map(key => finishNames[key]);
@@ -604,7 +682,7 @@
       // Live PokéWallet enrichment is optional; TCGdex remains a working fallback.
       const walletNote = document.createElement("p");
       walletNote.className = "hint";
-      walletNote.textContent = "Checking PokéWallet for exact printing and finish data…";
+      walletNote.textContent = "Loading additional finish information…";
       text.append(walletNote);
       if (window.CardVectorPokeWallet && supabaseClient) {
         const selectedId = card.id;
@@ -617,8 +695,8 @@
           if (selectedCard?.card_id !== selectedId || !walletNote.isConnected) return;
           if (result.status !== "matched") {
             walletNote.textContent = result.status === "ambiguous"
-              ? "PokéWallet returned multiple exact candidates. Keeping TCGdex finishes to avoid a mismatched printing."
-              : "PokéWallet exact printing not verified. Keeping TCGdex finishes.";
+              ? "Multiple printings share this number; select the exact artwork and finish."
+              : "Available finishes are based on catalog data.";
             return;
           }
           // Market categories can be incomplete. Display evidence but only replace the
@@ -635,7 +713,7 @@
           finishLabel.textContent="Available finishes: "+verified.map(k=>finishNames[k]).join(", ")+" (PokéWallet pricing evidence)";
           if (verified.includes(previous)) $("preferred-finish").value = previous;
           walletNote.textContent = "PokéWallet: " + verified.map(k => finishNames[k]).join(", ") +
-            ". Exact set and card number matched. Source: TCGplayer pricing categories.";
+            ". Verified against the product listing.";
           if (result.prices.length) {
             const prices = document.createElement("small");
             prices.textContent = "Market references: " + result.prices.map(p =>
@@ -644,9 +722,9 @@
           }
         }).catch(err => {
           if (selectedCard?.card_id === selectedId && walletNote.isConnected)
-            walletNote.textContent = "PokéWallet unavailable (" + err.message + "). TCGdex finishes remain selectable.";
+            walletNote.textContent = "Additional finish details are unavailable.";
         });
-      } else walletNote.textContent = "PokéWallet comparison unavailable. Using TCGdex.";
+      } else walletNote.textContent = "Available finishes are based on catalog data.";
     } catch (error) {
       if (error.name !== "AbortError") body.textContent = "Could not load card details. Select the card again to retry.";
     }
