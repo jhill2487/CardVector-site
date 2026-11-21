@@ -33,7 +33,7 @@
       for (const [label,id] of setLabels) label.textContent=label.dataset.cardName+" - "+label.dataset.cardNumber+" - "+(setNames.get(id)||"Pokémon TCG");
     } catch (_) { /* Search continues without set names if unavailable. */ }
   }
-  loadSetNames();
+  const setNamesReady=loadSetNames();
   // Populate the verified-set dropdown even if the external TCGdex list fails.
   // Deferred until after client initialization below.
 
@@ -45,6 +45,7 @@
   // for the exact PokéWallet provider ID are exposed by the server.
   const PW_SET_PREFIX="pw:";
   const approvedSetNames=new Map();
+  const canonicalResultCache=new Map();
   function isApprovedCard(card){return card?._cvApproved===true;}
   const marketUSD=new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"});
   function validatedTcgplayerUrl(url) {
@@ -119,7 +120,7 @@
   }
   async function loadApprovedSets(){
     if(!supabaseClient)return;
-    const {data,error}=await supabaseClient.rpc("cv_public_approved_card_sets");
+    const {data,error}=await supabaseClient.rpc("cv_public_catalog_sets");
     if(error)throw error;
     for(const row of data||[]){
       const id=PW_SET_PREFIX+String(row.set_id);
@@ -133,17 +134,27 @@
   }
   async function approvedCards(query,field,chosenSet){
     if(!supabaseClient||field==="illustrator"||(query.length<2&&!chosenSet))return [];
-    if(chosenSet&&!chosenSet.startsWith(PW_SET_PREFIX))return [];
-    const {data,error}=await supabaseClient.rpc("cv_public_approved_card_search_v2",{
-      p_query:query,p_mode:field,p_set_id:chosenSet?chosenSet.slice(PW_SET_PREFIX.length):null,p_limit:1000
+    let providerSetId=chosenSet?chosenSet.startsWith(PW_SET_PREFIX)
+      ?chosenSet.slice(PW_SET_PREFIX.length):null:null;
+    if(chosenSet&&!providerSetId){
+      await Promise.all([catalogSetsReady,setNamesReady]);
+      const sourceName=comparableSetName(setNames.get(chosenSet));
+      const candidates=[...approvedSetNames.entries()].filter(([id,name])=>
+        comparableSetName(name)===sourceName||
+        (chosenSet==="svp"&&id===PW_SET_PREFIX+"22872"));
+      if(candidates.length!==1)return [];
+      providerSetId=candidates[0][0].slice(PW_SET_PREFIX.length);
+    }
+    const {data,error}=await supabaseClient.rpc("cv_public_catalog_search",{
+      p_query:query,p_mode:field,p_set_id:providerSetId,p_limit:1000
     });
     if(error)throw error;
     return (data||[]).flatMap(row=>{
       const image=approvedImageUrl(row.image_path);
-      if(!image||!/^pk_[a-f0-9]{40,128}$/i.test(String(row.provider_id||"")))return [];
+      if(!/^pk_[a-f0-9]{40,128}$/i.test(String(row.provider_id||"")))return [];
       return [{
         id:PW_SET_PREFIX+row.provider_id,
-        _cvProviderId:row.provider_id,_cvApproved:true,
+        _cvProviderId:row.provider_id,_cvApproved:true,_cvArtworkApproved:!!image,
         name:row.card_name,localId:row.card_number,
         set:{name:row.set_name,id:PW_SET_PREFIX+row.set_id},
         image,variants:row.variants||[],rarity:row.rarity||null,
@@ -154,7 +165,7 @@
     });
   }
 
-  loadApprovedSets().catch(()=>{ /* External TCGdex search stays available. */ });
+  const catalogSetsReady=loadApprovedSets().catch(()=>{ /* TCGdex remains available. */ });
   // Explicit crosswalk: TCGdex set IDs -> Limitless English set codes.
   // Never infer a set code from the card name; wrong artwork is worse than none.
   const LIMITLESS_SETS = Object.freeze({
@@ -234,15 +245,30 @@
     }
     tryNext();
   }
+  function noArtwork(){
+    const span=document.createElement("span");
+    span.className="placeholder";
+    span.textContent="Artwork unavailable";
+    return span;
+  }
   function picture(card, eager = false) {
     if(isApprovedCard(card)){
-      const image=document.createElement("img");
-      image.alt=card.name+" · approved CardVector image";
-      image.loading=eager?"eager":"lazy";
-      image.decoding="async";
-      image.src=card.image;
-      image.onerror=()=>{const span=document.createElement("span");span.className="placeholder";span.textContent="Image unavailable";image.replaceWith(span);};
-      return image;
+      if(card._cvArtworkApproved&&card.image){
+        const image=document.createElement("img");
+        image.alt=card.name+" card artwork";
+        image.loading=eager?"eager":"lazy";
+        image.decoding="async";
+        image.src=card.image;
+        image.onerror=()=>image.replaceWith(noArtwork());
+        return image;
+      }
+      const fallbackCard=card._cvArtworkCard;
+      if(fallbackCard){
+        // Only use an externally verified unique exact printing. Never
+        // substitute regular artwork for a Staff or special print.
+        return picture(fallbackCard,eager);
+      }
+      return noArtwork();
     }
     const urls = imageCandidates(card);
     const fallback = () => {
@@ -487,8 +513,62 @@
   function localNumber(value){
     return String(value||"").split("/")[0].replace(/^0+(?=\d)/,"").toLowerCase();
   }
+  function isSpecialPrinting(name){
+    const cleaned=String(name||"").normalize("NFKD").replace(/[\u0300-\u036f]/g,"");
+    return /\b(staff|prerelease|pokemon center|stamped|cosmos|winner|alternate|league|championship|first edition|1st edition)\b/i.test(cleaned);
+  }
+  function canonicalPrintingKey(name,set,number){
+    return comparableSetName(set)+"|"+localNumber(number)+"|"+String(name||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+  }
+  // Explicit, audited crosswalks. Never infer equivalence from a set prefix.
+  const PROVIDER_TCGDEX_SET_IDS=Object.freeze({"22872":"svp"});
+  async function externalArtForSet(setId,signal){
+    await setNamesReady;
+    const matched=[...setNames.entries()].filter(([id,name])=>
+      !id.startsWith(PW_SET_PREFIX)&&
+      comparableSetName(name)===comparableSetName(approvedSetNames.get(PW_SET_PREFIX+setId)));
+    const tcgdexId=PROVIDER_TCGDEX_SET_IDS[setId]||(matched.length===1?matched[0][0]:null);
+    if(!tcgdexId)return [];
+    try{
+      const response=await fetch("https://api.tcgdex.net/v2/en/sets/"+tcgdexId,{signal});
+      if(!response.ok)return [];
+      const data=await response.json();
+      return Array.isArray(data.cards)?data.cards.filter(isPhysicalCard):[];
+    }catch(error){if(error.name==="AbortError")throw error;return [];}
+  }
+  function attachExactFallbackArtwork(canonical,external){
+    const canonicalNumbers=new Map();
+    for(const c of canonical){
+      const k=c.set?.id+"|"+localNumber(c.localId);
+      canonicalNumbers.set(k,(canonicalNumbers.get(k)||0)+1);
+    }
+    const aliases=new Map([["22872",["scarlet violet black star promos","scarlet violet promos"]]]);
+    for(const c of canonical){
+      if(c._cvArtworkApproved||isSpecialPrinting(c.name))continue;
+      const sid=String(c.set?.id||"").slice(PW_SET_PREFIX.length);
+      const knownSets=[comparableSetName(c.set.name),...(aliases.get(sid)||[])];
+      const num=localNumber(c.localId);
+      // No guessed fallback when a number has multiple catalog printings;
+      // they may differ by stamp, finish, or other printing attributes.
+      const siblingCount=canonicalNumbers.get(c.set?.id+"|"+num)||0;
+      if(siblingCount!==1)continue;
+      const matching=external.filter(e=>{
+        const name=comparableSetName(e.set?.name||setNames.get(setIdFor(e)));
+        return knownSets.includes(name)&&localNumber(e.localId)===num&&
+          comparableSetName(e.name)===comparableSetName(c.name)&&!isSpecialPrinting(e.name);
+      });
+      if(matching.length===1)c._cvArtworkCard=matching[0];
+    }
+    return canonical;
+  }
   function removeDuplicateUnverifiedCards(approved,external){
-    const approvedKeys=new Set(approved.map(c=>comparableSetName(c.set?.name)+"|"+localNumber(c.localId)));
+    const approvedKeys=new Set(approved.flatMap(c=>{
+      const original=comparableSetName(c.set?.name)+"|"+localNumber(c.localId);
+      return c.set?.id===PW_SET_PREFIX+"22872"
+        ?[original,"scarlet violet black star promos|"+localNumber(c.localId),
+           "scarlet violet promos|"+localNumber(c.localId)]
+        :[original];
+    }));
     return external.filter(c=>{
       const setId=setIdFor(c);
       const setName=c.set?.name||setNames.get(setId);
@@ -521,7 +601,11 @@
         const approved=await approvedPromise;
         if(id!==requestId)return;
         if(approved===null)throw Error("Approved catalog temporarily unavailable");
-        const cards=approved.sort(cardNumberCompare);
+        const setId=chosenSet.slice(PW_SET_PREFIX.length);
+        const historical=approved.some(c=>!c._cvArtworkApproved)
+          ?await externalArtForSet(setId,searchController.signal):[];
+        if(id!==requestId)return;
+        const cards=attachExactFallbackArtwork(approved,historical).sort(cardNumberCompare);
         const message=cards.length?cards.length+" cards found.":"No matching cards found.";
         cache.set(cacheKey,{cards,message});
         render(cards);feedback(message);return;
@@ -576,12 +660,12 @@
         datesIncomplete=await resolveReleaseDates(validExternal,searchController.signal,id);
         if(id!==requestId)return;
       }
-      const verified=approved||[];
+      const verified=attachExactFallbackArtwork(approved||[],validExternal);
       const cards=[...verified,...removeDuplicateUnverifiedCards(verified,validExternal)];
       const sorted=browseSet?cards.sort(cardNumberCompare):cards.sort(compareByReleaseDate);
       const message=sorted.length
         ?sorted.length+" cards found"+(datesIncomplete?" · unknown release dates listed last":"")
-        :approved===null?"Approved CardVector catalog unavailable; no external matching cards.":"No matching cards found.";
+        :approved===null?"Search is temporarily unavailable.":"No matching cards found.";
       cache.set(cacheKey,{cards:sorted,message});
       if(cache.size>30)cache.delete(cache.keys().next().value);
       render(sorted);feedback(message);
