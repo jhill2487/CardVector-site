@@ -30,7 +30,7 @@
       if (!Array.isArray(sets)) return;
       for (const set of sets) if (set.id && set.name && !pocketSetIds.has(String(set.id).toLowerCase())) { setNames.set(set.id, set.name); if (/^\\d{4}-\\d{2}-\\d{2}$/.test(String(set.releaseDate || ""))) releaseDates.set(set.id, set.releaseDate); }
       for (const set of [...sets].filter(s => s.id && s.name && !pocketSetIds.has(String(s.id).toLowerCase())).sort((a,b) => a.name.localeCompare(b.name))) setFilter.add(new Option(set.name, set.id));
-      for (const [label,id] of setLabels) label.textContent=label.dataset.cardName+" - "+label.dataset.cardNumber+" - "+(setNames.get(id)||"Set details pending");
+      for (const [label,id] of setLabels) label.textContent=label.dataset.cardName+" - "+label.dataset.cardNumber+" - "+(setNames.get(id)||"Pokémon TCG");
     } catch (_) { /* Search continues without set names if unavailable. */ }
   }
   loadSetNames();
@@ -425,13 +425,13 @@
       const card = matches[visible];
       const button = document.createElement("button"); button.type = "button"; button.className = "card";
       button.append(picture(card));
-      const setId = card.id.slice(0, card.id.lastIndexOf("-"));
+      const setId=setIdFor(card);
       const name = document.createElement("strong");
       name.textContent=card.name;
       const subline=document.createElement("small");
       subline.className="card-identity";
       subline.textContent=(setNames.get(setId)||card.set?.name||"Pokémon TCG")+" · #"+(card.localId||"—");
-      button.append(subline);
+      button.append(name,subline);
       if(card.rarity){
         const rarity=document.createElement("small");
         rarity.className="card-rarity";
@@ -455,7 +455,7 @@
       finish.textContent=isApprovedCard(card)
         ?(approvedFinishKeys(card).map(k=>finishNames[k]).join(" · ")||"")
         :"";
-      button.append(name,finish);
+      button.append(finish);
       button.addEventListener("click", () => selectCard(card));
       fragment.append(button);
       // Fetch finishes only for the visible page of results.
