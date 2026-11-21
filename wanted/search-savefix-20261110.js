@@ -172,6 +172,7 @@
     me06:"DLR", swsh7:"EVS", "sv3.5":"MEW", sv01:"SVI", "swsh12.5":"CRZ"
   });
   function imageCandidates(card) {
+    if(card._cvFallbackImage)return [card._cvFallbackImage];
     const rawId = String(card.id || "");
     const cut = rawId.lastIndexOf("-");
     const setId = cut > 0 ? rawId.slice(0, cut).toLowerCase() : "";
@@ -293,7 +294,7 @@
         kaggleUrl=await window.CardVectorKaggleCatalog?.forCard(card,card.set?.name||setNames.get(setIdFor(card))||"");
       } catch (_) { /* Existing artwork providers remain available. */ }
       if (!img.isConnected)return;
-      if (kaggleUrl)urls.unshift(kaggleUrl);
+      if(kaggleUrl&&!card._cvFallbackImage)urls.unshift(kaggleUrl);
       if (urls.length)img.src=urls[0];
       else addHistoricalOrSecondary(card,img,fallback);
     })();
@@ -575,6 +576,24 @@
       return !setName||!approvedKeys.has(comparableSetName(setName)+"|"+localNumber(c.localId));
     });
   }
+  async function attachPokewalletGapImages(cards){
+    if(!supabaseClient)return;
+    const missing=cards.filter(c=>!c.image&&typeof c.id==="string"&&
+      /^[a-z0-9.-]{1,40}-[a-z0-9.-]{1,20}$/i.test(c.id));
+    if(!missing.length)return;
+    // One public cached lookup per page, no PokéWallet requests in the browser.
+    const byId=new Map(missing.map(c=>[c.id,c]));
+    for(let i=0;i<missing.length;i+=400){
+      const ids=missing.slice(i,i+400).map(c=>c.id);
+      const {data,error}=await supabaseClient.rpc("cv_public_tcgdex_pokewallet_images",{p_ids:ids});
+      if(error)continue;
+      for(const row of data||[]){
+        const card=byId.get(row.tcgdex_id);
+        const image=approvedImageUrl(row.image_path);
+        if(card&&image)card._cvFallbackImage=image;
+      }
+    }
+  }
   async function search(query) {
     const id=++requestId;
     if(controller)controller.abort();
@@ -654,6 +673,8 @@
       if(id!==requestId)return;
       if(approved===null&&externalError)throw Error("Both card catalogs unavailable");
       const validExternal=external.filter(c=>c&&typeof c.id==="string"&&typeof c.name==="string"&&isPhysicalCard(c));
+      await attachPokewalletGapImages(validExternal);
+      if(id!==requestId)return;
       let datesIncomplete=false;
       if(validExternal.length&&!browseSet){
         feedback("Checking set release dates…");
