@@ -1,8 +1,8 @@
 {
   "source_repository": "jhill2487/CardVector",
   "source_path": "Docs/",
-  "source_commit": "d61bab62fed0d89ca15d0dfe68d2b9d7243babfb",
-  "generated_at": "2026-11-21T03:09:58+00:00",
+  "source_commit": "36e9e1919c6e01d5aa8b9ee3aaa85626e15c383d",
+  "generated_at": "2026-11-23T13:52:19+00:00",
   "public_files": [
     "index.html",
     "404.html",
@@ -67,5 +67,5 @@
     "sell/index.html",
     "sitemap.xml"
   ],
-  "market_brief_count": 14
+  "market_brief_count": 15
 }
