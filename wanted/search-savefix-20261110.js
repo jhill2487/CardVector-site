@@ -64,9 +64,11 @@
   }
   function tcgdexPriceRows(details) {
     const pricing=details?.pricing?.tcgplayer;
-    if(!pricing || (pricing.unit && pricing.unit!=="USD"))return [];
-    const known={normal:"Non-holo",holo:"Holofoil",reverse:"Reverse holo",holofoil:"Holofoil",
-      reverseHolofoil:"Reverse holo",firstEdition:"1st Edition",firstEditionHolofoil:"1st Edition holofoil"};
+    if(!pricing)return [];
+    const known={normal:"Non-holo",holo:"Holofoil",reverse:"Reverse holo",
+      holofoil:"Holofoil","reverse-holofoil":"Reverse holo",
+      "1st-edition":"1st Edition","1st-edition-holofoil":"1st Edition holofoil",
+      unlimited:"Unlimited","unlimited-holofoil":"Unlimited holofoil"};
     return Object.entries(pricing).flatMap(([key,row])=>{
       if(!row || typeof row!=="object")return [];
       const market=Number(row.marketPrice);
@@ -89,7 +91,7 @@
   function priceForSelectedFinish(card,finish){
     const names=finish==="normal"?["normal","non holofoil","non holo"]:
       finish==="holo"?["holo","holofoil"]:
-      finish==="reverse"?["reverse","reverse holo","reverse holofoil","reverseHolofoil"]:null;
+      finish==="reverse"?["reverse","reverse holo","reverse holofoil","reverse-holofoil"]:null;
     if(!names)return null;
     const matching=visiblePriceRows(card).filter(p=>
       names.includes(String(p.key).toLowerCase().trim()) ||
@@ -772,6 +774,15 @@
     }
   }
 
+  function appendTcgplayerSearchLink(parent,card){
+    const query=[card.name,card.set?.name,card.localId].filter(Boolean).join(" ");
+    const link=document.createElement("a");
+    link.href="https://www.tcgplayer.com/search/pokemon/product?productLineName=pokemon&view=grid&q="+encodeURIComponent(query);
+    link.target="_blank";link.rel="noopener noreferrer";
+    link.className="tcgplayer-search-link";
+    link.textContent="Find this printing on TCGplayer";
+    parent.append(link);
+  }
   function addMarketReference(container, details) {
     const pricing = details.pricing?.tcgplayer;
     const section = document.createElement("details");
@@ -856,7 +867,10 @@
       populateFinishOptions(finishKeys);
       const finishLabel = document.createElement("p");
       finishLabel.textContent = "Available finishes: " + (finishes.length ? finishes.join(", ") : "Not verified") + (initialFinishInfo.source==="reviewed"?" (reviewed)":initialFinishInfo.warning?" (catalog data requires review)":"");
-      text.append(heading, set, number, finishLabel); addMarketReference(text, details); box.append(img, text); body.replaceChildren(box);
+      text.append(heading, set, number, finishLabel);
+      addMarketReference(text, details);
+      appendTcgplayerSearchLink(text,{name:details.name||card.name,set:details.set||card.set,localId:details.localId||card.localId});
+      box.append(img, text); body.replaceChildren(box);
       card._cvDetails=details;
       selectedCard = { card_id: card.id, card_name: details.name || card.name, set_name: details.set?.name || "Unknown", card_number: details.localId || card.localId || "Unknown", image_url: details.image || card.image || null, allowedFinishes: finishKeys, priceCard:card };
       showInlinePricing(card);
