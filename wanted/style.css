@@ -83,3 +83,31 @@
 .inline-market-guide{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 2px;font-size:.82rem;color:#f6c083}
 .inline-market-guide .use-market-price{border:1px solid #e69a51;background:#322315;color:#ffe3bc;padding:6px 10px;border-radius:7px;cursor:pointer;font:inherit;white-space:nowrap}
 .card .card-market[hidden]{display:none}
+
+/* Multi-card wanting is enabled only when the collector filters to a set. */
+.batch-panel{border:1px solid #3f647c;border-radius:12px;background:#102437;padding:14px;margin:18px 0}
+.batch-panel[hidden],#batch-hint[hidden]{display:none}
+.batch-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.batch-heading h2{font-size:1.05rem;margin:0}
+.batch-heading span{font-size:.8rem;color:#f6c083}
+.batch-items{display:grid;gap:9px;margin:10px 0}
+.batch-card-row{border:1px solid #31536a;border-radius:9px;background:#0b1d2e;padding:10px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 10px;align-items:start}
+.batch-card-heading{display:grid;min-width:0;gap:3px}
+.batch-card-heading strong{font-size:.88rem}
+.batch-card-heading small{font-size:.76rem;color:#b5cee1}
+.batch-remove{border:1px solid #587185;border-radius:7px;background:transparent;color:#d9edfa;padding:5px 8px;cursor:pointer}
+.batch-controls{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr 1fr 90px;gap:9px}
+.batch-field{display:grid;gap:4px;font-size:.76rem;color:#cee2f0;min-width:0}
+.batch-field input,.batch-field select{box-sizing:border-box;min-width:0;width:100%;padding:8px;border:1px solid #7898ac;background:#0a1724;color:#f8fcff;border-radius:6px;font:inherit;min-height:37px}
+.batch-error{grid-column:1/-1;color:#f9b5a1;margin:3px 0;font-size:.8rem}
+.batch-market{grid-column:1/-1;color:#f6c083;font-size:.77rem}
+.batch-market-use{grid-column:1/-1;justify-self:start;background:#312718;color:#ffe1b8;border:1px solid #c89152;border-radius:6px;padding:5px 9px;cursor:pointer}
+#batch-submit{padding:10px 14px;margin-top:5px}
+#batch-submit:disabled{opacity:.6}
+#batch-status{font-size:.83rem;min-height:1em;margin:8px 0 0}
+.batch-result-tile{min-width:0;display:flex;flex-direction:column;border-radius:9px}
+.batch-result-tile>.card{flex:1;width:100%}
+.batch-select-toggle{display:flex;align-items:center;gap:7px;padding:7px 3px;color:#ffe0bd;font-size:.78rem;font-weight:650;cursor:pointer}
+.batch-select-toggle input{accent-color:#ff891f;width:17px;height:17px;flex-shrink:0}
+@media(max-width:600px){.batch-controls{grid-template-columns:1fr 1fr}.batch-panel{padding:10px}}
+@media(max-width:390px){.batch-controls{grid-template-columns:1fr 1fr}}
