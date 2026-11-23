@@ -217,6 +217,30 @@
     });
   }
 
+  function deduplicateIdenticalPrintings(cards){
+    // PokéWallet can provide multiple product IDs for an identical exact printing.
+    // Keep separate records for different finish lists, stamps or patterns.
+    // Prefer a record with approved art; always keep the choice deterministic.
+    const byKey=new Map();
+    for(const card of cards){
+      const variantKey=(Array.isArray(card.variants)?card.variants:[])
+        .map(v=>String(typeof v==="string"?v:v?.type||"").toLowerCase().trim())
+        .sort().join("|");
+      const key=[String(card.set?.id||"").toLowerCase(),
+        String(card.localId||"").toLowerCase().trim(),
+        String(card.name||"").toLowerCase().trim(),variantKey].join("::");
+      const prior=byKey.get(key);
+      if(!prior){
+        byKey.set(key,card);
+      }else if((!prior._cvArtworkApproved&&card._cvArtworkApproved)||
+        (!prior.tcgplayerUrl&&card.tcgplayerUrl)||
+        (!card._cvArtworkApproved&&!prior._cvArtworkApproved&&
+         String(card._cvProviderId).localeCompare(String(prior._cvProviderId))<0)){
+        byKey.set(key,card);
+      }
+    }
+    return [...byKey.values()];
+  }
   const catalogSetsReady=loadApprovedSets().catch(()=>{ /* TCGdex remains available. */ });
   // Explicit crosswalk: TCGdex set IDs -> Limitless English set codes.
   // Never infer a set code from the card name; wrong artwork is worse than none.
@@ -701,7 +725,7 @@
         const historical=approved.some(c=>!c._cvArtworkApproved)
           ?await externalArtForSet(setId,searchController.signal):[];
         if(id!==requestId)return;
-        const cards=attachExactFallbackArtwork(approved,historical).sort(cardNumberCompare);
+        const cards=attachExactFallbackArtwork(deduplicateIdenticalPrintings(approved),historical).sort(cardNumberCompare);
         const message=cards.length?cards.length+" cards found.":"No matching cards found.";
         cache.set(cacheKey,{cards,message});
         render(cards);feedback(message);return;
@@ -758,7 +782,7 @@
         datesIncomplete=await resolveReleaseDates(validExternal,searchController.signal,id);
         if(id!==requestId)return;
       }
-      const verified=attachExactFallbackArtwork(approved||[],validExternal);
+      const verified=attachExactFallbackArtwork(deduplicateIdenticalPrintings(approved||[]),validExternal);
       const cards=[...verified,...removeDuplicateUnverifiedCards(verified,validExternal)];
       const sorted=browseSet?cards.sort(cardNumberCompare):cards.sort(compareByReleaseDate);
       const message=sorted.length
