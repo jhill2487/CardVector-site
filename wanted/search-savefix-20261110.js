@@ -525,6 +525,181 @@
         .finally(() => { activeVariantLoads--; runVariantQueue(); });
     }
   }
+
+  // Set-filtered search supports a batch of independently configured wanted cards.
+  // Each request still stores the precise provider printing ID and selected finish.
+  const batchCards=new Map();
+  let batchBusy=false;
+  function batchIsActive(){return Boolean(setFilter.value);}
+  function batchKey(card){return String(card.id||"");}
+  function updateBatchVisibility(){
+    const panel=$("batch-panel"),active=batchIsActive();
+    if(panel)panel.hidden=!active;
+    const hint=$("batch-hint");
+    if(hint)hint.hidden=!active;
+    const count=$("batch-count");
+    if(count)count.textContent=batchCards.size+" selected";
+  }
+  function batchField(label,value,values=null){
+    const holder=document.createElement("label");
+    holder.className="batch-field";
+    const text=document.createElement("span");
+    text.textContent=label;
+    const input=values?document.createElement("select"):document.createElement("input");
+    if(values){
+      for(const [name,key] of values)input.add(new Option(name,key));
+      input.value=value;
+    }else{
+      input.type="number";input.min="0.01";input.max="1000000";
+      input.step="0.01";input.inputMode="decimal";
+      input.placeholder="Max price";
+      input.value=value||"";
+    }
+    holder.append(text,input);
+    return {holder,input};
+  }
+  function batchCardRow(entry){
+    const {card,finishKeys}=entry;
+    const row=document.createElement("div");row.className="batch-card-row";
+    const heading=document.createElement("div");heading.className="batch-card-heading";
+    const strong=document.createElement("strong");strong.textContent=card.name;
+    const identity=document.createElement("small");
+    identity.textContent=(card.set?.name||setNames.get(setIdFor(card))||"Pokémon TCG")+
+      " · #"+(card.localId||"—");
+    heading.append(strong,identity);
+    const remove=document.createElement("button");
+    remove.type="button";remove.className="batch-remove";
+    remove.textContent="Remove";remove.disabled=batchBusy;
+    remove.addEventListener("click",()=>{batchCards.delete(batchKey(card));renderBatch();render(matches);});
+    row.append(heading,remove);
+    if(entry.error){
+      const warning=document.createElement("p");warning.className="batch-error";
+      warning.textContent=entry.error;row.append(warning);
+      return row;
+    }
+    if(!finishKeys.length){
+      const warning=document.createElement("p");warning.className="batch-error";
+      warning.textContent=entry.loading
+        ?"Checking the finishes available for this printing…"
+        :"Finish unavailable or not verified. Remove this card or select another printing.";
+      row.append(warning);
+      return row;
+    }
+    const controls=document.createElement("div");controls.className="batch-controls";
+    const finish=batchField("Finish",entry.finish||"",
+      [...(finishKeys.length>1?[["Choose finish",""]]:[]),...finishKeys.map(k=>[finishNames[k]||k,k])]);
+    finish.input.value=entry.finish|| (finishKeys.length===1?finishKeys[0]:"");
+    const condition=batchField("Minimum condition",entry.condition||"NM",
+      [["NM","NM"],["LP","LP"],["MP","MP"],["HP","HP"],["DMG","DMG"]]);
+    const price=batchField("Max price (USD)",entry.price||"");
+    const quantity=batchField("Quantity",entry.quantity||"1");
+    quantity.input.min="1";quantity.input.max="99";quantity.input.step="1";
+    quantity.input.value=entry.quantity||"1";
+    finish.input.addEventListener("change",()=>{entry.finish=finish.input.value;renderBatch();});
+    condition.input.addEventListener("change",()=>{entry.condition=condition.input.value;});
+    price.input.addEventListener("input",()=>{entry.price=price.input.value;});
+    quantity.input.addEventListener("input",()=>{entry.quantity=quantity.input.value;});
+    controls.append(finish.holder,condition.holder,price.holder,quantity.holder);
+    row.append(controls);
+    const reference=entry.finish?priceForSelectedFinish(card,entry.finish):null;
+    if(reference!==null){
+      const market=document.createElement("small");market.className="batch-market";
+      market.textContent="TCGplayer market reference ("+(finishNames[entry.finish]||entry.finish)+
+        "): "+marketUSD.format(reference)+" · Not a verified NM-only price";
+      const use=document.createElement("button");use.type="button";use.className="batch-market-use";
+      use.textContent="Use "+marketUSD.format(reference);
+      use.addEventListener("click",()=>{entry.price=reference.toFixed(2);price.input.value=entry.price;});
+      row.append(market,use);
+    }
+    return row;
+  }
+  function renderBatch(){
+    const container=$("batch-items");
+    if(!container)return;
+    updateBatchVisibility();
+    container.replaceChildren(...[...batchCards.values()].map(batchCardRow));
+    const submit=$("batch-submit");
+    submit.disabled=batchBusy||!batchCards.size;
+    submit.textContent="Add "+batchCards.size+" card"+(batchCards.size===1?"":"s")+" to wanted list";
+  }
+  async function batchSelectCard(card,checked){
+    if(!batchIsActive())return;
+    const key=batchKey(card);
+    if(!checked){
+      batchCards.delete(key);
+      renderBatch();return;
+    }
+    if(batchCards.has(key))return;
+    if(batchCards.size>=99){
+      $("batch-status").textContent="Select up to 99 cards per batch.";
+      render(matches);return;
+    }
+    const entry={card,loading:false,finishKeys:[],finish:"",
+      condition:"NM",price:"",quantity:"1",error:null};
+    batchCards.set(key,entry);
+    if(isApprovedCard(card)){
+      entry.finishKeys=approvedFinishKeys(card);
+    }else{
+      entry.loading=true;
+      renderBatch();
+      try{
+        const response=await fetch(API+"/"+encodeURIComponent(card.id));
+        if(!response.ok)throw Error("Card details unavailable");
+        const details=await response.json();
+        if(!isPhysicalCard(details))throw Error("Only physical Pokémon cards can be requested");
+        card._cvDetails=details;
+        entry.finishKeys=finishInfo(details).keys;
+        if(!entry.finishKeys.length)entry.error="No verified finish options for this printing.";
+      }catch(_){entry.error="Card details could not be verified.";}
+      entry.loading=false;
+    }
+    if(entry.finishKeys.length===1)entry.finish=entry.finishKeys[0];
+    // Ignore a slow response if the selection was removed while loading.
+    if(batchCards.get(key)===entry)renderBatch();
+  }
+  async function submitBatch(){
+    const message=$("batch-status"),submit=$("batch-submit");
+    if(batchBusy||!batchIsActive())return;
+    if(!batchCards.size){message.textContent="Select at least one card.";return;}
+    if(!supabaseClient){message.textContent="Account service unavailable.";return;}
+    const requests=[];
+    for(const entry of batchCards.values()){
+      const card=entry.card,finish=entry.finish;
+      const price=Number(entry.price),quantity=Number(entry.quantity);
+      if(entry.loading||!finish||!entry.finishKeys.includes(finish)){
+        message.textContent="Choose a verified finish for every selected card.";return;
+      }
+      if(!Number.isFinite(price)||price<=0||price>1000000||
+         !Number.isInteger(quantity)||quantity<1||quantity>99){
+        message.textContent="Enter a valid maximum price and quantity for every card.";return;
+      }
+      requests.push({
+        source:isApprovedCard(card)?"pokewallet":"tcgdex",
+        card_id:isApprovedCard(card)?card._cvProviderId:card.id,
+        card_name:card.name,set_name:card.set?.name||setNames.get(setIdFor(card))||"Pokémon TCG",
+        card_number:card.localId,image_url:card.image||null,
+        minimum_condition:entry.condition||"NM",
+        max_price_usd:price,quantity,
+        consider_lower_condition:false,
+        preferred_finish:finish,accepted_finishes:[finish]
+      });
+    }
+    batchBusy=true;submit.disabled=true;message.textContent="Adding selected cards…";
+    try{
+      const {data:{user},error:authError}=await supabaseClient.auth.getUser();
+      if(authError||!user){message.textContent="Sign in to add these cards.";return;}
+      const {error}=await supabaseClient.from("cv_wanted_requests")
+        .insert(requests.map(request=>({...request,user_id:user.id})));
+      if(error)throw error;
+      batchCards.clear();
+      message.textContent=requests.length+" cards added to your wanted list.";
+      renderBatch();render(matches);
+    }catch(error){
+      message.textContent="No batch was confirmed saved. "+(error.message||"Please retry.");
+    }finally{batchBusy=false;renderBatch();}
+  }
+  $("batch-submit").addEventListener("click",submitBatch);
+
   function renderNext() {
     const end = matches.length;
     const fragment = document.createDocumentFragment();
@@ -564,7 +739,17 @@
         :"";
       button.append(finish);
       button.addEventListener("click", () => selectCard(card));
-      fragment.append(button);
+      if(batchIsActive()){
+        const tile=document.createElement("div");tile.className="batch-result-tile";
+        const select=document.createElement("label");select.className="batch-select-toggle";
+        const check=document.createElement("input");check.type="checkbox";
+        check.checked=batchCards.has(batchKey(card));
+        check.setAttribute("aria-label","Select "+card.name+" #"+(card.localId||""));
+        check.addEventListener("change",()=>batchSelectCard(card,check.checked));
+        select.append(check,document.createTextNode("Add to selection"));
+        tile.append(button,select);
+        fragment.append(tile);
+      }else fragment.append(button);
       // Fetch finishes only for the visible page of results.
       variantLabels.push({card,finish});
     }
@@ -579,6 +764,7 @@
     $("more-results").hidden = true;
   }
   function render(cards) {
+    updateBatchVisibility();
     if (variantObserver) {
       for (const element of waitingVariants.keys()) variantObserver.unobserve(element);
       waitingVariants.clear();
@@ -997,7 +1183,12 @@
     feedback(selected === "set" ? "Choose a set or enter its name." : "Enter at least 2 characters to search.");
   }
   mode.addEventListener("change", updateSearchMode);
-  setFilter.addEventListener("change", () => { input.dispatchEvent(new Event("input")); });
+  setFilter.addEventListener("change", () => {
+    batchCards.clear();
+    $("batch-status").textContent="";
+    renderBatch();
+    input.dispatchEvent(new Event("input"));
+  });
   input.addEventListener("input", () => {
     const query = input.value.trim().replace(/\s+/g, " ");
     $("clear-search").hidden = !query;
