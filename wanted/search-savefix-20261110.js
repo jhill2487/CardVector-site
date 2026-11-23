@@ -62,13 +62,63 @@
       .filter(d=>!Number.isNaN(d.getTime()));
     return dates.length?new Date(Math.min(...dates.map(d=>d.getTime()))):null;
   }
+  function tcgdexPriceRows(details) {
+    const pricing=details?.pricing?.tcgplayer;
+    if(!pricing || (pricing.unit && pricing.unit!=="USD"))return [];
+    const known={normal:"Non-holo",holo:"Holofoil",reverse:"Reverse holo",holofoil:"Holofoil",
+      reverseHolofoil:"Reverse holo",firstEdition:"1st Edition",firstEditionHolofoil:"1st Edition holofoil"};
+    return Object.entries(pricing).flatMap(([key,row])=>{
+      if(!row || typeof row!=="object")return [];
+      const market=Number(row.marketPrice);
+      return Number.isFinite(market)&&market>0?[{key,label:known[key]||key.replace(/([a-z])([A-Z])/g,"$1 $2"),market}]:[];
+    });
+  }
+  function visiblePriceRows(card){
+    return card?._cvDetails
+      ?tcgdexPriceRows(card._cvDetails)
+      :cardMarketRows(card).map(p=>({key:String(p.sub_type_name).toLowerCase().trim(),
+           label:p.sub_type_name,market:Number(p.market_price)}));
+  }
   function marketLine(card) {
-    const prices=cardMarketRows(card);
+    const prices=visiblePriceRows(card);
     if(!prices.length)return "";
-    const unique=[...new Set(prices.map(p=>Number(p.market_price)))];
-    const min=Math.min(...unique);
-    return prices.length===1?"Market "+marketUSD.format(min):
-      "Market from "+marketUSD.format(min);
+    return "TCGplayer market: "+prices.slice(0,2)
+      .map(p=>p.label+" "+marketUSD.format(p.market)).join(" · ")+
+      (prices.length>2?" · +more":"");
+  }
+  function priceForSelectedFinish(card,finish){
+    const names=finish==="normal"?["normal","non holofoil","non holo"]:
+      finish==="holo"?["holo","holofoil"]:
+      finish==="reverse"?["reverse","reverse holo","reverse holofoil","reverseHolofoil"]:null;
+    if(!names)return null;
+    const matching=visiblePriceRows(card).filter(p=>
+      names.includes(String(p.key).toLowerCase().trim()) ||
+      names.includes(String(p.label).toLowerCase().trim()));
+    return matching.length===1?matching[0].market:null;
+  }
+  function showInlinePricing(card){
+    const panel=$("inline-market-guide");
+    if(!panel)return;
+    const finish=$("preferred-finish")?.value;
+    const price=finish?priceForSelectedFinish(card,finish):null;
+    panel.replaceChildren();
+    const note=document.createElement("span");
+    note.textContent=price===null
+      ?"Market price unavailable for the selected finish. Set your own maximum."
+      :"TCGplayer market ("+finishNames[finish]+"): "+marketUSD.format(price)+
+        " · Not a verified NM-only price";
+    panel.append(note);
+    if(price!==null){
+      const copy=document.createElement("button");
+      copy.type="button";copy.className="use-market-price";
+      copy.textContent="Use "+marketUSD.format(price);
+      copy.addEventListener("click",()=>{
+        if(!selectedCard)return;
+        $("max-price").value=price.toFixed(2);
+        $("max-price").focus();
+      });
+      panel.append(copy);
+    }
   }
   function appendTcgplayerMarket(parent,card){
     const priceRows=cardMarketRows(card);
@@ -382,7 +432,7 @@
         if (check.disabled) check.checked = false;
       }
     }
-    preferred.onchange = sync;
+    preferred.onchange = ()=>{sync();if(selectedCard?.priceCard)showInlinePricing(selectedCard.priceCard);};
     sync();
     fieldset.hidden = keys.length === 1;
     $("finish-status").textContent = keys.length === 1
@@ -436,6 +486,11 @@
           const placeholder=frame?.querySelector(".placeholder");
           if(placeholder)placeholder.replaceWith(picture(task.card));
         }
+        task.card._cvDetails=details;
+        const tile=task.label.closest(".card");
+        const market=tile?.querySelector(".card-market");
+        const priceText=marketLine(task.card);
+        if(market){market.textContent=priceText;market.hidden=!priceText;}
         const label = variantLabel(details);
         variantCache.set(task.card.id,label);
         if (variantCache.size > 1500) variantCache.delete(variantCache.keys().next().value);
@@ -466,12 +521,11 @@
         button.append(rarity);
       }
       const market=marketLine(card);
-      if(market){
-        const line=document.createElement("small");
-        line.className="card-market";
-        line.textContent=market;
-        button.append(line);
-      }
+      const line=document.createElement("small");
+      line.className="card-market";
+      line.textContent=market;
+      line.hidden=!market;
+      button.append(line);
       if (!setNames.has(setId) && !isApprovedCard(card)) {
         name.dataset.cardName=card.name;
         name.dataset.cardNumber=card.localId||"—";
@@ -563,17 +617,38 @@
     return canonical;
   }
   function removeDuplicateUnverifiedCards(approved,external){
-    const approvedKeys=new Set(approved.flatMap(c=>{
-      const original=comparableSetName(c.set?.name)+"|"+localNumber(c.localId);
-      return c.set?.id===PW_SET_PREFIX+"22872"
-        ?[original,"scarlet violet black star promos|"+localNumber(c.localId),
-           "scarlet violet promos|"+localNumber(c.localId)]
-        :[original];
-    }));
+    // Cross-provider duplicates are only removed when an exact, unambiguous
+    // printing exists in the canonical catalog. Never merge Staff, stamps,
+    // promos, or multiple PokéWallet printings sharing a collector number.
+    const keys=new Map();
+    const namesFor=c=>{
+      const id=String(c.set?.id||"").replace(/^pw:/,"");
+      const name=comparableSetName(c.set?.name||setNames.get(setIdFor(c)));
+      return id==="22872"
+        ?[name,"scarlet violet black star promos","scarlet violet promos",
+            "svp black star promos"]
+        :[name];
+    };
+    for(const c of approved){
+      for(const name of namesFor(c)){
+        if(!name)continue;
+        const key=name+"|"+localNumber(c.localId);
+        if(!keys.has(key))keys.set(key,[]);
+        keys.get(key).push(c);
+      }
+    }
+    const seenExternal=new Set();
     return external.filter(c=>{
-      const setId=setIdFor(c);
-      const setName=c.set?.name||setNames.get(setId);
-      return !setName||!approvedKeys.has(comparableSetName(setName)+"|"+localNumber(c.localId));
+      if(seenExternal.has(c.id))return false;
+      seenExternal.add(c.id);
+      const setName=comparableSetName(c.set?.name||setNames.get(setIdFor(c)));
+      if(!setName)return true;
+      const peers=keys.get(setName+"|"+localNumber(c.localId))||[];
+      // Distinct variants remain visible. A uniquely matched canonical
+      // card supersedes a duplicate TCGdex search hit.
+      return !(peers.length===1&&
+        comparableSetName(peers[0].name)===comparableSetName(c.name)&&
+        isSpecialPrinting(peers[0].name)===isSpecialPrinting(c.name));
     });
   }
   async function attachPokewalletGapImages(cards){
@@ -755,7 +830,8 @@
       box.append(picture(card,true),details);body.replaceChildren(box);
       selectedCard={source:"pokewallet",card_id:card._cvProviderId,
         card_name:card.name,set_name:card.set.name,card_number:card.localId,
-        image_url:card.image,allowedFinishes:finishKeys};
+        image_url:card.image,allowedFinishes:finishKeys,priceCard:card};
+      showInlinePricing(card);
       return;
     }
     selectedController = new AbortController();
@@ -781,7 +857,9 @@
       const finishLabel = document.createElement("p");
       finishLabel.textContent = "Available finishes: " + (finishes.length ? finishes.join(", ") : "Not verified") + (initialFinishInfo.source==="reviewed"?" (reviewed)":initialFinishInfo.warning?" (catalog data requires review)":"");
       text.append(heading, set, number, finishLabel); addMarketReference(text, details); box.append(img, text); body.replaceChildren(box);
-      selectedCard = { card_id: card.id, card_name: details.name || card.name, set_name: details.set?.name || "Unknown", card_number: details.localId || card.localId || "Unknown", image_url: details.image || card.image || null, allowedFinishes: finishKeys };
+      card._cvDetails=details;
+      selectedCard = { card_id: card.id, card_name: details.name || card.name, set_name: details.set?.name || "Unknown", card_number: details.localId || card.localId || "Unknown", image_url: details.image || card.image || null, allowedFinishes: finishKeys, priceCard:card };
+      showInlinePricing(card);
       // Live PokéWallet enrichment is optional; TCGdex remains a working fallback.
       const walletNote = document.createElement("p");
       walletNote.className = "hint";
